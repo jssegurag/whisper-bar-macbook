@@ -66,7 +66,9 @@ class HotkeyManager {
             self.onKeyDown?()
         }
         keyUpMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyUp) { [weak self] event in
-            guard let self, event.keyCode == self.targetKeyCode else { return }
+            guard let self,
+                  event.keyCode == self.targetKeyCode,
+                  event.modifierFlags.contains(self.targetModifiers) else { return }
             self.onKeyUp?()
         }
     }
