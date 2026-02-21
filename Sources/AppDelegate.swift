@@ -6,12 +6,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Dependencias
 
-    private let config      = Config.shared
-    private let recorder    = AudioRecorder()
-    private let transcriber = Transcriber()
-    private let hotkey      = HotkeyManager()
+    private let config        = Config.shared
+    private let recorder      = AudioRecorder()
+    private let transcriber   = Transcriber()
+    private let hotkey        = HotkeyManager()
+    private let audioFeedback = AudioFeedback()
 
     private var statusItem: NSStatusItem!
+
+    // MARK: - Animación de grabación
+
+    private var animTimer: Timer?
+    private var animPhase: CGFloat = 0
 
     // MARK: - Ciclo de vida
 
@@ -31,13 +37,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         hotkey.tearDown()
+        stopRecordingAnimation()
     }
 
     // MARK: - Barra de menú
 
     private func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        setIcon("🎙")
+        setIconEmoji("🎙")
         rebuildMenu()
     }
 
@@ -52,13 +59,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(hint)
         menu.addItem(.separator())
 
-        // Estado de la configuración
-        menu.addItem(statusItem(for: config.isWhisperCliValid,
-                                ok:  "whisper-cli: \(URL(fileURLWithPath: config.whisperCliPath).lastPathComponent)",
-                                err: "❌ whisper-cli no encontrado"))
-        menu.addItem(statusItem(for: config.isModelValid,
-                                ok:  "Modelo: \(URL(fileURLWithPath: config.modelPath).lastPathComponent)",
-                                err: "❌ Modelo no encontrado"))
+        menu.addItem(statusMenuItem(for: config.isWhisperCliValid,
+                                    ok:  "whisper-cli: \(URL(fileURLWithPath: config.whisperCliPath).lastPathComponent)",
+                                    err: "❌ whisper-cli no encontrado"))
+        menu.addItem(statusMenuItem(for: config.isModelValid,
+                                    ok:  "Modelo: \(URL(fileURLWithPath: config.modelPath).lastPathComponent)",
+                                    err: "❌ Modelo no encontrado"))
 
         let langItem = NSMenuItem(title: "Idioma: \(config.language)", action: nil, keyEquivalent: "")
         langItem.isEnabled = false
@@ -70,14 +76,64 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
     }
 
-    private func statusItem(for ok: Bool, ok okText: String, err errText: String) -> NSMenuItem {
+    private func statusMenuItem(for ok: Bool, ok okText: String, err errText: String) -> NSMenuItem {
         let item = NSMenuItem(title: ok ? "✅ \(okText)" : errText, action: nil, keyEquivalent: "")
         item.isEnabled = false
         return item
     }
 
-    private func setIcon(_ s: String) {
-        DispatchQueue.main.async { self.statusItem.button?.title = s }
+    // MARK: - Iconos
+
+    /// Icono de emoji estático (idle / procesando)
+    private func setIconEmoji(_ s: String) {
+        DispatchQueue.main.async {
+            self.statusItem.button?.image = nil
+            self.statusItem.button?.title = s
+        }
+    }
+
+    /// Imagen dinámica para la animación de grabación
+    private func makeWaveformImage(phase: CGFloat) -> NSImage {
+        let w: CGFloat = 28
+        let h: CGFloat = 18
+        return NSImage(size: NSSize(width: w, height: h), flipped: false) { _ in
+            let nBars   = 4
+            let barW:  CGFloat = 3.5
+            let gap:   CGFloat = 2.5
+            let total  = CGFloat(nBars) * barW + CGFloat(nBars - 1) * gap
+            let startX = (w - total) / 2
+            let phases: [CGFloat] = [0, 1.1, 2.0, 3.0]   // desfase por barra
+
+            NSColor.systemRed.withAlphaComponent(0.92).setFill()
+            for i in 0..<nBars {
+                let barHeight = (sin(phase + phases[i]) * 0.42 + 0.58) * (h - 4)
+                let x = startX + CGFloat(i) * (barW + gap)
+                let y = (h - barHeight) / 2
+                NSBezierPath(
+                    roundedRect: NSRect(x: x, y: y, width: barW, height: barHeight),
+                    xRadius: barW / 2, yRadius: barW / 2
+                ).fill()
+            }
+            return true
+        }
+    }
+
+    // MARK: - Animación de grabación
+
+    private func startRecordingAnimation() {
+        animPhase = 0
+        animTimer = Timer.scheduledTimer(withTimeInterval: 0.07, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            self.animPhase += 0.28
+            let img = self.makeWaveformImage(phase: self.animPhase)
+            self.statusItem.button?.image = img
+            self.statusItem.button?.title = ""
+        }
+    }
+
+    private func stopRecordingAnimation() {
+        animTimer?.invalidate()
+        animTimer = nil
     }
 
     // MARK: - Grabación
@@ -85,7 +141,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func startRecording() {
         do {
             try recorder.start()
-            setIcon("🔴")
+            startRecordingAnimation()
         } catch {
             notify("Error al iniciar grabación: \(error.localizedDescription)")
         }
@@ -93,27 +149,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func stopAndTranscribe() {
         guard recorder.isRecording else { return }
+        stopRecordingAnimation()
 
         let duration = recorder.stop()
 
         guard duration >= config.minRecordingDuration else {
-            setIcon("🎙")
+            setIconEmoji("🎙")
             return
         }
 
-        setIcon("⏳")
+        setIconEmoji("⏳")
+        audioFeedback.start()
+
         let audioURL = recorder.outputURL
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             switch self.transcriber.transcribe(url: audioURL) {
             case .success(let text) where !text.isEmpty:
+                DispatchQueue.main.async { self.audioFeedback.stop() }
                 self.paste(text: text)
             case .failure(let error):
+                DispatchQueue.main.async { self.audioFeedback.stop() }
                 self.notify("Error: \(error.localizedDescription)")
-                self.setIcon("🎙")
+                self.setIconEmoji("🎙")
             default:
-                self.setIcon("🎙")
+                DispatchQueue.main.async { self.audioFeedback.stop() }
+                self.setIconEmoji("🎙")
             }
         }
     }
@@ -121,13 +183,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Paste (preserva el clipboard del usuario)
 
     private func paste(text: String) {
-        // Guardar contenido previo del clipboard
         let previous = NSPasteboard.general.string(forType: .string)
 
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
 
-        // Simular ⌘V
         let src  = CGEventSource(stateID: .hidSystemState)
         let down = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true)
         let up   = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
@@ -136,13 +196,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         down?.post(tap: .cghidEventTap)
         up?.post(tap: .cghidEventTap)
 
-        // Restaurar clipboard original tras 300ms (suficiente para que el paste complete)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             if let previous {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(previous, forType: .string)
             }
-            self?.setIcon("🎙")
+            self?.setIconEmoji("🎙")
             self?.rebuildMenu()
         }
     }
