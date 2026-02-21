@@ -47,7 +47,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "WhisperBar", action: nil, keyEquivalent: "")
         menu.addItem(.separator())
 
-        let hint = NSMenuItem(title: "Mantén ⌘⌥S para grabar", action: nil, keyEquivalent: "")
+        let hint = NSMenuItem(title: "Mantén ⌘⌥ para grabar", action: nil, keyEquivalent: "")
         hint.isEnabled = false
         menu.addItem(hint)
         menu.addItem(.separator())

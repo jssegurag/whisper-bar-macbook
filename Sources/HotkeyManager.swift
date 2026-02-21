@@ -1,38 +1,31 @@
 import AppKit
 import ApplicationServices
 
-/// Registra un atajo global de teclado (⌘⌥S) y notifica al delegado
-/// cuando la tecla se presiona (inicio de grabación) o suelta (fin).
+/// Registra un atajo global de teclado (⌘⌥) y notifica al delegado
+/// cuando ambos modificadores se presionan (inicio de grabación) o se sueltan (fin).
 class HotkeyManager {
 
     var onKeyDown: (() -> Void)?
     var onKeyUp:   (() -> Void)?
 
-    // keyCode 1 = tecla S (independiente del layout de teclado)
-    private let targetKeyCode:   UInt16               = 1
     private let targetModifiers: NSEvent.ModifierFlags = [.command, .option]
 
-    private var keyDownMonitor: Any?
-    private var keyUpMonitor:   Any?
-    private var retryTimer:     DispatchSourceTimer?
-    private var hasPrompted     = false
+    private var flagsMonitor: Any?
+    private var retryTimer:   DispatchSourceTimer?
+    private var hasPrompted   = false
+    private var isActive      = false
 
     // MARK: - Setup
 
-    /// Inicia el proceso de registro del atajo.
-    /// Si aún no hay permiso de Accesibilidad, reintenta cada 2 segundos.
     func setupWhenReady() {
         checkAndRegister()
     }
 
-    /// Elimina los monitores al cerrar la app.
     func tearDown() {
         retryTimer?.cancel()
         retryTimer = nil
-        if let m = keyDownMonitor { NSEvent.removeMonitor(m) }
-        if let m = keyUpMonitor   { NSEvent.removeMonitor(m) }
-        keyDownMonitor = nil
-        keyUpMonitor   = nil
+        if let m = flagsMonitor { NSEvent.removeMonitor(m) }
+        flagsMonitor = nil
     }
 
     // MARK: - Privado
@@ -58,18 +51,18 @@ class HotkeyManager {
     }
 
     private func register() {
-        keyDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self,
-                  !event.isARepeat,
-                  event.keyCode == self.targetKeyCode,
-                  event.modifierFlags.contains(self.targetModifiers) else { return }
-            self.onKeyDown?()
-        }
-        keyUpMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyUp) { [weak self] event in
-            guard let self,
-                  event.keyCode == self.targetKeyCode,
-                  event.modifierFlags.contains(self.targetModifiers) else { return }
-            self.onKeyUp?()
+        flagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            guard let self else { return }
+            let bothPressed = event.modifierFlags
+                .intersection(self.targetModifiers) == self.targetModifiers
+
+            if bothPressed && !self.isActive {
+                self.isActive = true
+                self.onKeyDown?()
+            } else if !bothPressed && self.isActive {
+                self.isActive = false
+                self.onKeyUp?()
+            }
         }
     }
 }
