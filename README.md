@@ -212,6 +212,10 @@ ls ~/.whisper-realtime/*.bin
 bash build.sh
 ```
 
+> ⚠️ **Después de cada `build.sh`** macOS revoca el permiso de Accesibilidad porque la firma cambia.
+> Ve a Configuración del Sistema → Privacidad y Seguridad → Accesibilidad,
+> desactiva WhisperBar y vuélvelo a activar.
+
 ---
 
 ## Contribuir
