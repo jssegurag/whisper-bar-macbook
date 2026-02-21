@@ -53,7 +53,34 @@ Suelta       →  ⏳ transcribe  →  📋 pega donde está el cursor
 xcode-select --install
 ```
 
-### 3. whisper-cpp
+### 3. Agregar Homebrew al PATH
+
+Para que `whisper-cli` y otros binarios de Homebrew se detecten automáticamente en toda la máquina, asegúrate de que Homebrew esté en el `PATH` de tu shell.
+
+**Apple Silicon (M1/M2/M3/M4 — `/opt/homebrew`)**
+
+```bash
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+source ~/.zprofile
+```
+
+**Intel (`/usr/local`)**
+
+```bash
+echo 'eval "$(/usr/local/bin/brew shellenv)"' >> ~/.zprofile
+source ~/.zprofile
+```
+
+Verifica que quedó configurado:
+
+```bash
+which brew        # debe imprimir la ruta
+which whisper-cli # debe imprimir la ruta (después de instalar whisper-cpp)
+```
+
+> Si usas `bash` en lugar de `zsh`, reemplaza `~/.zprofile` por `~/.bash_profile`.
+
+### 4. whisper-cpp
 
 ```bash
 brew install whisper-cpp
@@ -211,6 +238,10 @@ ls ~/.whisper-realtime/*.bin
 ```bash
 bash build.sh
 ```
+
+> ⚠️ **Después de cada `build.sh`** macOS revoca el permiso de Accesibilidad porque la firma cambia.
+> Ve a Configuración del Sistema → Privacidad y Seguridad → Accesibilidad,
+> desactiva WhisperBar y vuélvelo a activar.
 
 ---
 
