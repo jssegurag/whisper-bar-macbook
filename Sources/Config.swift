@@ -4,7 +4,7 @@ import Foundation
 /// Las rutas se auto-detectan si no están configuradas explícitamente.
 class Config {
     static let shared = Config()
-    private let defaults = UserDefaults(suiteName: "com.user.WhisperBar")!
+    private let defaults = UserDefaults.standard
 
     // MARK: - Propiedades configurables
 
