@@ -92,6 +92,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func stopAndTranscribe() {
+        guard recorder.isRecording else { return }
+
         let duration = recorder.stop()
 
         guard duration >= config.minRecordingDuration else {

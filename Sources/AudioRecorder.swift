@@ -36,7 +36,9 @@ class AudioRecorder {
     func stop() -> TimeInterval {
         recorder?.stop()
         isRecording = false
-        return Date().timeIntervalSince(startTime ?? Date())
+        let duration = Date().timeIntervalSince(startTime ?? Date())
+        startTime = nil   // limpiar para que no reutilice el tiempo de grabaciones anteriores
+        return duration
     }
 
     // MARK: - Permisos
