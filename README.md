@@ -1,22 +1,41 @@
-# WhisperBar
+# WhisperBar 🎙
 
-App de barra de menú para dictado por voz offline en macOS.
-Usa [whisper.cpp](https://github.com/ggerganov/whisper.cpp) — el texto nunca sale de tu Mac.
+> Dictado por voz offline para macOS — powered by [whisper.cpp](https://github.com/ggerganov/whisper.cpp)
+
+[![macOS](https://img.shields.io/badge/macOS-13%2B-blue)](https://www.apple.com/macos/)
+[![Swift](https://img.shields.io/badge/Swift-6-orange)](https://swift.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+WhisperBar vive en la barra de menú y transcribe tu voz directamente donde está el cursor.
+Todo ocurre localmente — ningún audio sale de tu Mac.
 
 ```
 Mantén ⌘⌥S  →  🔴 graba
 Suelta       →  ⏳ transcribe  →  📋 pega donde está el cursor
 ```
 
+![Demo](https://raw.githubusercontent.com/jssegurag/whisper-bar-macbook/main/docs/demo.gif)
+
+---
+
+## Características
+
+- **Completamente offline** — usa whisper.cpp, sin APIs externas
+- **Preserva el clipboard** — restaura lo que tenías copiado tras pegar
+- **Auto-detección de rutas** — encuentra whisper-cli y el modelo automáticamente
+- **Configurable** — idioma, modelo, ruta y duración mínima via `defaults`
+- **Apple Silicon e Intel** — el script de build detecta la arquitectura
+- **Open source** — código modular, fácil de extender y contribuir
+
 ---
 
 ## Requisitos
 
-| Requisito | Versión mínima |
-|-----------|----------------|
-| macOS     | 13 Ventura     |
-| Homebrew  | cualquiera     |
-| Xcode CLT | cualquiera     |
+| Componente | Versión mínima |
+|------------|----------------|
+| macOS      | 13 Ventura     |
+| Homebrew   | cualquiera     |
+| Xcode CLT  | cualquiera (`xcode-select --install`) |
 
 ---
 
@@ -28,7 +47,13 @@ Suelta       →  ⏳ transcribe  →  📋 pega donde está el cursor
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-### 2. whisper-cpp
+### 2. Xcode Command Line Tools
+
+```bash
+xcode-select --install
+```
+
+### 3. whisper-cpp
 
 ```bash
 brew install whisper-cpp
@@ -37,61 +62,58 @@ brew install whisper-cpp
 Verifica que quedó instalado:
 
 ```bash
-which whisper-cli   # debe imprimir la ruta
+which whisper-cli   # debe imprimir la ruta del binario
 ```
 
-### 3. Modelo de transcripción
+### 4. Modelo de transcripción
 
-Crea la carpeta de modelos y descarga el que prefieras:
+Crea la carpeta de modelos:
 
 ```bash
 mkdir -p ~/.whisper-realtime
 ```
 
-| Modelo     | Tamaño | Velocidad | Precisión | Comando de descarga |
-|------------|--------|-----------|-----------|---------------------|
-| tiny       | 75 MB  | ⚡⚡⚡⚡⚡ | ⭐⭐       | `brew install --cask whisper-cpp-model-tiny` |
-| base       | 150 MB | ⚡⚡⚡⚡  | ⭐⭐⭐     | `brew install --cask whisper-cpp-model-base` |
-| small      | 500 MB | ⚡⚡⚡    | ⭐⭐⭐⭐   | `brew install --cask whisper-cpp-model-small` |
-| medium     | 1.5 GB | ⚡⚡      | ⭐⭐⭐⭐⭐ | `brew install --cask whisper-cpp-model-medium` |
-| large-v3   | 3 GB   | ⚡        | ⭐⭐⭐⭐⭐ | descarga manual (ver abajo) |
+Elige el modelo según tu necesidad:
 
-**Descarga manual del modelo large-v3** (el más preciso):
+| Modelo   | Tamaño | Velocidad | Precisión | Descarga |
+|----------|--------|-----------|-----------|----------|
+| tiny     | 75 MB  | ⚡⚡⚡⚡⚡ | ⭐⭐       | `brew install --cask whisper-cpp-model-tiny` |
+| base     | 150 MB | ⚡⚡⚡⚡  | ⭐⭐⭐     | `brew install --cask whisper-cpp-model-base` |
+| small    | 500 MB | ⚡⚡⚡    | ⭐⭐⭐⭐   | `brew install --cask whisper-cpp-model-small` |
+| medium   | 1.5 GB | ⚡⚡      | ⭐⭐⭐⭐⭐ | `brew install --cask whisper-cpp-model-medium` |
+| large-v3 | 3 GB   | ⚡        | ⭐⭐⭐⭐⭐ | ver abajo |
+
+**Descarga manual del modelo large-v3** (máxima precisión):
 
 ```bash
 curl -L "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin" \
      -o ~/.whisper-realtime/ggml-large-v3.bin
 ```
 
-WhisperBar detecta automáticamente el modelo disponible en `~/.whisper-realtime/`,
-priorizando los más grandes.
+> WhisperBar detecta automáticamente el modelo disponible en `~/.whisper-realtime/`, priorizando los más precisos.
 
-### 4. Copiar y compilar WhisperBar
+### 5. Clonar y compilar
 
 ```bash
-# Copiar la carpeta WhisperBar a tu Mac
-cp -r WhisperBar ~/.whisper-realtime/WhisperBar
-
-# Compilar e instalar
-bash ~/.whisper-realtime/WhisperBar/build.sh
+git clone git@github.com:jssegurag/whisper-bar-macbook.git
+cd whisper-bar-macbook
+bash build.sh
 ```
 
-El script detecta automáticamente si es Apple Silicon o Intel y compila para la arquitectura correcta.
+El script detecta la arquitectura (Apple Silicon / Intel) y crea la app en `~/Applications/WhisperBar.app`.
 
-### 5. Permisos (solo la primera vez)
+### 6. Permisos (primera vez)
 
-Al abrir WhisperBar, el sistema pedirá dos permisos:
+Al abrir WhisperBar el sistema pedirá dos permisos:
 
-**Accesibilidad** (para detectar el atajo de teclado global):
+**Accesibilidad** — necesario para detectar el atajo de teclado global:
 > Configuración del Sistema → Privacidad y Seguridad → Accesibilidad → activar WhisperBar
 
-**Micrófono** (aparece automáticamente al grabar por primera vez):
-> Aceptar cuando el sistema lo solicite
+**Micrófono** — aparece automáticamente la primera vez que grabes.
 
-### 6. Gatekeeper (si aparece "app no verificada")
+### 7. Gatekeeper
 
-La app está firmada con firma ad-hoc, no con una cuenta de desarrollador de Apple.
-Para desbloquearla:
+Si aparece "la app no puede abrirse porque es de un desarrollador no identificado":
 
 ```bash
 xattr -dr com.apple.quarantine ~/Applications/WhisperBar.app
@@ -101,18 +123,19 @@ xattr -dr com.apple.quarantine ~/Applications/WhisperBar.app
 
 ## Uso
 
-1. Abre `~/Applications/WhisperBar.app` — aparece el ícono 🎙 en la barra de menú
-2. Coloca el cursor donde quieras escribir (editor, navegador, chat, etc.)
-3. **Mantén ⌘⌥S** — el ícono cambia a 🔴 mientras grabas
+1. Abre `~/Applications/WhisperBar.app` — aparece 🎙 en la barra de menú
+2. Coloca el cursor donde quieras escribir
+3. **Mantén `⌘⌥S`** — el ícono cambia a 🔴 mientras grabas
 4. **Suelta** — el ícono cambia a ⏳ mientras transcribe
-5. El texto aparece automáticamente donde estaba el cursor
+5. El texto aparece en el cursor automáticamente
+
+El menú muestra el estado de la configuración en tiempo real (✅/❌).
 
 ---
 
 ## Configuración
 
-WhisperBar detecta automáticamente las rutas de `whisper-cli` y del modelo.
-Si necesitas cambiarlas manualmente (rutas no estándar, múltiples modelos, etc.):
+WhisperBar detecta las rutas automáticamente. Para personalizarlas:
 
 ```bash
 # Ver configuración actual
@@ -131,37 +154,37 @@ defaults write com.user.WhisperBar language "es"
 defaults write com.user.WhisperBar minRecordingDuration 0.5
 ```
 
-Reinicia WhisperBar después de cambiar la configuración:
+Reinicia la app después de cambiar la configuración:
 
 ```bash
 pkill WhisperBar; open ~/Applications/WhisperBar.app
 ```
 
----
-
-## Auto-inicio con el Mac
-
-Para que WhisperBar arranque automáticamente al encender el Mac:
+### Auto-inicio con el Mac
 
 > Configuración del Sistema → General → Elementos de inicio de sesión → `+` → seleccionar WhisperBar.app
 
 ---
 
-## Estructura del proyecto
+## Arquitectura
 
 ```
 WhisperBar/
 ├── Sources/
-│   ├── main.swift          # Punto de entrada
-│   ├── AppDelegate.swift   # Coordinador: menú, grabación, paste
-│   ├── Config.swift        # Configuración via UserDefaults + auto-detección
-│   ├── AudioRecorder.swift # Grabación de audio (AVAudioRecorder)
-│   ├── Transcriber.swift   # Invocación de whisper-cli con timeout
-│   └── HotkeyManager.swift # Atajo global de teclado (⌘⌥S)
-├── Info.plist              # Metadatos del bundle macOS
-├── build.sh                # Script de compilación (Apple Silicon + Intel)
-└── README.md               # Este archivo
+│   ├── main.swift            # Punto de entrada (4 líneas)
+│   ├── AppDelegate.swift     # Coordinador: menú, grabación, paste
+│   ├── Config.swift          # Configuración via UserDefaults + auto-detección
+│   ├── AudioRecorder.swift   # Grabación de audio (AVAudioRecorder)
+│   ├── Transcriber.swift     # Invocación de whisper-cli con timeout
+│   └── HotkeyManager.swift   # Atajo global ⌘⌥S (keyDown/keyUp)
+├── Info.plist                # Metadatos del bundle macOS
+├── build.sh                  # Compilación para Apple Silicon e Intel
+├── LICENSE
+├── CONTRIBUTING.md
+└── README.md
 ```
+
+Cada módulo tiene una única responsabilidad y no depende de los otros excepto `AppDelegate` (coordinador) y `Config` (compartido por todos).
 
 ---
 
@@ -175,7 +198,7 @@ brew install whisper-cpp
 
 **❌ Modelo no encontrado**
 ```bash
-ls ~/.whisper-realtime/*.bin   # verifica que existe el archivo
+ls ~/.whisper-realtime/*.bin
 ```
 
 **El atajo ⌘⌥S no responde**
@@ -184,7 +207,19 @@ ls ~/.whisper-realtime/*.bin   # verifica que existe el archivo
 **No graba audio**
 > Configuración del Sistema → Privacidad y Seguridad → Micrófono → verificar que WhisperBar está activado
 
-**Recompilar después de cambiar el código**
+**Recompilar tras cambiar el código**
 ```bash
-bash ~/.whisper-realtime/WhisperBar/build.sh
+bash build.sh
 ```
+
+---
+
+## Contribuir
+
+¡Las contribuciones son bienvenidas! Lee [CONTRIBUTING.md](CONTRIBUTING.md) para empezar.
+
+---
+
+## Licencia
+
+MIT © [jssegurag](https://github.com/jssegurag) — ver [LICENSE](LICENSE)
