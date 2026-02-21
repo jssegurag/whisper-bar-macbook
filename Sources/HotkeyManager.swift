@@ -38,14 +38,12 @@ class HotkeyManager {
     // MARK: - Privado
 
     private func checkAndRegister() {
-        // Mostrar el diálogo de permisos solo la primera vez
         if !hasPrompted {
             let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
                 as CFDictionary
             hasPrompted = true
             if AXIsProcessTrustedWithOptions(opts) { register(); return }
         } else {
-            // Reintentos silenciosos: verificar sin reabrir el diálogo
             if AXIsProcessTrusted() { register(); return }
         }
         scheduleRetry()
