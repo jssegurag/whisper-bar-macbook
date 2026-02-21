@@ -1,0 +1,11 @@
+# Binario compilado (generado por build.sh)
+WhisperBar_bin
+
+# macOS
+.DS_Store
+*.swp
+
+# Xcode (si se abre con Xcode en el futuro)
+*.xcodeproj/
+xcuserdata/
+DerivedData/
