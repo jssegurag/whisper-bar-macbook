@@ -33,6 +33,7 @@ mkdir -p "$APP/Contents/MacOS"
 mkdir -p "$APP/Contents/Resources"
 cp "$DIR/WhisperBar_bin" "$APP/Contents/MacOS/WhisperBar"
 cp "$DIR/Info.plist"     "$APP/Contents/Info.plist"
+cp "$DIR/AppIcon.icns"   "$APP/Contents/Resources/AppIcon.icns"
 
 echo "→ Firmando (ad-hoc)..."
 codesign --force --deep --sign - "$APP"
