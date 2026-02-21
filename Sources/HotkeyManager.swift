@@ -15,6 +15,7 @@ class HotkeyManager {
     private var keyDownMonitor: Any?
     private var keyUpMonitor:   Any?
     private var retryTimer:     DispatchSourceTimer?
+    private var hasPrompted     = false
 
     // MARK: - Setup
 
@@ -37,13 +38,17 @@ class HotkeyManager {
     // MARK: - Privado
 
     private func checkAndRegister() {
-        let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
-            as CFDictionary
-        guard AXIsProcessTrustedWithOptions(opts) else {
-            scheduleRetry()
-            return
+        // Mostrar el diálogo de permisos solo la primera vez
+        if !hasPrompted {
+            let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
+                as CFDictionary
+            hasPrompted = true
+            if AXIsProcessTrustedWithOptions(opts) { register(); return }
+        } else {
+            // Reintentos silenciosos: verificar sin reabrir el diálogo
+            if AXIsProcessTrusted() { register(); return }
         }
-        register()
+        scheduleRetry()
     }
 
     private func scheduleRetry() {
