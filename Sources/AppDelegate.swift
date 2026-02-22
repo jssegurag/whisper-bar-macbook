@@ -12,6 +12,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotkey        = HotkeyManager()
     private let audioFeedback = AudioFeedback()
     private let llmProcessor  = LLMProcessor()
+    private let actionDetector  = VoiceActionDetector()
+    private let actionExecutor  = VoiceActionExecutor()
     private let history       = TranscriptionHistory.shared
 
     private var statusItem: NSStatusItem!
@@ -84,6 +86,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let langItem = NSMenuItem(title: "Idioma: \(config.language)", action: nil, keyEquivalent: "")
         langItem.isEnabled = false
         menu.addItem(langItem)
+
+        let actionsItem = NSMenuItem(
+            title: config.voiceActionsEnabled ? "⚡ Acciones por voz: activadas" : "Acciones por voz: desactivadas",
+            action: nil, keyEquivalent: "")
+        actionsItem.isEnabled = false
+        menu.addItem(actionsItem)
 
         menu.addItem(.separator())
         menu.addItem(withTitle: "Preferencias…", action: #selector(openPreferences), keyEquivalent: ",")
@@ -195,11 +203,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     finalText = text
                 }
                 DispatchQueue.main.async { self.audioFeedback.stop() }
-                // Guardar en historial
-                let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
-                let entry = TranscriptionEntry(text: finalText, duration: duration, sourceApp: sourceApp)
-                self.history.add(entry)
-                self.paste(text: finalText)
+
+                // Detección de acciones por voz
+                if self.config.voiceActionsEnabled {
+                    let intent = self.actionDetector.detect(text: finalText)
+                    switch intent {
+                    case .none(let originalText):
+                        // Sin acción → paste normal
+                        let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
+                        let entry = TranscriptionEntry(text: originalText, duration: duration, sourceApp: sourceApp)
+                        self.history.add(entry)
+                        self.paste(text: originalText)
+                    default:
+                        // Ejecutar acción
+                        self.setIconEmoji("⚡")
+                        let result = self.actionExecutor.execute(intent)
+                        self.notify(result)
+                        DispatchQueue.main.async {
+                            self.setIconEmoji("🎙")
+                            self.rebuildMenu()
+                        }
+                    }
+                } else {
+                    // Acciones desactivadas → paste normal
+                    let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
+                    let entry = TranscriptionEntry(text: finalText, duration: duration, sourceApp: sourceApp)
+                    self.history.add(entry)
+                    self.paste(text: finalText)
+                }
             case .failure(let error):
                 DispatchQueue.main.async { self.audioFeedback.stop() }
                 self.notify("Error: \(error.localizedDescription)")

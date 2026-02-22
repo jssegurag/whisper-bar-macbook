@@ -84,6 +84,24 @@ class Config {
         set { defaults.set(newValue, forKey: "llmPrompt") }
     }
 
+    // MARK: - Acciones por voz
+
+    /// Si las acciones por voz están habilitadas
+    var voiceActionsEnabled: Bool {
+        get { defaults.bool(forKey: "voiceActionsEnabled") }
+        set { defaults.set(newValue, forKey: "voiceActionsEnabled") }
+    }
+
+    /// Nombre legible del idioma por código
+    static func languageName(for code: String) -> String {
+        let names = [
+            "es": "Español", "en": "English", "fr": "Français",
+            "pt": "Português", "de": "Deutsch", "it": "Italiano",
+            "ja": "日本語", "zh": "中文", "ko": "한국어",
+        ]
+        return names[code] ?? code
+    }
+
     /// Cantidad máxima de entradas en el historial
     var maxHistoryCount: Int {
         get {

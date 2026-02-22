@@ -23,6 +23,8 @@ swiftc \
     "$DIR/Sources/HotkeyManager.swift" \
     "$DIR/Sources/AudioFeedback.swift" \
     "$DIR/Sources/LLMProcessor.swift" \
+    "$DIR/Sources/VoiceActionDetector.swift" \
+    "$DIR/Sources/VoiceActionExecutor.swift" \
     "$DIR/Sources/PreferencesView.swift" \
     "$DIR/Sources/PreferencesWindowController.swift" \
     "$DIR/Sources/TranscriptionHistory.swift" \
