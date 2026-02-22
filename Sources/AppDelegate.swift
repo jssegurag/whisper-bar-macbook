@@ -28,8 +28,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenuBar()
         AudioRecorder.requestPermission { _ in }
 
-        hotkey.onKeyDown = { [weak self] in self?.startRecording() }
-        hotkey.onKeyUp   = { [weak self] in self?.stopAndTranscribe() }
+        // Transcripción: ⌘⌥
+        hotkey.register(id: "transcribe", modifiers: [.command, .option],
+            onKeyDown: { [weak self] in self?.startRecording() },
+            onKeyUp:   { [weak self] in self?.stopAndTranscribe() }
+        )
+
+        // Transcripción flotante: ⌘⌥⌃
+        hotkey.register(id: "floating", modifiers: [.command, .option, .control],
+            onKeyDown: { },
+            onKeyUp:   { [weak self] in self?.toggleFloatingTranscription() }
+        )
+
         hotkey.setupWhenReady()
 
         if !config.isValid {
@@ -40,6 +50,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         hotkey.tearDown()
         stopRecordingAnimation()
+        FloatingTranscriptionWindowController.shared.hideWindow()
     }
 
     // MARK: - Barra de menú
@@ -61,6 +72,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(hint)
         menu.addItem(.separator())
 
+        // Transcripción flotante
+        let floatingItem: NSMenuItem
+        if config.isWhisperStreamValid {
+            let label = FloatingTranscriptionWindowController.shared.isVisible
+                ? "⏹ Detener transcripción en vivo"
+                : "🔴 Transcripción en tiempo real"
+            floatingItem = NSMenuItem(title: label, action: #selector(toggleFloatingAction), keyEquivalent: "t")
+            floatingItem.keyEquivalentModifierMask = [.command]
+        } else {
+            floatingItem = NSMenuItem(title: "Streaming: whisper-stream no encontrado", action: nil, keyEquivalent: "")
+            floatingItem.isEnabled = false
+        }
+        menu.addItem(floatingItem)
+
+        let floatingHint = NSMenuItem(title: "⌘⌥⌃ para toggle rápido", action: nil, keyEquivalent: "")
+        floatingHint.isEnabled = false
+        menu.addItem(floatingHint)
+
+        menu.addItem(.separator())
+
         menu.addItem(statusMenuItem(for: config.isWhisperCliValid,
                                     ok:  "whisper-cli: \(URL(fileURLWithPath: config.whisperCliPath).lastPathComponent)",
                                     err: "❌ whisper-cli no encontrado"))
@@ -79,6 +110,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let llmOff = NSMenuItem(title: "LLM: desactivado", action: nil, keyEquivalent: "")
             llmOff.isEnabled = false
             menu.addItem(llmOff)
+        }
+
+        if config.isWhisperStreamValid {
+            menu.addItem(statusMenuItem(for: true,
+                                        ok: "whisper-stream: \(URL(fileURLWithPath: config.whisperStreamPath).lastPathComponent)",
+                                        err: ""))
         }
 
         let langItem = NSMenuItem(title: "Idioma: \(config.language)", action: nil, keyEquivalent: "")
@@ -209,6 +246,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.setIconEmoji("🎙")
             }
         }
+    }
+
+    // MARK: - Transcripción flotante
+
+    private func toggleFloatingTranscription() {
+        DispatchQueue.main.async { [weak self] in
+            FloatingTranscriptionWindowController.shared.toggleWindow()
+            self?.rebuildMenu()
+        }
+    }
+
+    @objc private func toggleFloatingAction() {
+        toggleFloatingTranscription()
     }
 
     // MARK: - Paste (preserva el clipboard del usuario)

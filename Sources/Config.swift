@@ -84,6 +84,50 @@ class Config {
         set { defaults.set(newValue, forKey: "llmPrompt") }
     }
 
+    // MARK: - Transcripción flotante / Streaming
+
+    /// Ruta al binario whisper-stream
+    var whisperStreamPath: String {
+        get {
+            if let saved = defaults.string(forKey: "whisperStreamPath"), !saved.isEmpty {
+                return saved
+            }
+            return Config.detectWhisperStream() ?? "/opt/homebrew/bin/whisper-stream"
+        }
+        set { defaults.set(newValue, forKey: "whisperStreamPath") }
+    }
+
+    var isWhisperStreamValid: Bool {
+        FileManager.default.isExecutableFile(atPath: whisperStreamPath)
+    }
+
+    /// Step size en ms (cada cuánto whisper-stream produce output)
+    var streamStepMs: Int {
+        get {
+            let v = defaults.integer(forKey: "streamStepMs")
+            return v > 0 ? v : 3000
+        }
+        set { defaults.set(newValue, forKey: "streamStepMs") }
+    }
+
+    /// Longitud de audio para streaming en ms
+    var streamLengthMs: Int {
+        get {
+            let v = defaults.integer(forKey: "streamLengthMs")
+            return v > 0 ? v : 10000
+        }
+        set { defaults.set(newValue, forKey: "streamLengthMs") }
+    }
+
+    /// Overlap de audio para streaming en ms
+    var streamKeepMs: Int {
+        get {
+            let v = defaults.integer(forKey: "streamKeepMs")
+            return v > 0 ? v : 200
+        }
+        set { defaults.set(newValue, forKey: "streamKeepMs") }
+    }
+
     /// Cantidad máxima de entradas en el historial
     var maxHistoryCount: Int {
         get {
@@ -173,5 +217,14 @@ class Config {
             .sorted()
             .first
             .map { "\(dir)/\($0)" }
+    }
+
+    /// Busca whisper-stream en rutas comunes de Homebrew
+    static func detectWhisperStream() -> String? {
+        let candidates = [
+            "/opt/homebrew/bin/whisper-stream",   // Apple Silicon
+            "/usr/local/bin/whisper-stream",       // Intel
+        ]
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 }
