@@ -24,6 +24,8 @@ swiftc \
     "$DIR/Sources/AudioFeedback.swift" \
     "$DIR/Sources/LLMProcessor.swift" \
     "$DIR/Sources/TranslationProcessor.swift" \
+    "$DIR/Sources/VoiceActionDetector.swift" \
+    "$DIR/Sources/VoiceActionExecutor.swift" \
     "$DIR/Sources/PreferencesView.swift" \
     "$DIR/Sources/PreferencesWindowController.swift" \
     "$DIR/Sources/TranscriptionHistory.swift" \

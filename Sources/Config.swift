@@ -98,6 +98,14 @@ class Config {
         set { defaults.set(newValue, forKey: "translationTargetLanguage") }
     }
 
+    // MARK: - Acciones por voz
+
+    /// Si las acciones por voz están habilitadas
+    var voiceActionsEnabled: Bool {
+        get { defaults.bool(forKey: "voiceActionsEnabled") }
+        set { defaults.set(newValue, forKey: "voiceActionsEnabled") }
+    }
+
     /// Nombre legible del idioma por código
     static func languageName(for code: String) -> String {
         let names = [
