@@ -11,6 +11,7 @@ class LLMProcessor {
         case invalidConfig
         case timeout
         case emptyOutput
+        case processError(String)
 
         var errorDescription: String? {
             switch self {
@@ -18,6 +19,7 @@ class LLMProcessor {
             case .invalidConfig: return "Config LLM inválida — verifica llama-cli y modelo."
             case .timeout:     return "LLM timeout (>30s)."
             case .emptyOutput: return "LLM no devolvió texto."
+            case .processError(let msg): return "LLM error: \(msg)"
             }
         }
     }
@@ -39,11 +41,15 @@ class LLMProcessor {
             "-n", "512",
             "--no-display-prompt",
             "-ngl", "99",
+            "-no-cnv",
+            "--log-disable",
         ]
 
         let outPipe = Pipe()
+        let errPipe = Pipe()
         proc.standardOutput = outPipe
-        proc.standardError  = Pipe()
+        proc.standardError  = errPipe
+        proc.standardInput  = FileHandle.nullDevice   // cerrar stdin → no modo conversación
 
         do { try proc.run() } catch { return .failure(error) }
 
@@ -55,9 +61,32 @@ class LLMProcessor {
             return .failure(LLMError.timeout)
         }
 
+        // Verificar exit code
+        if proc.terminationStatus != 0 {
+            let errMsg = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(),
+                                encoding: .utf8) ?? "exit code \(proc.terminationStatus)"
+            return .failure(LLMError.processError(errMsg.trimmingCharacters(in: .whitespacesAndNewlines)))
+        }
+
         let raw = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(),
                          encoding: .utf8) ?? ""
-        let cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Limpiar output: filtrar líneas de banner/prompt de llama-cli
+        let cleaned = raw
+            .components(separatedBy: .newlines)
+            .filter { line in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                return !trimmed.isEmpty
+                    && !trimmed.hasPrefix(">")
+                    && !trimmed.hasPrefix("▄")
+                    && !trimmed.hasPrefix("█")
+                    && !trimmed.hasPrefix("▀")
+                    && !trimmed.hasPrefix("[")
+                    && !trimmed.hasPrefix("|-")
+            }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
         return cleaned.isEmpty ? .failure(LLMError.emptyOutput) : .success(cleaned)
     }
 }
