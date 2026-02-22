@@ -12,6 +12,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotkey        = HotkeyManager()
     private let audioFeedback = AudioFeedback()
     private let llmProcessor  = LLMProcessor()
+    private let history       = TranscriptionHistory.shared
 
     private var statusItem: NSStatusItem!
 
@@ -86,6 +87,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
         menu.addItem(withTitle: "Preferencias…", action: #selector(openPreferences), keyEquivalent: ",")
+        menu.addItem(withTitle: "Historial…", action: #selector(openHistory), keyEquivalent: "h")
         menu.addItem(withTitle: "Salir", action: #selector(quit), keyEquivalent: "q")
 
         statusItem.menu = menu
@@ -193,6 +195,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     finalText = text
                 }
                 DispatchQueue.main.async { self.audioFeedback.stop() }
+                // Guardar en historial
+                let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
+                let entry = TranscriptionEntry(text: finalText, duration: duration, sourceApp: sourceApp)
+                self.history.add(entry)
                 self.paste(text: finalText)
             case .failure(let error):
                 DispatchQueue.main.async { self.audioFeedback.stop() }
@@ -245,6 +251,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openPreferences() {
         PreferencesWindowController.shared.showWindow()
+    }
+
+    @objc private func openHistory() {
+        HistoryWindowController.shared.showWindow()
     }
 
     @objc private func quit() { NSApp.terminate(nil) }

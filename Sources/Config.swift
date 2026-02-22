@@ -84,6 +84,15 @@ class Config {
         set { defaults.set(newValue, forKey: "llmPrompt") }
     }
 
+    /// Cantidad máxima de entradas en el historial
+    var maxHistoryCount: Int {
+        get {
+            let v = defaults.integer(forKey: "maxHistoryCount")
+            return v > 0 ? v : 100
+        }
+        set { defaults.set(newValue, forKey: "maxHistoryCount") }
+    }
+
     // MARK: - Validación
 
     var isWhisperCliValid: Bool {

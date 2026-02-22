@@ -25,6 +25,9 @@ swiftc \
     "$DIR/Sources/LLMProcessor.swift" \
     "$DIR/Sources/PreferencesView.swift" \
     "$DIR/Sources/PreferencesWindowController.swift" \
+    "$DIR/Sources/TranscriptionHistory.swift" \
+    "$DIR/Sources/HistoryView.swift" \
+    "$DIR/Sources/HistoryWindowController.swift" \
     "$DIR/Sources/AppDelegate.swift" \
     -o "$DIR/WhisperBar_bin" \
     -framework Cocoa \
