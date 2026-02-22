@@ -1,7 +1,7 @@
 import AppKit
 import ApplicationServices
 
-/// Combinación de hotkey registrada con sus callbacks.
+/// Representa una combinación de teclas registrada con sus callbacks.
 struct HotkeyCombination {
     let id: String
     let modifiers: NSEvent.ModifierFlags
@@ -9,8 +9,8 @@ struct HotkeyCombination {
     let onKeyUp: () -> Void
 }
 
-/// Registra múltiples atajos globales de teclado y notifica sus callbacks
-/// cuando los modificadores exactos se presionan o sueltan.
+/// Gestiona múltiples atajos globales de teclado con matching exacto de modificadores.
+/// Soporta ⌘⌥, ⌘⌥⇧, ⌘⌥⌃ etc sin conflictos entre combinaciones.
 class HotkeyManager {
 
     private var combinations: [HotkeyCombination] = []
@@ -20,22 +20,18 @@ class HotkeyManager {
     private var retryTimer:   DispatchSourceTimer?
     private var hasPrompted   = false
 
-    /// Solo estos modificadores se comparan (ignora capsLock, fn, etc.)
+    /// Máscara de modificadores relevantes (ignora caps lock, fn, etc.)
     private let relevantMask: NSEvent.ModifierFlags = [.command, .option, .shift, .control]
 
-    // MARK: - Registro
+    // MARK: - API pública
 
-    /// Registra una combinación de hotkey. Llamar antes de setupWhenReady().
+    /// Registra una combinación de teclas. Llamar ANTES de `setupWhenReady()`.
     func register(id: String, modifiers: NSEvent.ModifierFlags,
-                  onKeyDown: @escaping () -> Void,
-                  onKeyUp: @escaping () -> Void) {
+                  onKeyDown: @escaping () -> Void, onKeyUp: @escaping () -> Void) {
         combinations.append(HotkeyCombination(
             id: id, modifiers: modifiers,
-            onKeyDown: onKeyDown, onKeyUp: onKeyUp
-        ))
+            onKeyDown: onKeyDown, onKeyUp: onKeyUp))
     }
-
-    // MARK: - Setup
 
     func setupWhenReady() {
         checkAndRegister()
@@ -71,16 +67,16 @@ class HotkeyManager {
     }
 
     private func startMonitor() {
+        guard flagsMonitor == nil else { return }
+
         flagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
             guard let self else { return }
-
-            // Extraer solo los modificadores relevantes (ignorar fn, capsLock, numLock)
             let current = event.modifierFlags
                 .intersection(.deviceIndependentFlagsMask)
                 .intersection(self.relevantMask)
 
             if let activeId = self.activeComboId {
-                // Hay un combo activo → verificar si se soltó
+                // Ya hay un combo activo — verificar si se soltó
                 if let combo = self.combinations.first(where: { $0.id == activeId }) {
                     if current != combo.modifiers {
                         self.activeComboId = nil
@@ -88,8 +84,7 @@ class HotkeyManager {
                     }
                 }
             } else {
-                // Ningún combo activo → buscar match exacto
-                // Prioridad: combos más específicos primero (más modifiers)
+                // Buscar match exacto — prioridad: más modificadores primero
                 let sorted = self.combinations.sorted {
                     $0.modifiers.rawValue.nonzeroBitCount > $1.modifiers.rawValue.nonzeroBitCount
                 }
