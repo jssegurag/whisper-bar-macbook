@@ -22,11 +22,15 @@ swiftc \
     "$DIR/Sources/Transcriber.swift" \
     "$DIR/Sources/HotkeyManager.swift" \
     "$DIR/Sources/AudioFeedback.swift" \
+    "$DIR/Sources/TranscriptionHistory.swift" \
+    "$DIR/Sources/HistoryView.swift" \
+    "$DIR/Sources/HistoryWindowController.swift" \
     "$DIR/Sources/AppDelegate.swift" \
     -o "$DIR/WhisperBar_bin" \
     -framework Cocoa \
     -framework AVFoundation \
     -framework ApplicationServices \
+    -framework SwiftUI \
     -target "$TARGET"
 
 echo "→ Creando bundle..."

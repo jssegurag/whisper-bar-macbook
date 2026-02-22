@@ -11,6 +11,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let transcriber   = Transcriber()
     private let hotkey        = HotkeyManager()
     private let audioFeedback = AudioFeedback()
+    private let history       = TranscriptionHistory.shared
 
     private var statusItem: NSStatusItem!
 
@@ -71,6 +72,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(langItem)
 
         menu.addItem(.separator())
+        menu.addItem(withTitle: "Historial…", action: #selector(openHistory), keyEquivalent: "h")
         menu.addItem(withTitle: "Salir", action: #selector(quit), keyEquivalent: "q")
 
         statusItem.menu = menu
@@ -168,6 +170,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             switch self.transcriber.transcribe(url: audioURL) {
             case .success(let text) where !text.isEmpty:
                 DispatchQueue.main.async { self.audioFeedback.stop() }
+                // Guardar en historial
+                let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
+                let entry = TranscriptionEntry(text: text, duration: duration, sourceApp: sourceApp)
+                self.history.add(entry)
                 self.paste(text: text)
             case .failure(let error):
                 DispatchQueue.main.async { self.audioFeedback.stop() }
@@ -216,6 +222,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         proc.standardOutput = Pipe()
         proc.standardError  = Pipe()
         try? proc.run()
+    }
+
+    @objc private func openHistory() {
+        HistoryWindowController.shared.showWindow()
     }
 
     @objc private func quit() { NSApp.terminate(nil) }
