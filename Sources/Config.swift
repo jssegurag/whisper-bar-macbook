@@ -45,6 +45,45 @@ class Config {
         set { defaults.set(newValue, forKey: "minRecordingDuration") }
     }
 
+    // MARK: - LLM Post-procesamiento
+
+    /// Si el post-procesamiento con LLM está habilitado
+    var llmEnabled: Bool {
+        get { defaults.bool(forKey: "llmEnabled") }
+        set { defaults.set(newValue, forKey: "llmEnabled") }
+    }
+
+    /// Ruta al binario llama-cli
+    var llmCliPath: String {
+        get {
+            if let saved = defaults.string(forKey: "llmCliPath"), !saved.isEmpty {
+                return saved
+            }
+            return Config.detectLlmCli() ?? "/opt/homebrew/bin/llama-cli"
+        }
+        set { defaults.set(newValue, forKey: "llmCliPath") }
+    }
+
+    /// Ruta al modelo LLM (.gguf)
+    var llmModelPath: String {
+        get {
+            if let saved = defaults.string(forKey: "llmModelPath"), !saved.isEmpty {
+                return saved
+            }
+            return Config.detectLlmModel() ?? ""
+        }
+        set { defaults.set(newValue, forKey: "llmModelPath") }
+    }
+
+    /// Prompt del sistema para corrección con LLM
+    var llmPrompt: String {
+        get {
+            defaults.string(forKey: "llmPrompt")
+                ?? "Corrige ortografía y puntuación del siguiente texto. No cambies las palabras, solo corrige errores. Devuelve SOLO el texto corregido."
+        }
+        set { defaults.set(newValue, forKey: "llmPrompt") }
+    }
+
     // MARK: - Validación
 
     var isWhisperCliValid: Bool {
@@ -56,6 +95,14 @@ class Config {
     }
 
     var isValid: Bool { isWhisperCliValid && isModelValid }
+
+    var isLlmCliValid: Bool {
+        FileManager.default.isExecutableFile(atPath: llmCliPath)
+    }
+
+    var isLlmModelValid: Bool {
+        !llmModelPath.isEmpty && FileManager.default.fileExists(atPath: llmModelPath)
+    }
 
     // MARK: - Auto-detección
 
@@ -95,5 +142,25 @@ class Config {
             "\(home)/.whisper-realtime/ggml-tiny.bin",
         ]
         return candidates.first { FileManager.default.fileExists(atPath: $0) }
+    }
+
+    /// Busca llama-cli en rutas comunes de Homebrew
+    static func detectLlmCli() -> String? {
+        let candidates = [
+            "/opt/homebrew/bin/llama-cli",
+            "/usr/local/bin/llama-cli",
+        ]
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
+    /// Busca modelos .gguf en la carpeta estándar
+    static func detectLlmModel() -> String? {
+        let dir = "\(NSHomeDirectory())/.whisper-realtime"
+        guard let files = try? FileManager.default.contentsOfDirectory(atPath: dir) else { return nil }
+        return files
+            .filter { $0.hasSuffix(".gguf") }
+            .sorted()
+            .first
+            .map { "\(dir)/\($0)" }
     }
 }

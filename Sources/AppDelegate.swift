@@ -11,6 +11,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let transcriber   = Transcriber()
     private let hotkey        = HotkeyManager()
     private let audioFeedback = AudioFeedback()
+    private let llmProcessor  = LLMProcessor()
 
     private var statusItem: NSStatusItem!
 
@@ -65,6 +66,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(statusMenuItem(for: config.isModelValid,
                                     ok:  "Modelo: \(URL(fileURLWithPath: config.modelPath).lastPathComponent)",
                                     err: "❌ Modelo no encontrado"))
+
+        if config.llmEnabled {
+            menu.addItem(statusMenuItem(for: config.isLlmCliValid,
+                                        ok:  "LLM: \(URL(fileURLWithPath: config.llmCliPath).lastPathComponent)",
+                                        err: "❌ llama-cli no encontrado"))
+            menu.addItem(statusMenuItem(for: config.isLlmModelValid,
+                                        ok:  "LLM Modelo: \(URL(fileURLWithPath: config.llmModelPath).lastPathComponent)",
+                                        err: "❌ LLM Modelo no configurado"))
+        } else {
+            let llmOff = NSMenuItem(title: "LLM: desactivado", action: nil, keyEquivalent: "")
+            llmOff.isEnabled = false
+            menu.addItem(llmOff)
+        }
 
         let langItem = NSMenuItem(title: "Idioma: \(config.language)", action: nil, keyEquivalent: "")
         langItem.isEnabled = false
@@ -167,8 +181,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             switch self.transcriber.transcribe(url: audioURL) {
             case .success(let text) where !text.isEmpty:
+                // LLM post-procesamiento (retorna texto original si está deshabilitado)
+                self.setIconEmoji("🧠")
+                let finalText: String
+                switch self.llmProcessor.process(text: text) {
+                case .success(let processed):
+                    finalText = processed
+                case .failure(let llmError):
+                    self.notify("LLM error (usando texto original): \(llmError.localizedDescription)")
+                    finalText = text
+                }
                 DispatchQueue.main.async { self.audioFeedback.stop() }
-                self.paste(text: text)
+                self.paste(text: finalText)
             case .failure(let error):
                 DispatchQueue.main.async { self.audioFeedback.stop() }
                 self.notify("Error: \(error.localizedDescription)")

@@ -22,6 +22,7 @@ swiftc \
     "$DIR/Sources/Transcriber.swift" \
     "$DIR/Sources/HotkeyManager.swift" \
     "$DIR/Sources/AudioFeedback.swift" \
+    "$DIR/Sources/LLMProcessor.swift" \
     "$DIR/Sources/AppDelegate.swift" \
     -o "$DIR/WhisperBar_bin" \
     -framework Cocoa \
