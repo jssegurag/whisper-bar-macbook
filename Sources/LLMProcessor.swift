@@ -1,6 +1,6 @@
 import Foundation
 
-/// Procesa texto a través de llama-cli para corrección ortográfica y puntuación.
+/// Procesa texto a través de llama-completion para corrección ortográfica y puntuación.
 class LLMProcessor {
 
     private let config  = Config.shared
@@ -16,7 +16,7 @@ class LLMProcessor {
         var errorDescription: String? {
             switch self {
             case .disabled:    return "LLM deshabilitado."
-            case .invalidConfig: return "Config LLM inválida — verifica llama-cli y modelo."
+            case .invalidConfig: return "Config LLM inválida — verifica llama-completion y modelo."
             case .timeout:     return "LLM timeout (>30s)."
             case .emptyOutput: return "LLM no devolvió texto."
             case .processError(let msg): return "LLM error: \(msg)"
@@ -31,25 +31,21 @@ class LLMProcessor {
             return .failure(LLMError.invalidConfig)
         }
 
-        let fullPrompt = "\(config.llmPrompt)\n\nTexto: \(text)"
-
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: config.llmCliPath)
         proc.arguments = [
             "-m", config.llmModelPath,
-            "-p", fullPrompt,
+            "-sys", config.llmPrompt,
+            "-p", text,
             "-n", "512",
-            "--no-display-prompt",
             "-ngl", "99",
-            "-no-cnv",
-            "--log-disable",
         ]
 
         let outPipe = Pipe()
         let errPipe = Pipe()
         proc.standardOutput = outPipe
         proc.standardError  = errPipe
-        proc.standardInput  = FileHandle.nullDevice   // cerrar stdin → no modo conversación
+        proc.standardInput  = FileHandle.nullDevice   // cerrar stdin → sale tras primer turno
 
         do { try proc.run() } catch { return .failure(error) }
 
@@ -71,22 +67,53 @@ class LLMProcessor {
         let raw = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(),
                          encoding: .utf8) ?? ""
 
-        // Limpiar output: filtrar líneas de banner/prompt de llama-cli
-        let cleaned = raw
+        // Extraer solo la respuesta del assistant del formato chat:
+        // "user\n{prompt}\nassistant\n{response}\n> EOF by user"
+        let cleaned = extractAssistantResponse(from: raw)
+
+        return cleaned.isEmpty ? .failure(LLMError.emptyOutput) : .success(cleaned)
+    }
+
+    /// Extrae la respuesta del assistant del output con formato chat de llama-completion.
+    private func extractAssistantResponse(from raw: String) -> String {
+        // Buscar "assistant\n" como marcador de inicio de respuesta
+        if let range = raw.range(of: "assistant\n") {
+            let afterAssistant = String(raw[range.upperBound...])
+            // Limpiar: quitar líneas de control y "EOF by user"
+            return afterAssistant
+                .components(separatedBy: .newlines)
+                .filter { line in
+                    let trimmed = line.trimmingCharacters(in: .whitespaces)
+                    return !trimmed.isEmpty
+                        && !trimmed.hasPrefix(">")
+                        && !trimmed.hasPrefix("▄")
+                        && !trimmed.hasPrefix("█")
+                        && !trimmed.hasPrefix("▀")
+                        && !trimmed.hasPrefix("[")
+                        && !trimmed.hasPrefix("|-")
+                        && !trimmed.contains("EOF by user")
+                }
+                .joined(separator: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        // Fallback: si no hay marcador "assistant", filtrar todo el output
+        return raw
             .components(separatedBy: .newlines)
             .filter { line in
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 return !trimmed.isEmpty
+                    && trimmed != "user"
+                    && trimmed != "assistant"
                     && !trimmed.hasPrefix(">")
                     && !trimmed.hasPrefix("▄")
                     && !trimmed.hasPrefix("█")
                     && !trimmed.hasPrefix("▀")
                     && !trimmed.hasPrefix("[")
                     && !trimmed.hasPrefix("|-")
+                    && !trimmed.contains("EOF by user")
             }
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        return cleaned.isEmpty ? .failure(LLMError.emptyOutput) : .success(cleaned)
     }
 }

@@ -71,7 +71,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if config.llmEnabled {
             menu.addItem(statusMenuItem(for: config.isLlmCliValid,
                                         ok:  "LLM: \(URL(fileURLWithPath: config.llmCliPath).lastPathComponent)",
-                                        err: "❌ llama-cli no encontrado"))
+                                        err: "❌ llama-completion no encontrado"))
             menu.addItem(statusMenuItem(for: config.isLlmModelValid,
                                         ok:  "LLM Modelo: \(URL(fileURLWithPath: config.llmModelPath).lastPathComponent)",
                                         err: "❌ LLM Modelo no configurado"))

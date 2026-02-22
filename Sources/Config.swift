@@ -53,13 +53,13 @@ class Config {
         set { defaults.set(newValue, forKey: "llmEnabled") }
     }
 
-    /// Ruta al binario llama-cli
+    /// Ruta al binario llama-completion (single-shot, no modo conversación)
     var llmCliPath: String {
         get {
             if let saved = defaults.string(forKey: "llmCliPath"), !saved.isEmpty {
                 return saved
             }
-            return Config.detectLlmCli() ?? "/opt/homebrew/bin/llama-cli"
+            return Config.detectLlmCli() ?? "/opt/homebrew/bin/llama-completion"
         }
         set { defaults.set(newValue, forKey: "llmCliPath") }
     }
@@ -153,10 +153,12 @@ class Config {
         return candidates.first { FileManager.default.fileExists(atPath: $0) }
     }
 
-    /// Busca llama-cli en rutas comunes de Homebrew
+    /// Busca llama-completion en rutas comunes de Homebrew (single-shot, sin modo conversación)
     static func detectLlmCli() -> String? {
         let candidates = [
-            "/opt/homebrew/bin/llama-cli",
+            "/opt/homebrew/bin/llama-completion",   // Apple Silicon
+            "/usr/local/bin/llama-completion",       // Intel
+            "/opt/homebrew/bin/llama-cli",           // fallback legacy
             "/usr/local/bin/llama-cli",
         ]
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
