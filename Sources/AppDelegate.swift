@@ -12,7 +12,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotkey        = HotkeyManager()
     private let audioFeedback = AudioFeedback()
     private let llmProcessor  = LLMProcessor()
+    private let translator    = TranslationProcessor()
     private let history       = TranscriptionHistory.shared
+
+    /// Modo de grabación actual (transcripción o traducción)
+    private var recordingMode: RecordingMode = .transcribe
+    private enum RecordingMode { case transcribe, translate }
 
     private var statusItem: NSStatusItem!
 
@@ -28,8 +33,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenuBar()
         AudioRecorder.requestPermission { _ in }
 
-        hotkey.onKeyDown = { [weak self] in self?.startRecording() }
-        hotkey.onKeyUp   = { [weak self] in self?.stopAndTranscribe() }
+        // Transcripción: ⌘⌥
+        hotkey.register(id: "transcribe", modifiers: [.command, .option],
+            onKeyDown: { [weak self] in
+                self?.recordingMode = .transcribe
+                self?.startRecording()
+            },
+            onKeyUp: { [weak self] in self?.stopAndTranscribe() }
+        )
+
+        // Traducción: ⌘⌥⇧
+        hotkey.register(id: "translate", modifiers: [.command, .option, .shift],
+            onKeyDown: { [weak self] in
+                self?.recordingMode = .translate
+                self?.startRecording()
+            },
+            onKeyUp: { [weak self] in self?.stopAndTranslate() }
+        )
+
         hotkey.setupWhenReady()
 
         if !config.isValid {
@@ -59,6 +80,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let hint = NSMenuItem(title: "Mantén ⌘⌥ para grabar", action: nil, keyEquivalent: "")
         hint.isEnabled = false
         menu.addItem(hint)
+
+        if config.translationEnabled {
+            let target = Config.languageName(for: config.translationTargetLanguage)
+            let transHint = NSMenuItem(title: "Mantén ⌘⌥⇧ para traducir → \(target)", action: nil, keyEquivalent: "")
+            transHint.isEnabled = false
+            menu.addItem(transHint)
+        }
+
         menu.addItem(.separator())
 
         menu.addItem(statusMenuItem(for: config.isWhisperCliValid,
@@ -203,6 +232,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             case .failure(let error):
                 DispatchQueue.main.async { self.audioFeedback.stop() }
                 self.notify("Error: \(error.localizedDescription)")
+                self.setIconEmoji("🎙")
+            default:
+                DispatchQueue.main.async { self.audioFeedback.stop() }
+                self.setIconEmoji("🎙")
+            }
+        }
+    }
+
+    // MARK: - Traducción
+
+    private func stopAndTranslate() {
+        guard recorder.isRecording else { return }
+        stopRecordingAnimation()
+
+        let duration = recorder.stop()
+
+        guard duration >= config.minRecordingDuration else {
+            setIconEmoji("🎙")
+            return
+        }
+
+        setIconEmoji("🌐")
+        audioFeedback.start()
+
+        let audioURL = recorder.outputURL
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            switch self.translator.translate(audioURL: audioURL) {
+            case .success(let text) where !text.isEmpty:
+                DispatchQueue.main.async { self.audioFeedback.stop() }
+                let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
+                let entry = TranscriptionEntry(text: text, duration: duration, sourceApp: sourceApp)
+                self.history.add(entry)
+                self.paste(text: text)
+            case .failure(let error):
+                DispatchQueue.main.async { self.audioFeedback.stop() }
+                self.notify("Traducción error: \(error.localizedDescription)")
                 self.setIconEmoji("🎙")
             default:
                 DispatchQueue.main.async { self.audioFeedback.stop() }

@@ -1,19 +1,39 @@
 import AppKit
 import ApplicationServices
 
-/// Registra un atajo global de teclado (⌘⌥) y notifica al delegado
-/// cuando ambos modificadores se presionan (inicio de grabación) o se sueltan (fin).
+/// Combinación de hotkey registrada con sus callbacks.
+struct HotkeyCombination {
+    let id: String
+    let modifiers: NSEvent.ModifierFlags
+    let onKeyDown: () -> Void
+    let onKeyUp: () -> Void
+}
+
+/// Registra múltiples atajos globales de teclado y notifica sus callbacks
+/// cuando los modificadores exactos se presionan o sueltan.
 class HotkeyManager {
 
-    var onKeyDown: (() -> Void)?
-    var onKeyUp:   (() -> Void)?
-
-    private let targetModifiers: NSEvent.ModifierFlags = [.command, .option]
+    private var combinations: [HotkeyCombination] = []
+    private var activeComboId: String?
 
     private var flagsMonitor: Any?
     private var retryTimer:   DispatchSourceTimer?
     private var hasPrompted   = false
-    private var isActive      = false
+
+    /// Solo estos modificadores se comparan (ignora capsLock, fn, etc.)
+    private let relevantMask: NSEvent.ModifierFlags = [.command, .option, .shift, .control]
+
+    // MARK: - Registro
+
+    /// Registra una combinación de hotkey. Llamar antes de setupWhenReady().
+    func register(id: String, modifiers: NSEvent.ModifierFlags,
+                  onKeyDown: @escaping () -> Void,
+                  onKeyUp: @escaping () -> Void) {
+        combinations.append(HotkeyCombination(
+            id: id, modifiers: modifiers,
+            onKeyDown: onKeyDown, onKeyUp: onKeyUp
+        ))
+    }
 
     // MARK: - Setup
 
@@ -35,9 +55,9 @@ class HotkeyManager {
             let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
                 as CFDictionary
             hasPrompted = true
-            if AXIsProcessTrustedWithOptions(opts) { register(); return }
+            if AXIsProcessTrustedWithOptions(opts) { startMonitor(); return }
         } else {
-            if AXIsProcessTrusted() { register(); return }
+            if AXIsProcessTrusted() { startMonitor(); return }
         }
         scheduleRetry()
     }
@@ -50,18 +70,36 @@ class HotkeyManager {
         retryTimer = timer
     }
 
-    private func register() {
+    private func startMonitor() {
         flagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
             guard let self else { return }
-            let bothPressed = event.modifierFlags
-                .intersection(self.targetModifiers) == self.targetModifiers
 
-            if bothPressed && !self.isActive {
-                self.isActive = true
-                self.onKeyDown?()
-            } else if !bothPressed && self.isActive {
-                self.isActive = false
-                self.onKeyUp?()
+            // Extraer solo los modificadores relevantes (ignorar fn, capsLock, numLock)
+            let current = event.modifierFlags
+                .intersection(.deviceIndependentFlagsMask)
+                .intersection(self.relevantMask)
+
+            if let activeId = self.activeComboId {
+                // Hay un combo activo → verificar si se soltó
+                if let combo = self.combinations.first(where: { $0.id == activeId }) {
+                    if current != combo.modifiers {
+                        self.activeComboId = nil
+                        combo.onKeyUp()
+                    }
+                }
+            } else {
+                // Ningún combo activo → buscar match exacto
+                // Prioridad: combos más específicos primero (más modifiers)
+                let sorted = self.combinations.sorted {
+                    $0.modifiers.rawValue.nonzeroBitCount > $1.modifiers.rawValue.nonzeroBitCount
+                }
+                for combo in sorted {
+                    if current == combo.modifiers {
+                        self.activeComboId = combo.id
+                        combo.onKeyDown()
+                        break
+                    }
+                }
             }
         }
     }

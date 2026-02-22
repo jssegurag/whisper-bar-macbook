@@ -84,6 +84,30 @@ class Config {
         set { defaults.set(newValue, forKey: "llmPrompt") }
     }
 
+    // MARK: - Traducción por voz
+
+    /// Si la traducción por voz está habilitada
+    var translationEnabled: Bool {
+        get { defaults.bool(forKey: "translationEnabled") }
+        set { defaults.set(newValue, forKey: "translationEnabled") }
+    }
+
+    /// Idioma destino para traducción (default: "en" — usa whisper-cli -tr sin LLM)
+    var translationTargetLanguage: String {
+        get { defaults.string(forKey: "translationTargetLanguage") ?? "en" }
+        set { defaults.set(newValue, forKey: "translationTargetLanguage") }
+    }
+
+    /// Nombre legible del idioma por código
+    static func languageName(for code: String) -> String {
+        let names = [
+            "es": "Español", "en": "English", "fr": "Français",
+            "pt": "Português", "de": "Deutsch", "it": "Italiano",
+            "ja": "日本語", "zh": "中文", "ko": "한국어",
+        ]
+        return names[code] ?? code
+    }
+
     /// Cantidad máxima de entradas en el historial
     var maxHistoryCount: Int {
         get {
