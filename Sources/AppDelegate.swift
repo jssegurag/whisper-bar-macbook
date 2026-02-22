@@ -85,6 +85,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(langItem)
 
         menu.addItem(.separator())
+        menu.addItem(withTitle: "Preferencias…", action: #selector(openPreferences), keyEquivalent: ",")
         menu.addItem(withTitle: "Salir", action: #selector(quit), keyEquivalent: "q")
 
         statusItem.menu = menu
@@ -240,6 +241,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         proc.standardOutput = Pipe()
         proc.standardError  = Pipe()
         try? proc.run()
+    }
+
+    @objc private func openPreferences() {
+        PreferencesWindowController.shared.showWindow()
     }
 
     @objc private func quit() { NSApp.terminate(nil) }
