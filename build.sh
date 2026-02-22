@@ -23,6 +23,13 @@ swiftc \
     "$DIR/Sources/HotkeyManager.swift" \
     "$DIR/Sources/AudioFeedback.swift" \
     "$DIR/Sources/LLMProcessor.swift" \
+    "$DIR/Sources/TranslationProcessor.swift" \
+    "$DIR/Sources/VoiceActionDetector.swift" \
+    "$DIR/Sources/VoiceActionExecutor.swift" \
+    "$DIR/Sources/StreamingTranscriber.swift" \
+    "$DIR/Sources/FloatingTranscriptionViewModel.swift" \
+    "$DIR/Sources/FloatingTranscriptionView.swift" \
+    "$DIR/Sources/FloatingTranscriptionWindowController.swift" \
     "$DIR/Sources/PreferencesView.swift" \
     "$DIR/Sources/PreferencesWindowController.swift" \
     "$DIR/Sources/TranscriptionHistory.swift" \

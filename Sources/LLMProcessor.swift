@@ -27,6 +27,11 @@ class LLMProcessor {
     /// Corrige el texto con LLM. Retorna el texto original si LLM está deshabilitado.
     func process(text: String) -> Result<String, Error> {
         guard config.llmEnabled else { return .success(text) }
+        return process(text: text, systemPrompt: config.llmPrompt)
+    }
+
+    /// Procesa texto con un prompt de sistema personalizado (traducción, acciones, etc.)
+    func process(text: String, systemPrompt: String) -> Result<String, Error> {
         guard config.isLlmCliValid, config.isLlmModelValid else {
             return .failure(LLMError.invalidConfig)
         }
@@ -35,7 +40,7 @@ class LLMProcessor {
         proc.executableURL = URL(fileURLWithPath: config.llmCliPath)
         proc.arguments = [
             "-m", config.llmModelPath,
-            "-sys", config.llmPrompt,
+            "-sys", systemPrompt,
             "-p", text,
             "-n", "512",
             "-ngl", "99",

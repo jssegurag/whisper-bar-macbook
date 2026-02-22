@@ -12,7 +12,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotkey        = HotkeyManager()
     private let audioFeedback = AudioFeedback()
     private let llmProcessor  = LLMProcessor()
+    private let translator      = TranslationProcessor()
+    private let actionDetector  = VoiceActionDetector()
+    private let actionExecutor  = VoiceActionExecutor()
     private let history       = TranscriptionHistory.shared
+
+    /// Modo de grabación actual (transcripción o traducción)
+    private var recordingMode: RecordingMode = .transcribe
+    private enum RecordingMode { case transcribe, translate }
 
     private var statusItem: NSStatusItem!
 
@@ -28,8 +35,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenuBar()
         AudioRecorder.requestPermission { _ in }
 
-        hotkey.onKeyDown = { [weak self] in self?.startRecording() }
-        hotkey.onKeyUp   = { [weak self] in self?.stopAndTranscribe() }
+        // Transcripción: ⌘⌥
+        hotkey.register(id: "transcribe", modifiers: [.command, .option],
+            onKeyDown: { [weak self] in
+                self?.recordingMode = .transcribe
+                self?.startRecording()
+            },
+            onKeyUp: { [weak self] in self?.stopAndTranscribe() }
+        )
+
+        // Traducción: ⌘⌥⇧
+        hotkey.register(id: "translate", modifiers: [.command, .option, .shift],
+            onKeyDown: { [weak self] in
+                self?.recordingMode = .translate
+                self?.startRecording()
+            },
+            onKeyUp: { [weak self] in self?.stopAndTranslate() }
+        )
+
+        // Transcripción flotante: ⌘⌥⌃
+        hotkey.register(id: "floating", modifiers: [.command, .option, .control],
+            onKeyDown: { },
+            onKeyUp:   { [weak self] in self?.toggleFloatingTranscription() }
+        )
+
         hotkey.setupWhenReady()
 
         if !config.isValid {
@@ -40,6 +69,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         hotkey.tearDown()
         stopRecordingAnimation()
+        FloatingTranscriptionWindowController.shared.hideWindow()
     }
 
     // MARK: - Barra de menú
@@ -59,6 +89,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let hint = NSMenuItem(title: "Mantén ⌘⌥ para grabar", action: nil, keyEquivalent: "")
         hint.isEnabled = false
         menu.addItem(hint)
+
+        if config.translationEnabled {
+            let target = Config.languageName(for: config.translationTargetLanguage)
+            let transHint = NSMenuItem(title: "Mantén ⌘⌥⇧ para traducir → \(target)", action: nil, keyEquivalent: "")
+            transHint.isEnabled = false
+            menu.addItem(transHint)
+        }
+
+        menu.addItem(.separator())
+
+        // Transcripción flotante
+        let floatingItem: NSMenuItem
+        if config.isWhisperStreamValid {
+            let label = FloatingTranscriptionWindowController.shared.isVisible
+                ? "⏹ Detener transcripción en vivo"
+                : "🔴 Transcripción en tiempo real"
+            floatingItem = NSMenuItem(title: label, action: #selector(toggleFloatingAction), keyEquivalent: "t")
+            floatingItem.keyEquivalentModifierMask = [.command]
+        } else {
+            floatingItem = NSMenuItem(title: "Streaming: whisper-stream no encontrado", action: nil, keyEquivalent: "")
+            floatingItem.isEnabled = false
+        }
+        menu.addItem(floatingItem)
+
+        let floatingHint = NSMenuItem(title: "⌘⌥⌃ para toggle rápido", action: nil, keyEquivalent: "")
+        floatingHint.isEnabled = false
+        menu.addItem(floatingHint)
+
         menu.addItem(.separator())
 
         menu.addItem(statusMenuItem(for: config.isWhisperCliValid,
@@ -81,9 +139,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(llmOff)
         }
 
+        if config.isWhisperStreamValid {
+            menu.addItem(statusMenuItem(for: true,
+                                        ok: "whisper-stream: \(URL(fileURLWithPath: config.whisperStreamPath).lastPathComponent)",
+                                        err: ""))
+        }
+
         let langItem = NSMenuItem(title: "Idioma: \(config.language)", action: nil, keyEquivalent: "")
         langItem.isEnabled = false
         menu.addItem(langItem)
+
+        let actionsItem = NSMenuItem(
+            title: config.voiceActionsEnabled ? "⚡ Acciones por voz: activadas" : "Acciones por voz: desactivadas",
+            action: nil, keyEquivalent: "")
+        actionsItem.isEnabled = false
+        menu.addItem(actionsItem)
 
         menu.addItem(.separator())
         menu.addItem(withTitle: "Preferencias…", action: #selector(openPreferences), keyEquivalent: ",")
@@ -195,11 +265,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     finalText = text
                 }
                 DispatchQueue.main.async { self.audioFeedback.stop() }
-                // Guardar en historial
-                let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
-                let entry = TranscriptionEntry(text: finalText, duration: duration, sourceApp: sourceApp)
-                self.history.add(entry)
-                self.paste(text: finalText)
+
+                // Detección de acciones por voz
+                if self.config.voiceActionsEnabled {
+                    let intent = self.actionDetector.detect(text: finalText)
+                    switch intent {
+                    case .none(let originalText):
+                        // Sin acción → paste normal
+                        let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
+                        let entry = TranscriptionEntry(text: originalText, duration: duration, sourceApp: sourceApp)
+                        self.history.add(entry)
+                        self.paste(text: originalText)
+                    default:
+                        // Ejecutar acción
+                        self.setIconEmoji("⚡")
+                        let result = self.actionExecutor.execute(intent)
+                        self.notify(result)
+                        DispatchQueue.main.async {
+                            self.setIconEmoji("🎙")
+                            self.rebuildMenu()
+                        }
+                    }
+                } else {
+                    // Acciones desactivadas → paste normal
+                    let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
+                    let entry = TranscriptionEntry(text: finalText, duration: duration, sourceApp: sourceApp)
+                    self.history.add(entry)
+                    self.paste(text: finalText)
+                }
             case .failure(let error):
                 DispatchQueue.main.async { self.audioFeedback.stop() }
                 self.notify("Error: \(error.localizedDescription)")
@@ -209,6 +302,57 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.setIconEmoji("🎙")
             }
         }
+    }
+
+    // MARK: - Traducción
+
+    private func stopAndTranslate() {
+        guard recorder.isRecording else { return }
+        stopRecordingAnimation()
+
+        let duration = recorder.stop()
+
+        guard duration >= config.minRecordingDuration else {
+            setIconEmoji("🎙")
+            return
+        }
+
+        setIconEmoji("🌐")
+        audioFeedback.start()
+
+        let audioURL = recorder.outputURL
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            switch self.translator.translate(audioURL: audioURL) {
+            case .success(let text) where !text.isEmpty:
+                DispatchQueue.main.async { self.audioFeedback.stop() }
+                let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
+                let entry = TranscriptionEntry(text: text, duration: duration, sourceApp: sourceApp)
+                self.history.add(entry)
+                self.paste(text: text)
+            case .failure(let error):
+                DispatchQueue.main.async { self.audioFeedback.stop() }
+                self.notify("Traducción error: \(error.localizedDescription)")
+                self.setIconEmoji("🎙")
+            default:
+                DispatchQueue.main.async { self.audioFeedback.stop() }
+                self.setIconEmoji("🎙")
+            }
+        }
+    }
+
+    // MARK: - Transcripción flotante
+
+    private func toggleFloatingTranscription() {
+        DispatchQueue.main.async { [weak self] in
+            FloatingTranscriptionWindowController.shared.toggleWindow()
+            self?.rebuildMenu()
+        }
+    }
+
+    @objc private func toggleFloatingAction() {
+        toggleFloatingTranscription()
     }
 
     // MARK: - Paste (preserva el clipboard del usuario)

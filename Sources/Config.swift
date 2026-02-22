@@ -84,6 +84,82 @@ class Config {
         set { defaults.set(newValue, forKey: "llmPrompt") }
     }
 
+    // MARK: - Traducción por voz
+
+    /// Si la traducción por voz está habilitada
+    var translationEnabled: Bool {
+        get { defaults.bool(forKey: "translationEnabled") }
+        set { defaults.set(newValue, forKey: "translationEnabled") }
+    }
+
+    /// Idioma destino para traducción (default: "en" — usa whisper-cli -tr sin LLM)
+    var translationTargetLanguage: String {
+        get { defaults.string(forKey: "translationTargetLanguage") ?? "en" }
+        set { defaults.set(newValue, forKey: "translationTargetLanguage") }
+    }
+
+    // MARK: - Acciones por voz
+
+    /// Si las acciones por voz están habilitadas
+    var voiceActionsEnabled: Bool {
+        get { defaults.bool(forKey: "voiceActionsEnabled") }
+        set { defaults.set(newValue, forKey: "voiceActionsEnabled") }
+    }
+
+    /// Nombre legible del idioma por código
+    static func languageName(for code: String) -> String {
+        let names = [
+            "es": "Español", "en": "English", "fr": "Français",
+            "pt": "Português", "de": "Deutsch", "it": "Italiano",
+            "ja": "日本語", "zh": "中文", "ko": "한국語",
+        ]
+        return names[code] ?? code
+    }
+
+    // MARK: - Transcripción flotante / Streaming
+
+    /// Ruta al binario whisper-stream
+    var whisperStreamPath: String {
+        get {
+            if let saved = defaults.string(forKey: "whisperStreamPath"), !saved.isEmpty {
+                return saved
+            }
+            return Config.detectWhisperStream() ?? "/opt/homebrew/bin/whisper-stream"
+        }
+        set { defaults.set(newValue, forKey: "whisperStreamPath") }
+    }
+
+    var isWhisperStreamValid: Bool {
+        FileManager.default.isExecutableFile(atPath: whisperStreamPath)
+    }
+
+    /// Step size en ms (cada cuánto whisper-stream produce output)
+    var streamStepMs: Int {
+        get {
+            let v = defaults.integer(forKey: "streamStepMs")
+            return v > 0 ? v : 3000
+        }
+        set { defaults.set(newValue, forKey: "streamStepMs") }
+    }
+
+    /// Longitud de audio para streaming en ms
+    var streamLengthMs: Int {
+        get {
+            let v = defaults.integer(forKey: "streamLengthMs")
+            return v > 0 ? v : 10000
+        }
+        set { defaults.set(newValue, forKey: "streamLengthMs") }
+    }
+
+    /// Overlap de audio para streaming en ms
+    var streamKeepMs: Int {
+        get {
+            let v = defaults.integer(forKey: "streamKeepMs")
+            return v > 0 ? v : 200
+        }
+        set { defaults.set(newValue, forKey: "streamKeepMs") }
+    }
+
     /// Cantidad máxima de entradas en el historial
     var maxHistoryCount: Int {
         get {
@@ -173,5 +249,14 @@ class Config {
             .sorted()
             .first
             .map { "\(dir)/\($0)" }
+    }
+
+    /// Busca whisper-stream en rutas comunes de Homebrew
+    static func detectWhisperStream() -> String? {
+        let candidates = [
+            "/opt/homebrew/bin/whisper-stream",   // Apple Silicon
+            "/usr/local/bin/whisper-stream",       // Intel
+        ]
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 }
