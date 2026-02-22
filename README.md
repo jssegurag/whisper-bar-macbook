@@ -10,8 +10,8 @@ WhisperBar vive en la barra de menú y transcribe tu voz directamente donde est�
 Todo ocurre localmente — ningún audio sale de tu Mac.
 
 ```
-Mantén ⌘⌥S  →  🔴 graba
-Suelta       →  ⏳ transcribe  →  📋 pega donde está el cursor
+Mantén ⌘⌥  →  🔴 graba
+Suelta     →  ⏳ transcribe  →  📋 pega donde está el cursor
 ```
 
 ![Demo](https://raw.githubusercontent.com/jssegurag/whisper-bar-macbook/main/docs/demo.gif)
@@ -21,9 +21,12 @@ Suelta       →  ⏳ transcribe  →  📋 pega donde está el cursor
 ## Características
 
 - **Completamente offline** — usa whisper.cpp, sin APIs externas
+- **Corrección con LLM local** — post-procesamiento opcional con llama.cpp para corregir ortografía y puntuación
+- **Panel de preferencias nativo** — configura todo desde una ventana SwiftUI (sin tocar terminal)
+- **Historial de transcripciones** — busca y reutiliza transcripciones anteriores
 - **Preserva el clipboard** — restaura lo que tenías copiado tras pegar
-- **Auto-detección de rutas** — encuentra whisper-cli y el modelo automáticamente
-- **Configurable** — idioma, modelo, ruta y duración mínima via `defaults`
+- **Feedback sonoro** — sonido binaural relajante mientras transcribe
+- **Auto-detección de rutas** — encuentra whisper-cli, modelos y llama-cli automáticamente
 - **Apple Silicon e Intel** — el script de build detecta la arquitectura
 - **Open source** — código modular, fácil de extender y contribuir
 
@@ -92,7 +95,7 @@ Verifica que quedó instalado:
 which whisper-cli   # debe imprimir la ruta del binario
 ```
 
-### 4. Modelo de transcripción
+### 5. Modelo de transcripción
 
 Crea la carpeta de modelos:
 
@@ -119,7 +122,30 @@ curl -L "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3
 
 > WhisperBar detecta automáticamente el modelo disponible en `~/.whisper-realtime/`, priorizando los más precisos.
 
-### 5. Clonar y compilar
+### 6. LLM para corrección (opcional)
+
+WhisperBar puede pasar la transcripción por un LLM local para corregir ortografía y puntuación automáticamente.
+
+```bash
+brew install llama.cpp
+```
+
+Descarga un modelo ligero (recomendado: Qwen2.5-1.5B-Instruct, ~1GB, <2s en Apple Silicon):
+
+```bash
+curl -L "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf" \
+     -o ~/.whisper-realtime/qwen2.5-1.5b-instruct-q4_k_m.gguf
+```
+
+Actívalo desde Preferencias (menú → Preferencias → pestaña Modelos) o por terminal:
+
+```bash
+defaults write com.user.WhisperBar llmEnabled -bool true
+```
+
+> WhisperBar auto-detecta `llama-cli` y modelos `.gguf` en `~/.whisper-realtime/`.
+
+### 7. Clonar y compilar
 
 ```bash
 git clone git@github.com:jssegurag/whisper-bar-macbook.git
@@ -129,7 +155,7 @@ bash build.sh
 
 El script detecta la arquitectura (Apple Silicon / Intel) y crea la app en `~/Applications/WhisperBar.app`.
 
-### 6. Permisos (primera vez)
+### 8. Permisos (primera vez)
 
 Al abrir WhisperBar el sistema pedirá dos permisos:
 
@@ -138,7 +164,7 @@ Al abrir WhisperBar el sistema pedirá dos permisos:
 
 **Micrófono** — aparece automáticamente la primera vez que grabes.
 
-### 7. Gatekeeper
+### 9. Gatekeeper
 
 Si aparece "la app no puede abrirse porque es de un desarrollador no identificado":
 
@@ -152,36 +178,49 @@ xattr -dr com.apple.quarantine ~/Applications/WhisperBar.app
 
 1. Abre `~/Applications/WhisperBar.app` — aparece 🎙 en la barra de menú
 2. Coloca el cursor donde quieras escribir
-3. **Mantén `⌘⌥S`** — el ícono cambia a 🔴 mientras grabas
-4. **Suelta** — el ícono cambia a ⏳ mientras transcribe
+3. **Mantén `⌘⌥`** — el ícono se anima mientras grabas
+4. **Suelta** — escucharás un sonido relajante mientras transcribe
 5. El texto aparece en el cursor automáticamente
 
-El menú muestra el estado de la configuración en tiempo real (✅/❌).
+El menú muestra el estado de la configuración en tiempo real (✅/❌) y da acceso a:
+- **Preferencias** (`⌘,`) — configuración visual completa
+- **Historial** (`⌘H`) — transcripciones anteriores con búsqueda
 
 ---
 
 ## Configuración
 
-WhisperBar detecta las rutas automáticamente. Para personalizarlas:
+### Panel de preferencias (recomendado)
+
+Desde el menú de WhisperBar → **Preferencias…** (`⌘,`):
+
+| Pestaña  | Opciones |
+|----------|----------|
+| General  | Idioma de transcripción, duración mínima de grabación |
+| Modelos  | Rutas de whisper-cli y modelo, activar/configurar LLM |
+| Audio    | Dispositivo de entrada (próximamente) |
+| Atajos   | Atajo de grabación actual |
+
+### Terminal (alternativa)
 
 ```bash
 # Ver configuración actual
 defaults read com.user.WhisperBar
 
-# Ruta de whisper-cli (si no está en la ubicación estándar de Homebrew)
-defaults write com.user.WhisperBar whisperCliPath "/ruta/a/whisper-cli"
-
-# Ruta del modelo
-defaults write com.user.WhisperBar modelPath "$HOME/.whisper-realtime/ggml-large-v3.bin"
-
 # Idioma (es, en, fr, pt, de, it, auto…)
 defaults write com.user.WhisperBar language "es"
 
-# Duración mínima de grabación en segundos (evita toques accidentales)
+# Activar corrección con LLM
+defaults write com.user.WhisperBar llmEnabled -bool true
+
+# Prompt personalizado para el LLM
+defaults write com.user.WhisperBar llmPrompt "Tu prompt aquí"
+
+# Duración mínima de grabación en segundos
 defaults write com.user.WhisperBar minRecordingDuration 0.5
 ```
 
-Reinicia la app después de cambiar la configuración:
+Reinicia la app después de cambiar la configuración por terminal:
 
 ```bash
 pkill WhisperBar; open ~/Applications/WhisperBar.app
@@ -193,25 +232,55 @@ pkill WhisperBar; open ~/Applications/WhisperBar.app
 
 ---
 
+## Historial
+
+WhisperBar guarda las últimas 100 transcripciones (configurable) con:
+- Timestamp
+- Texto transcrito
+- App donde se pegó
+- Duración de la grabación
+
+Accede desde el menú → **Historial…** (`⌘H`). Haz click en cualquier entrada para copiarla al clipboard.
+
+Los datos se almacenan en `~/Library/Application Support/WhisperBar/history.json`.
+
+---
+
 ## Arquitectura
 
 ```
 WhisperBar/
 ├── Sources/
-│   ├── main.swift            # Punto de entrada (4 líneas)
-│   ├── AppDelegate.swift     # Coordinador: menú, grabación, paste
-│   ├── Config.swift          # Configuración via UserDefaults + auto-detección
-│   ├── AudioRecorder.swift   # Grabación de audio (AVAudioRecorder)
-│   ├── Transcriber.swift     # Invocación de whisper-cli con timeout
-│   └── HotkeyManager.swift   # Atajo global ⌘⌥S (keyDown/keyUp)
-├── Info.plist                # Metadatos del bundle macOS
-├── build.sh                  # Compilación para Apple Silicon e Intel
+│   ├── main.swift                      # Punto de entrada
+│   ├── AppDelegate.swift               # Coordinador: menú, grabación, paste
+│   ├── Config.swift                    # Configuración via UserDefaults + auto-detección
+│   ├── AudioRecorder.swift             # Grabación de audio (AVAudioRecorder, 16kHz mono)
+│   ├── Transcriber.swift               # Invocación de whisper-cli con timeout
+│   ├── LLMProcessor.swift              # Post-procesamiento con llama-cli
+│   ├── HotkeyManager.swift             # Atajo global ⌘⌥ (flagsChanged)
+│   ├── AudioFeedback.swift             # Sonido binaural durante transcripción
+│   ├── TranscriptionHistory.swift      # Modelo + persistencia JSON del historial
+│   ├── HistoryView.swift               # Vista SwiftUI del historial
+│   ├── HistoryWindowController.swift   # NSWindow host para historial
+│   ├── PreferencesView.swift           # Vista SwiftUI de preferencias
+│   └── PreferencesWindowController.swift # NSWindow host para preferencias
+├── Info.plist
+├── AppIcon.icns
+├── build.sh
 ├── LICENSE
 ├── CONTRIBUTING.md
 └── README.md
 ```
 
-Cada módulo tiene una única responsabilidad y no depende de los otros excepto `AppDelegate` (coordinador) y `Config` (compartido por todos).
+### Pipeline de transcripción
+
+```
+⌘⌥ (mantener)  →  AudioRecorder (16kHz mono WAV)
+⌘⌥ (soltar)    →  whisper-cli (transcripción)
+               →  llama-cli (corrección, opcional)
+               →  Historial (guardar)
+               →  Clipboard + ⌘V (pegar)
+```
 
 ---
 
@@ -228,7 +297,14 @@ brew install whisper-cpp
 ls ~/.whisper-realtime/*.bin
 ```
 
-**El atajo ⌘⌥S no responde**
+**❌ LLM no encontrado**
+```bash
+which llama-cli         # si no imprime nada:
+brew install llama.cpp
+ls ~/.whisper-realtime/*.gguf
+```
+
+**El atajo ⌘⌥ no responde**
 > Configuración del Sistema → Privacidad y Seguridad → Accesibilidad → verificar que WhisperBar está activado
 
 **No graba audio**

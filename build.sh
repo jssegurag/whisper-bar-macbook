@@ -21,11 +21,19 @@ swiftc \
     "$DIR/Sources/AudioRecorder.swift" \
     "$DIR/Sources/Transcriber.swift" \
     "$DIR/Sources/HotkeyManager.swift" \
+    "$DIR/Sources/AudioFeedback.swift" \
+    "$DIR/Sources/LLMProcessor.swift" \
+    "$DIR/Sources/PreferencesView.swift" \
+    "$DIR/Sources/PreferencesWindowController.swift" \
+    "$DIR/Sources/TranscriptionHistory.swift" \
+    "$DIR/Sources/HistoryView.swift" \
+    "$DIR/Sources/HistoryWindowController.swift" \
     "$DIR/Sources/AppDelegate.swift" \
     -o "$DIR/WhisperBar_bin" \
     -framework Cocoa \
     -framework AVFoundation \
     -framework ApplicationServices \
+    -framework SwiftUI \
     -target "$TARGET"
 
 echo "→ Creando bundle..."
@@ -33,6 +41,7 @@ mkdir -p "$APP/Contents/MacOS"
 mkdir -p "$APP/Contents/Resources"
 cp "$DIR/WhisperBar_bin" "$APP/Contents/MacOS/WhisperBar"
 cp "$DIR/Info.plist"     "$APP/Contents/Info.plist"
+cp "$DIR/AppIcon.icns"   "$APP/Contents/Resources/AppIcon.icns"
 
 echo "→ Firmando (ad-hoc)..."
 codesign --force --deep --sign - "$APP"
