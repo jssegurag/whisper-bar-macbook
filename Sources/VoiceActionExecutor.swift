@@ -35,16 +35,27 @@ class VoiceActionExecutor {
 
     private func createReminder(title: String) -> String {
         let escaped = title.replacingOccurrences(of: "\"", with: "\\\"")
-        let script = """
-        tell application "Reminders"
-            make new reminder with properties {name: "\(escaped)"}
-        end tell
-        """
-        let appleScript = NSAppleScript(source: script)
-        var error: NSDictionary?
-        appleScript?.executeAndReturnError(&error)
-        if error != nil {
-            return "❌ Error creando recordatorio"
+        // Usar osascript via Process (funciona desde cualquier thread y respeta
+        // NSAppleEventsUsageDescription para solicitar permisos de Automation)
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        proc.arguments = [
+            "-e",
+            "tell application \"Reminders\" to make new reminder with properties {name: \"\(escaped)\"}"
+        ]
+        let errPipe = Pipe()
+        proc.standardOutput = Pipe()
+        proc.standardError = errPipe
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+        } catch {
+            return "❌ Error ejecutando osascript: \(error.localizedDescription)"
+        }
+        if proc.terminationStatus != 0 {
+            let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+            let errMsg = String(data: errData, encoding: .utf8) ?? "desconocido"
+            return "❌ Error creando recordatorio: \(errMsg.trimmingCharacters(in: .whitespacesAndNewlines))"
         }
         return "✅ Recordatorio: \(title)"
     }
