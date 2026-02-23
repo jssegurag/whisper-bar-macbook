@@ -65,7 +65,7 @@ class VoiceActionDetector {
     /// Parsea la respuesta estructurada del LLM.
     /// Busca el patrón ACTION: en cualquier parte del string para ser robusto
     /// ante el join de líneas que hace LLMProcessor.extractAssistantResponse.
-    private func parseResponse(_ response: String, originalText: String) -> VoiceActionIntent {
+    func parseResponse(_ response: String, originalText: String) -> VoiceActionIntent {
         // Buscar "ACTION:" en cualquier parte del response (protege contra join de líneas)
         guard let actionRange = response.range(of: "ACTION:") else {
             return .none(originalText: originalText)
@@ -102,7 +102,7 @@ class VoiceActionDetector {
     }
 
     /// Extrae el parámetro después del prefix, limpiando whitespace.
-    private func extractParam(from line: String, prefix: String) -> String {
+    func extractParam(from line: String, prefix: String) -> String {
         String(line.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
     }
 }

@@ -13,14 +13,14 @@ class FloatingTranscriptionViewModel: ObservableObject {
     private let maxDisplayLength = 800
 
     /// Último fragmento finalizado recibido (para deduplicación anti-loop).
-    private var lastFragment: String = ""
+    var lastFragment: String = ""
     /// Contador de repeticiones consecutivas del mismo fragmento.
-    private var repeatCount: Int = 0
+    var repeatCount: Int = 0
     /// Máximo de repeticiones antes de silenciar (anti-hallucination loop).
-    private let maxRepeats: Int = 2
+    let maxRepeats: Int = 2
 
     /// Texto confirmado acumulado (líneas finalizadas por whisper-stream).
-    private var finalizedText: String = ""
+    var finalizedText: String = ""
 
     init() {
         streamer.onFinalizedText = { [weak self] text in
@@ -66,7 +66,7 @@ class FloatingTranscriptionViewModel: ObservableObject {
     }
 
     /// Agrega texto confirmado/finalizado al transcript permanente.
-    private func appendFinalizedText(_ text: String) {
+    func appendFinalizedText(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
@@ -99,7 +99,7 @@ class FloatingTranscriptionViewModel: ObservableObject {
 
     /// Actualiza el texto parcial (en progreso) mostrado después del texto finalizado.
     /// Este texto se reemplaza con cada actualización — no se acumula.
-    private func updatePartial(_ text: String) {
+    func updatePartial(_ text: String) {
         if text.isEmpty {
             displayText = finalizedText
         } else {

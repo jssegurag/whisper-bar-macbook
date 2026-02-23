@@ -15,7 +15,8 @@ class StreamingTranscriber {
     var onPartialUpdate: ((String) -> Void)?
 
     /// Buffer para datos crudos incompletos entre lecturas de stdout.
-    private var rawBuffer = ""
+    /// Internal para permitir testing.
+    var rawBuffer = ""
 
     // MARK: - Validación
 
@@ -85,7 +86,7 @@ class StreamingTranscriber {
     /// - Texto entre `\r` dentro de una misma línea = reemplazo progresivo (solo el último importa)
     /// - Texto seguido de `\n` = línea finalizada (confirmada, se agrega al transcript)
     /// - Texto después del último `\n` = línea parcial actual (se muestra pero puede cambiar)
-    private func processChunk(_ chunk: String) {
+    func processChunk(_ chunk: String) {
         rawBuffer += chunk
 
         // Separar por \n para encontrar líneas finalizadas
@@ -115,7 +116,7 @@ class StreamingTranscriber {
 
     /// De una línea que puede contener múltiples `\r` o `\033[2K` (reescrituras progresivas),
     /// extrae la versión final: el texto después del último \r (que es la versión más reciente).
-    private func extractFinalVersion(of line: String) -> String {
+    func extractFinalVersion(of line: String) -> String {
         // Split por \r — whisper-stream envía \033[2K\r antes de cada reescritura
         let segments = line.components(separatedBy: "\r")
         // Tomar el último segmento no vacío (después de quitar ANSI)
@@ -153,14 +154,14 @@ class StreamingTranscriber {
     ]
 
     /// Quita códigos de escape ANSI de un string.
-    private func stripAnsiCodes(_ text: String) -> String {
+    func stripAnsiCodes(_ text: String) -> String {
         let range = NSRange(text.startIndex..., in: text)
         return StreamingTranscriber.ansiRegex.stringByReplacingMatches(
             in: text, options: [], range: range, withTemplate: "")
     }
 
     /// Limpia una línea individual: quita caracteres de control, timestamps, alucinaciones.
-    private func cleanLine(_ text: String) -> String {
+    func cleanLine(_ text: String) -> String {
         // Strip caracteres de control residuales (excepto newline)
         var cleaned = text.unicodeScalars.filter {
             $0 == "\n" || !CharacterSet.controlCharacters.contains($0)
