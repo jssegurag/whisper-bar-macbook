@@ -20,6 +20,8 @@
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>WhisperBar necesita el micrófono para grabar y transcribir tu voz.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>WhisperBar necesita controlar otras aplicaciones para ejecutar acciones por voz (recordatorios, abrir apps).</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>NSPrincipalClass</key>

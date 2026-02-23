@@ -35,6 +35,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenuBar()
         AudioRecorder.requestPermission { _ in }
 
+        // Callback para actualizar menú cuando la ventana flotante cambia de estado
+        FloatingTranscriptionWindowController.shared.onWindowStateChanged = { [weak self] in
+            DispatchQueue.main.async { self?.rebuildMenu() }
+        }
+
         // Transcripción: ⌘⌥
         hotkey.register(id: "transcribe", modifiers: [.command, .option],
             onKeyDown: { [weak self] in
