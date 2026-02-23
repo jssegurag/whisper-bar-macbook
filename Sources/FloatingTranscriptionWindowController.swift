@@ -2,18 +2,26 @@ import Cocoa
 import SwiftUI
 
 /// Controla el panel flotante de transcripción en tiempo real. Singleton.
-class FloatingTranscriptionWindowController {
+/// Implementa NSWindowDelegate para capturar el cierre por el botón X nativo.
+class FloatingTranscriptionWindowController: NSObject, NSWindowDelegate {
     static let shared = FloatingTranscriptionWindowController()
 
     private var panel: NSPanel?
     private var viewModel: FloatingTranscriptionViewModel?
 
+    /// Callback para notificar al AppDelegate que debe actualizar el menú.
+    var onWindowStateChanged: (() -> Void)?
+
     var isVisible: Bool { panel?.isVisible ?? false }
+
+    /// Bandera para evitar recursión entre hideWindow y windowWillClose.
+    private var isClosing = false
 
     func showWindow() {
         if let existing = panel {
             existing.makeKeyAndOrderFront(nil)
             viewModel?.start()
+            onWindowStateChanged?()
             return
         }
 
@@ -34,6 +42,7 @@ class FloatingTranscriptionWindowController {
         p.backgroundColor = .clear
         p.titlebarAppearsTransparent = true
         p.titleVisibility = .hidden
+        p.delegate = self
 
         // Posición: esquina inferior-derecha de la pantalla
         if let screen = NSScreen.main {
@@ -52,13 +61,19 @@ class FloatingTranscriptionWindowController {
 
         // Auto-iniciar streaming
         vm.start()
+        onWindowStateChanged?()
     }
 
     func hideWindow() {
+        guard !isClosing else { return }
+        isClosing = true
         viewModel?.stop()
         panel?.orderOut(nil)
+        panel?.delegate = nil
         panel = nil
         viewModel = nil
+        isClosing = false
+        onWindowStateChanged?()
     }
 
     func toggleWindow() {
@@ -67,5 +82,20 @@ class FloatingTranscriptionWindowController {
         } else {
             showWindow()
         }
+    }
+
+    // MARK: - NSWindowDelegate
+
+    /// Captura el cierre por el botón X nativo del NSPanel.
+    func windowWillClose(_ notification: Notification) {
+        guard !isClosing else { return }
+        isClosing = true
+        viewModel?.stop()
+        // No llamar panel?.orderOut — ya se está cerrando
+        panel?.delegate = nil
+        panel = nil
+        viewModel = nil
+        isClosing = false
+        onWindowStateChanged?()
     }
 }
