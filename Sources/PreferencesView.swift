@@ -55,6 +55,13 @@ struct PreferencesView: View {
         }
     }
 
+    static let windowWidth: CGFloat = 760
+    static let sidebarWidth: CGFloat = 206
+    /// Ancho útil del detalle. Se fija en lugar de dejarlo crecer: una sección
+    /// cuyo contenido pida más ancho que la ventana comprime la barra lateral y le
+    /// recorta los iconos, que es justo lo que hacía «General» con su Form.
+    static var detailWidth: CGFloat { windowWidth - sidebarWidth - 1 }
+
     @State private var selection: Section = .general
     @State private var setupStatus = SetupStatus.current()
 
@@ -64,7 +71,7 @@ struct PreferencesView: View {
             Divider()
             detail
         }
-        .frame(width: 760, height: 552)
+        .frame(width: Self.windowWidth, height: 552)
         .tint(Theme.brand)
     }
 
@@ -98,7 +105,8 @@ struct PreferencesView: View {
             .buttonStyle(.plain)
         }
         .padding(8)
-        .frame(width: 206)
+        .frame(width: Self.sidebarWidth)
+        .fixedSize(horizontal: true, vertical: false)
         .onAppear { setupStatus = SetupStatus.current() }
     }
 
@@ -143,7 +151,9 @@ struct PreferencesView: View {
                 case .shortcuts: ShortcutsTab()
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(width: Self.detailWidth, alignment: .topLeading)
         }
+        .frame(width: Self.detailWidth)
+        .clipped()
     }
 }
