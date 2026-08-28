@@ -195,6 +195,21 @@ Comprehensive integration test suite covering:
 
 Tests use a simple custom harness (in Tests/RunTests.swift) with colored output and pass/fail counts. All 20+ test suites must pass.
 
+### Continuous Integration
+
+`.github/workflows/ci.yml` runs `run_tests.sh` and `build.sh` on `macos-14` for every
+pull request and every push to `main`. A red PR does not get merged.
+
+`build.sh` runs in CI on purpose, not just a compile check: it catches the easiest
+mistake to make in this project — adding a file to `Sources/` and forgetting to
+register it in `build.sh` (and `run_tests.sh`).
+
+The runner has no `whisper-cpp` and no model, and they are deliberately not installed
+(~3 GB). The subprocess suites install a fake `whisper-cli` themselves, and the suites
+with conditional assertions on detected binaries simply skip those branches — so the
+test total CI prints is lower than on a dev machine. **Never assert a test count**;
+the exit code is the contract.
+
 ### Development Workflow
 
 1. **Edit source file** in `Sources/*.swift`
@@ -228,7 +243,7 @@ Tests are organized by module/feature with colored output. No external testing f
 - **State management** — ViewModel and window controller state transitions
 - **Cancel callback** — `onPillCancelTapped` assignment and invocation
 
-Run with `bash run_tests.sh`; exit code 0 = all pass, 1 = failures. Currently: 122 tests.
+Run with `bash run_tests.sh`; exit code 0 = all pass, 1 = failures. The runner prints the total on every run — don't hardcode it here, it drifts (this line claimed 122 while `main` actually had 118).
 
 ## Important Details
 
