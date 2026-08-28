@@ -919,6 +919,196 @@ func testPillCancelCallback() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - 24. Transcriber — Subproceso whisper-cli
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Instala un whisper-cli falso (script sh) y un modelo falso en Config, ejecuta
+/// `body` y restaura los valores originales de UserDefaults.
+private func withFakeWhisperCli(_ script: String, _ body: (Transcriber, URL) -> Void) {
+    let fm = FileManager.default
+    let defaults = UserDefaults.standard
+    let savedCli   = defaults.object(forKey: "whisperCliPath")
+    let savedModel = defaults.object(forKey: "modelPath")
+
+    let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("whisperbar_test_\(UUID().uuidString)")
+    try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+
+    let cli   = dir.appendingPathComponent("fake-whisper-cli")
+    let model = dir.appendingPathComponent("fake-model.bin")
+    let audio = dir.appendingPathComponent("fake-audio.wav")
+    try? script.write(to: cli, atomically: true, encoding: .utf8)
+    try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: cli.path)
+    try? Data("modelo".utf8).write(to: model)
+    try? Data("RIFF".utf8).write(to: audio)
+
+    Config.shared.whisperCliPath = cli.path
+    Config.shared.modelPath      = model.path
+
+    body(Transcriber(), audio)
+
+    if let v = savedCli { defaults.set(v, forKey: "whisperCliPath") }
+    else { defaults.removeObject(forKey: "whisperCliPath") }
+    if let v = savedModel { defaults.set(v, forKey: "modelPath") }
+    else { defaults.removeObject(forKey: "modelPath") }
+    try? fm.removeItem(at: dir)
+}
+
+private func transcriberError(_ result: Result<String, Error>) -> Transcriber.TranscriberError? {
+    guard case .failure(let error) = result else { return nil }
+    return error as? Transcriber.TranscriberError
+}
+
+func testTranscriberOutputCleaning() {
+    suite("Transcriber — Limpieza de salida")
+
+    assertEqual(Transcriber.cleanOutput("[00:00:00.000 --> 00:00:02.000]\nhola mundo\n"),
+        "hola mundo",
+        "cleanOutput descarta líneas de timestamp")
+    assertEqual(Transcriber.cleanOutput("  hola  \n\n  mundo  \n"),
+        "hola mundo",
+        "cleanOutput recorta espacios y une segmentos")
+    assertEqual(Transcriber.cleanOutput(""), "",
+        "cleanOutput con entrada vacía devuelve vacío")
+    assertEqual(Transcriber.lastLines(of: "a\nb\nc\nd\ne\nf", count: 3),
+        "d\ne\nf",
+        "lastLines devuelve solo las últimas líneas")
+    assertEqual(Transcriber.lastLines(of: "\n\nerror real\n\n", count: 5),
+        "error real",
+        "lastLines ignora líneas vacías")
+}
+
+func testTranscriberErrorMessages() {
+    suite("Transcriber — Mensajes de error")
+
+    let invalid = Transcriber.TranscriberError.invalidConfig(
+        whisperCli: "/nope/whisper-cli", model: "/nope/model.bin")
+    assertContains(invalid.errorDescription ?? "", "/nope/whisper-cli",
+        "invalidConfig incluye la ruta del binario")
+    assertContains(invalid.errorDescription ?? "", "/nope/model.bin",
+        "invalidConfig incluye la ruta del modelo")
+
+    // Antes el mensaje interpolaba Int(60) literal y mentía si cambiaba `timeout`.
+    assertContains(Transcriber.TranscriberError.timeout(seconds: 90).errorDescription ?? "",
+        "90",
+        "timeout reporta los segundos reales, no un 60 hardcodeado")
+
+    assert(Transcriber.TranscriberError.cancelled.errorDescription != nil,
+        "cancelled tiene mensaje")
+
+    let failed = Transcriber.TranscriberError.processFailed(
+        status: 3, stderr: "error: failed to load model")
+    assertContains(failed.errorDescription ?? "", "3",
+        "processFailed incluye el código de salida")
+    assertContains(failed.errorDescription ?? "", "failed to load model",
+        "processFailed incluye el stderr")
+}
+
+func testTranscriberStderrFlood() {
+    suite("Transcriber — stderr abundante no bloquea (regresión)")
+
+    // whisper-cli escribe progreso continuo a stderr. Con las tuberías sin drenar,
+    // el búfer del kernel (~64 KB) se llenaba y el proceso quedaba bloqueado
+    // escribiendo hasta morir por timeout a los 60 s. Este script emite ~270 KB.
+    let script = """
+    #!/bin/sh
+    i=0
+    while [ $i -lt 3000 ]; do
+      echo "whisper_print_progress_callback: progress = $i% ................................." >&2
+      i=$((i+1))
+    done
+    echo "[00:00:00.000 --> 00:00:02.000]"
+    echo "hola mundo"
+    """
+
+    withFakeWhisperCli(script) { transcriber, audio in
+        let start = Date()
+        let result = transcriber.transcribe(url: audio)
+        let elapsed = Date().timeIntervalSince(start)
+
+        if case .success(let text) = result {
+            assertEqual(text, "hola mundo",
+                "transcribe devuelve el texto con 270 KB de stderr pendiente")
+        } else {
+            assert(false, "transcribe falló con stderr abundante: \(result)")
+        }
+        assert(elapsed < 30,
+            "transcribe no se bloquea drenando stderr (\(String(format: "%.1f", elapsed))s)")
+    }
+}
+
+func testTranscriberProcessFailure() {
+    suite("Transcriber — Salida con código de error")
+
+    // Antes, un whisper-cli que fallaba devolvía .success("") y el usuario veía
+    // una transcripción vacía sin explicación.
+    let script = """
+    #!/bin/sh
+    echo "error: failed to load model 'fake-model.bin'" >&2
+    exit 3
+    """
+
+    withFakeWhisperCli(script) { transcriber, audio in
+        let result = transcriber.transcribe(url: audio)
+        guard case .processFailed(let status, let stderr)? = transcriberError(result) else {
+            assert(false, "código de salida != 0 debe devolver processFailed, no \(result)")
+            return
+        }
+        assertEqual(status, 3, "processFailed conserva el código de salida")
+        assertContains(stderr, "failed to load model",
+            "processFailed conserva el stderr de whisper-cli")
+    }
+}
+
+func testTranscriberCancellation() {
+    suite("Transcriber — Cancelación thread-safe (regresión)")
+
+    let idle = Transcriber()
+    idle.cancel()
+    assert(true, "cancel() sin proceso en curso no revienta")
+
+    // AppDelegate.cancelRecording() llama cancel() aunque solo se esté grabando y no
+    // haya subproceso. Esa cancelación obsoleta no debe envenenar la siguiente
+    // transcripción, y terminate() no debe correr sobre un proceso sin lanzar
+    // (eso lanzaba NSInvalidArgumentException y tiraba la app).
+    withFakeWhisperCli("#!/bin/sh\necho \"hola mundo\"\n") { transcriber, audio in
+        transcriber.cancel()
+        let result = transcriber.transcribe(url: audio)
+        if case .success(let text) = result {
+            assertEqual(text, "hola mundo",
+                "cancel() obsoleto no bloquea la siguiente transcripción")
+        } else {
+            assert(false, "cancel() obsoleto no debe hacer fallar la siguiente transcripción: \(result)")
+        }
+    }
+
+    // `exec` para que terminate() mate al propio sleep y no solo al shell padre.
+    withFakeWhisperCli("#!/bin/sh\nexec sleep 30\n") { transcriber, audio in
+        let done = DispatchSemaphore(value: 0)
+        var result: Result<String, Error>?
+        let start = Date()
+        DispatchQueue.global().async {
+            result = transcriber.transcribe(url: audio)
+            done.signal()
+        }
+        Thread.sleep(forTimeInterval: 0.5)
+        transcriber.cancel()   // desde otro hilo, mientras transcribe() corre
+
+        let finished = done.wait(timeout: .now() + 15) == .success
+        let elapsed = Date().timeIntervalSince(start)
+        assert(finished, "transcribe() retorna tras cancel() en vez de esperar el timeout")
+        assert(elapsed < 15,
+            "cancel() corta el subproceso enseguida (\(String(format: "%.1f", elapsed))s)")
+
+        if let result, case .cancelled? = transcriberError(result) {
+            assert(true, "cancelar durante la transcripción devuelve cancelled")
+        } else {
+            assert(false, "cancelar durante la transcripción debe devolver cancelled, no \(String(describing: result))")
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -955,6 +1145,11 @@ struct TestRunner {
         testConfigFloatingPillDefaults()
         testConfigAudioFeedback()
         testPillCancelCallback()
+        testTranscriberOutputCleaning()
+        testTranscriberErrorMessages()
+        testTranscriberStderrFlood()
+        testTranscriberProcessFailure()
+        testTranscriberCancellation()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")
