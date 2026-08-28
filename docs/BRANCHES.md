@@ -64,9 +64,15 @@ imperativo, ≤ 72 caracteres. El cuerpo explica el *por qué*, no el *qué*.
 
 ## Orden de mezcla y conflictos previstos
 
-Las dos ramas `fix/` son independientes en `Sources/`, pero ambas añaden suites al
-final de `Tests/RunTests.swift` y registran sus llamadas en la misma lista de
-`TestRunner.main()`. La segunda que se mezcle dará conflicto en esa región.
+Las dos ramas `fix/` son independientes en `Sources/`, pero se cruzan en dos archivos
+compartidos:
+
+- `Tests/RunTests.swift` — ambas añaden suites al final y registran sus llamadas en la
+  misma lista de `TestRunner.main()`.
+- `CLAUDE.md` — los bloques de `AudioRecorder.swift` y `Transcriber.swift` son
+  contiguos, y ambas ramas añaden un bullet a "Key test areas".
+
+La segunda que se mezcle dará conflicto en esas regiones.
 
 Orden recomendado:
 
