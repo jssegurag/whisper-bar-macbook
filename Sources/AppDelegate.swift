@@ -632,11 +632,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         handlePillTap()
     }
 
-    /// Fila de estado del menú y, más adelante, notificaciones y sidebar.
-    /// Paso 2 del rediseño sustituye esto por la ventana de Configuración; hasta
-    /// entonces lleva a Preferencias, que es donde están hoy esas rutas.
+    /// Ventana de Configuración: la abre la fila de estado del menú, y más
+    /// adelante también las notificaciones y el sidebar de Preferencias.
     @objc private func openSetup() {
-        PreferencesWindowController.shared.showWindow()
+        SetupWindowController.shared.showWindow()
     }
 
     @objc private func openSnippets() {

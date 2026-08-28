@@ -20,6 +20,10 @@ swiftc \
     "$DIR/Sources/Config.swift" \
     "$DIR/Sources/Theme.swift" \
     "$DIR/Sources/SetupStatus.swift" \
+    "$DIR/Sources/SetupComponent.swift" \
+    "$DIR/Sources/ModelDownloader.swift" \
+    "$DIR/Sources/SetupView.swift" \
+    "$DIR/Sources/SetupWindowController.swift" \
     "$DIR/Sources/MenuBarIcon.swift" \
     "$DIR/Sources/MenuViews.swift" \
     "$DIR/Sources/AudioRecorder.swift" \

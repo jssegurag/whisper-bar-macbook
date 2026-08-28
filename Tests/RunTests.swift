@@ -1946,6 +1946,55 @@ func testMenuBarIcon() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - SetupSummary — Los cuatro componentes
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testSetupSummary() {
+    suite("SetupSummary — Encabezado de la ventana de Configuración")
+
+    let todo = SetupSummary.evaluate(engine: true, model: true, llmEnabled: true, llm: true, streaming: true)
+    assertEqual(todo.headline, "Gluffi está listo", "con todo puesto")
+    assertEqual(todo.subhead, "Los 4 componentes están en su sitio.", "resumen de todo listo")
+    assert(todo.canTranscribe, "puede transcribir")
+
+    // El caso del handoff: falta el modelo y los otros tres están.
+    let faltaModelo = SetupSummary.evaluate(engine: true, model: false, llmEnabled: true, llm: true, streaming: true)
+    assertEqual(faltaModelo.headline, "Gluffi está casi listo", "casi listo si falta algo obligatorio")
+    assertEqual(faltaModelo.subhead, "Falta 1 de 4. Los otros 3 ya están listos.",
+        "cuenta cuánto falta y cuánto hay, en vez de decir «configuración incompleta»")
+    assert(!faltaModelo.canTranscribe, "sin modelo no puede transcribir")
+    assertEqual(faltaModelo.missingRequired, 1, "un obligatorio ausente")
+
+    // Solo faltan opcionales: la app funciona, y el texto no debe alarmar.
+    let soloOpcionales = SetupSummary.evaluate(engine: true, model: true, llmEnabled: false, llm: false, streaming: false)
+    assertEqual(soloOpcionales.headline, "Gluffi está listo", "los opcionales no impiden transcribir")
+    assertContains(soloOpcionales.subhead, "2 mejoras opcionales", "los nombra como mejoras, no como fallos")
+    assert(soloOpcionales.canTranscribe, "puede transcribir igual")
+
+    // Etiquetas por fila
+    let componentes = faltaModelo.components
+    assertEqual(componentes.count, 4, "siempre cuatro componentes")
+    assertEqual(componentes.first { $0.kind == .model }?.label, "falta esto",
+        "el que falta se etiqueta «falta esto»")
+    assertEqual(componentes.first { $0.kind == .engine }?.label, "obligatorio",
+        "el motor presente se etiqueta obligatorio")
+    assertEqual(soloOpcionales.components.first { $0.kind == .streaming }?.label, "opcional",
+        "un opcional ausente se etiqueta opcional, no error")
+}
+
+func testModelDownloaderFormatting() {
+    suite("ModelDownloader — Tamaño legible en el botón")
+
+    let texto = ModelDownloader.humanSize(ModelDownloader.defaultModel.bytes)
+    assert(texto.contains("GB"), "el botón dice GB, no bytes: «Descargar (\(texto))»")
+    assertEqual(ModelDownloader.State.idle.progress, nil, "sin descarga no hay progreso")
+    assertEqual(ModelDownloader.State.downloading(received: 50, total: 200).progress, 0.25,
+        "el progreso es recibido/total")
+    assert(ModelDownloader.State.downloading(received: 0, total: 1).isBusy, "descargando está ocupado")
+    assert(!ModelDownloader.State.idle.isBusy, "en reposo no")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -2011,6 +2060,8 @@ struct TestRunner {
         testPasteTargetTracker()
         testSetupStatus()
         testMenuBarIcon()
+        testSetupSummary()
+        testModelDownloaderFormatting()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")
