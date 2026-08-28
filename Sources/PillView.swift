@@ -39,18 +39,36 @@ struct PillView: View {
     /// Tamaño real del contenido, para que el panel se ajuste.
     var onSizeChange: (CGSize) -> Void = { _ in }
 
-    @State private var breathing = false
-    @State private var spin = false
     @State private var dragDistance: CGFloat = 0
 
     private let height: CGFloat = 46
 
+    /// Todo el movimiento cuelga de un solo reloj.
+    ///
+    /// Antes cada animación era un `repeatForever` atado a un `@State`, y eso
+    /// falla de dos maneras que se vieron al probar: el nivel del micrófono
+    /// cambia 30 veces por segundo, así que reiniciaba la animación de la onda y
+    /// las barras perdían la fase; y el anillo dependía de un booleano puesto en
+    /// `onAppear`, que al recrearse la vista ya venía en `true`, sin cambio de
+    /// valor y por tanto sin animación.
+    ///
+    /// Con un reloj, cada cuadro se calcula desde el tiempo. No hay estado que
+    /// reiniciar ni fases que descuadrar.
     var body: some View {
+        // En reposo basta con 12 cuadros por segundo: lo único que se mueve es un
+        // halo con periodo de 3.4 s. La píldora está siempre a la vista, así que
+        // gastar 30 cuadros ahí sería quemar batería por nada.
+        TimelineView(.animation(minimumInterval: model.state == .idle ? 1.0 / 12.0 : 1.0 / 30.0)) { timeline in
+            content(at: timeline.date.timeIntervalSinceReferenceDate)
+        }
+    }
+
+    private func content(at time: TimeInterval) -> some View {
         HStack(spacing: 11) {
             switch model.state {
-            case .idle:        idleContent
-            case .recording:   recordingContent
-            case .transcribing: processingContent
+            case .idle:        idleContent(time)
+            case .recording:   recordingContent(time)
+            case .transcribing: processingContent(time)
             }
         }
         .padding(.horizontal, 16)
@@ -59,7 +77,7 @@ struct PillView: View {
         .overlay(
             Capsule().stroke(Theme.brand.opacity(0.4), lineWidth: 1)
         )
-        .overlay(breathRing)
+        .overlay(breathRing(time))
         .clipShape(Capsule())
         .shadow(color: .black.opacity(0.5), radius: 12, x: 0, y: 8)
         .fixedSize()
@@ -67,15 +85,16 @@ struct PillView: View {
         .contentShape(Capsule())
         .onTapGesture { onTap() }
         .gesture(dragGesture)
-        .onAppear {
-            breathing = true
-            spin = true
-        }
+    }
+
+    /// Onda de 0 a 1 con el periodo dado. Es la base de todo el movimiento.
+    private func wave(_ time: TimeInterval, period: Double, offset: Double = 0) -> Double {
+        0.5 + 0.5 * sin(2 * .pi * (time / period - offset))
     }
 
     // MARK: - Estados
 
-    private var idleContent: some View {
+    private func idleContent(_ time: TimeInterval) -> some View {
         HStack(spacing: 11) {
             GluffiMarkView(size: 20, color: Theme.brand)
             Text(model.idleWord)
@@ -90,32 +109,34 @@ struct PillView: View {
         .animation(.easeInOut(duration: 0.45), value: model.idleWord)
     }
 
-    private var recordingContent: some View {
-        HStack(spacing: 11) {
+    private func recordingContent(_ time: TimeInterval) -> some View {
+        let pulse = wave(time, period: 1.1)
+        return HStack(spacing: 11) {
             // El logo sigue visible mientras graba: el estado lo comunica el
             // punto rojo y la onda, no la desaparición de la marca.
             GluffiMarkView(size: 20, color: Theme.brand)
             Circle()
                 .fill(Theme.danger)
                 .frame(width: 6, height: 6)
-                .opacity(breathing ? 0.45 : 1)
-                .scaleEffect(breathing ? 0.82 : 1)
-                .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true), value: breathing)
-            VoiceWaveView(level: model.micLevel)
+                .opacity(0.45 + 0.55 * pulse)
+                .scaleEffect(0.82 + 0.18 * pulse)
+            VoiceWaveView(time: time, level: model.micLevel)
             cancelButton
         }
     }
 
-    private var processingContent: some View {
-        HStack(spacing: 11) {
+    private func processingContent(_ time: TimeInterval) -> some View {
+        // Una vuelta cada 0.85 s, calculada desde el reloj: no hay animación que
+        // pueda quedarse sin arrancar.
+        let angle = (time / 0.85).truncatingRemainder(dividingBy: 1) * 360
+        return HStack(spacing: 11) {
             ZStack {
                 GluffiMarkView(size: 20, color: Theme.brand.opacity(0.55))
                 Circle()
                     .trim(from: 0, to: 0.22)
                     .stroke(Theme.brand, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                     .frame(width: 24, height: 24)
-                    .rotationEffect(.degrees(spin ? 360 : 0))
-                    .animation(.linear(duration: 0.85).repeatForever(autoreverses: false), value: spin)
+                    .rotationEffect(.degrees(angle))
             }
             Text(model.processingLabel)
                 .font(.system(size: 13.5, weight: .semibold))
@@ -155,12 +176,11 @@ struct PillView: View {
     /// Anillo que respira en reposo. No aparece en los otros estados: ahí ya hay
     /// movimiento y sumar otro sería ruido.
     @ViewBuilder
-    private var breathRing: some View {
+    private func breathRing(_ time: TimeInterval) -> some View {
         if model.state == .idle {
             Capsule()
-                .stroke(Theme.brand.opacity(breathing ? 0.35 : 0.0), lineWidth: 3)
+                .stroke(Theme.brand.opacity(0.35 * wave(time, period: 3.4)), lineWidth: 3)
                 .blur(radius: 3)
-                .animation(.easeInOut(duration: 3.4).repeatForever(autoreverses: true), value: breathing)
         }
     }
 
@@ -195,15 +215,19 @@ struct PillView: View {
 /// Cada barra es un halo translúcido con un núcleo sólido más estrecho, que es lo
 /// que le da cuerpo sin necesidad de sombras.
 struct VoiceWaveView: View {
-    /// 0…1 del micrófono. Con señal la altura la manda la voz; sin señal queda la
-    /// animación como respaldo, para que la píldora no parezca congelada.
+    /// Reloj compartido con la píldora: así las barras nunca pierden la fase
+    /// entre ellas ni respecto al resto del movimiento.
+    var time: TimeInterval
+    /// 0…1 del micrófono. Con señal la altura la manda la voz; sin señal queda el
+    /// vaivén como respaldo, para que no parezca congelada.
     var level: CGFloat
 
     private let heights: [CGFloat] = [14, 20, 26, 30, 26, 20, 14]
     private let cores:   [CGFloat] = [6, 9, 11, 13, 11, 9, 6]
     private let offsets: [Double]  = [0, 0.14, 0.28, 0.42, 0.28, 0.14, 0]
 
-    @State private var animating = false
+    /// Piso de amplitud: sin voz la onda late suave en vez de apagarse.
+    private var amplitude: CGFloat { max(0.35, level) }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -211,28 +235,20 @@ struct VoiceWaveView: View {
                 bar(index: i)
             }
         }
-        .frame(height: 30)
-        .onAppear { animating = true }
+        // Altura fija igual a la barra más alta: así la onda no puede crecer por
+        // encima de la píldora al subir el volumen.
+        .frame(height: heights.max() ?? 30)
     }
 
     private func bar(index: Int) -> some View {
-        let amplitude = max(0.25, level)
-        let full = heights[index]
-        let core = cores[index]
+        let vaiven = 0.5 + 0.5 * sin(2 * .pi * (time / 1.25 - offsets[index]))
+        let scale = (0.38 + 0.62 * vaiven) * amplitude
+        let full = heights[index] * scale
+        let core = cores[index] * scale
         return ZStack {
-            Capsule()
-                .fill(Theme.brand.opacity(0.28))
-                .frame(width: 5, height: full)
-            Capsule()
-                .fill(Theme.brand)
-                .frame(width: 5, height: core)
+            Capsule().fill(Theme.brand.opacity(0.28)).frame(width: 5, height: full)
+            Capsule().fill(Theme.brand).frame(width: 5, height: core)
         }
-        .scaleEffect(y: animating ? amplitude : 0.38, anchor: .center)
-        .animation(
-            .easeInOut(duration: 1.25)
-                .repeatForever(autoreverses: true)
-                .delay(offsets[index]),
-            value: animating)
-        .animation(.easeOut(duration: 0.12), value: level)
+        .frame(width: 5, height: heights.max() ?? 30)
     }
 }
