@@ -1828,7 +1828,7 @@ func testRewritePipelineOrder() {
         "el diccionario corrige el texto dictado pero no toca el cuerpo del snippet")
 }
 
-// MARK: - 24. PasteTargetTracker — A quién pegarle
+// MARK: - PasteTargetTracker — A quién pegarle
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Doble de una app en ejecución: NSRunningApplication no se puede instanciar.
