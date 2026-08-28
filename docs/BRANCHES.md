@@ -15,8 +15,7 @@ con su propósito, alcance y estado. Actualízalo cuando abras o cierres una ram
 |------------|-----------------------------------------------------------------|-----------------------------------------|
 | `feat/`    | Capacidad nueva visible para el usuario                         | `feat/configurable-hotkeys`             |
 | `fix/`     | Corrección de comportamiento incorrecto                         | `fix/transcriber-subprocess-reliability`|
-| `refactor/`| Reorganización sin cambio de comportamiento                     | `refactor/split-preferences-view`       |
-| `docs/`    | Solo documentación                                              | `docs/branch-strategy`                  |
+| `refactor/`| Reorganización sin cambio de comportamiento                     | `docs/`    | Solo documentación                                              | `docs/branch-strategy`                  |
 | `chore/`   | Build, tooling, CI, dependencias                                | `chore/github-actions-ci`               |
 
 Reglas:
@@ -59,6 +58,14 @@ imperativo, ≤ 72 caracteres. El cuerpo explica el *por qué*, no el *qué*.
 - **Bug que cierra:** `start()` descartaba el `Bool` de `AVAudioRecorder.record()`. Con el micrófono ocupado o el permiso denegado, `record()` devuelve `false`, pero la app marcaba `isRecording = true`, animaba el icono y grababa un WAV vacío: el usuario dictaba y recibía una transcripción vacía sin ningún error. La documentación del método ya prometía lanzar error; ahora lo cumple.
 - **Depende de:** —
 - **Estado:** listo para PR.
+
+### `refactor/split-preferences-view`
+
+- **Propósito:** paso 1 de la secuencia de `docs/AUDITORIA-UX.md`. Partir las diez pantallas de configuración en un archivo cada una.
+- **Alcance:** `PreferencesView.swift` (queda con el TabView, 39 líneas) y nueve archivos nuevos `Preferences*Tab.swift` más `PreferencesComponents.swift`; `build.sh`, `run_tests.sh`, `CLAUDE.md`.
+- **Depende de:** `feat/voice-snippets`. Sale del extremo de la cadena porque ahí está el archivo con las diez pestañas; partirlo sobre `main`, que tiene ocho, garantizaría conflicto con las dos ramas de funcionalidad. Se rebasa sobre `main` cuando el lote entre.
+- **Criterio de revisión:** el archivo original reconstruido concatenando los diez nuevos es idéntico línea por línea al de su padre. Cero código alterado.
+- **Estado:** implementada, 295 tests en verde.
 
 ### `docs/ux-audit`
 
@@ -110,6 +117,7 @@ Orden recomendado:
 2. `fix/audiorecorder-start-failure` — sección de tests nº 25.
 3. `feat/custom-dictionary` — secciones nº 26 a 28.
 4. `feat/voice-snippets` — secciones nº 29 a 32. Ya trae `fix/paste-target-window` mezclado.
+5. `refactor/split-preferences-view` — sin tests nuevos; sale del extremo de la cadena.
 
 `fix/paste-target-window` puede entrar en cualquier punto antes del 4. Sale del diccionario, así que solo choca con la nº 25. Ya trae la nº 24 porque sale de la rama del Transcriber, así que solo choca con la nº 25.
 
@@ -172,6 +180,21 @@ bash run_tests.sh && bash build.sh
 Nunca se mezcla `integration/*` hacia `main`: lo que se mezcla son las ramas de
 origen, por PR y por separado. Si un fallo aparece solo en la integración, se
 corrige en la rama que lo causó y se rehace esta.
+
+---
+
+## Nota sobre el arnés de UI
+
+`preview_ui.sh` vive en `chore/ui-preview-harness` y no está disponible en las
+ramas que no lo tienen mezclado. Para revisar UI desde otra rama sin ensuciar su
+PR, saca el arnés de su rama y compílalo contra la actual:
+
+```bash
+git show chore/ui-preview-harness:Tools/PreviewUI.swift > /tmp/PreviewUI.swift
+# luego compila Sources/*.swift (menos main.swift) junto con ese archivo
+```
+
+Cuando el PR del arnés entre a `main`, el problema desaparece.
 
 ---
 
