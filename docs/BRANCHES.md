@@ -102,16 +102,34 @@ Orden recomendado:
 1. `fix/transcriber-subprocess-reliability` — sección de tests nº 24.
 2. `fix/audiorecorder-start-failure` — sección de tests nº 25.
 3. `feat/custom-dictionary` — secciones nº 26 a 28.
-4. `feat/voice-snippets` — secciones nº 29 a 32. Sale del diccionario, así que solo choca con la nº 25. Ya trae la nº 24 porque sale de la rama del Transcriber, así que solo choca con la nº 25.
+4. `feat/voice-snippets` — secciones nº 29 a 32. Ya trae `fix/paste-target-window` mezclado.
+
+`fix/paste-target-window` puede entrar en cualquier punto antes del 4. Sale del diccionario, así que solo choca con la nº 25. Ya trae la nº 24 porque sale de la rama del Transcriber, así que solo choca con la nº 25.
 
 `feat/custom-dictionary` también edita `CLAUDE.md` cerca de "Key test areas", igual que esta rama y que las dos de `fix/`. Mismo criterio: conservar todos los bullets.
 
-Resolución del conflicto: conservar **ambas** suites y **ambas** llamadas; no hay
-solapamiento de contenido. Ojo con un detalle: el hunk parte a la mitad de la última
+Resolución del conflicto: conservar **ambas** suites y **ambas** llamadas cuando
+no haya solapamiento — pero **verifica que no lo haya**. Si una rama ya mezcló a
+la otra, «conservar ambos lados» duplica una suite entera y el archivo no
+compila (`invalid redeclaration`). Pasó de verdad con `PasteTargetTracker`, que
+`feat/voice-snippets` ya traía dentro. Tras resolver, busca definiciones
+repetidas antes de dar el conflicto por cerrado.
+
+Y no numeres las secciones nuevas de tests: el número se elige por rama, así que
+dos ramas salidas de `main` eligen el mismo y colisionan. Con el título solo
+basta. Ojo con un detalle: el hunk parte a la mitad de la última
 función del lado `HEAD` (la llave de cierre queda en la línea compartida que sigue al
 marcador `>>>>>>>`), así que hay que cerrar esa función con `}` antes de pegar el
 bloque entrante. Tras resolver, `bash run_tests.sh` debe dar **151 tests** (118 en
 `main` + 20 de la primera rama + 13 de la segunda); verificado con un merge de prueba.
+
+### `fix/paste-target-window`
+
+- **Propósito:** que el texto transcrito llegue a la app del usuario y no a una ventana nuestra.
+- **Alcance:** `Sources/PasteTargetTracker.swift` (nuevo), `AppDelegate.swift`, `CLAUDE.md`, tests.
+- **Bug que cierra:** `paste(text:)` ignoraba `pasteTargetApp` y posteaba ⌘V a lo que estuviera al frente, y `currentPasteTarget()` devolvía `nil` cuando el frontmost era WhisperBar — justo lo que ocurre tras abrir Preferencias, Historial o Snippets, porque llaman `NSApp.activate`. Dictar en ese momento dejaba el texto en el historial y en ningún otro sitio. Reportado por Jesús probando snippets el 28-08-2026.
+- **Depende de:** — (sale de `main`).
+- **Estado:** listo para PR. Reemplaza la propuesta `fix/unused-paste-target`.
 
 ### `feat/voice-snippets`
 
@@ -158,6 +176,5 @@ Ramas acordadas pero sin código. Se mueven a "activas" al crearse.
 |------------------------------------|---------------------------------------------------------------------------|
 | `chore/swiftpm-build`              | `Package.swift` en lugar de los 23 archivos listados a mano en `build.sh`; olvidar un archivo nuevo rompe el build. |
 | `refactor/split-preferences-view`  | `PreferencesView.swift` tiene 802 líneas y viola el "un archivo = una responsabilidad" del propio proyecto. |
-| `fix/unused-paste-target`          | **`pasteTargetApp` se captura y nunca se usa.** `AppDelegate` lo asigna en `startRecording()` y `handlePillTap()`, lo limpia en `resetIdleUI()`, y `paste(text:)` nunca lo lee: postea ⌘V a lo que esté al frente. Funciona porque al soltar ⌘⌥ la app del usuario sigue enfocada, pero `CLAUDE.md` afirmaba que era «el destino real del Cmd+V», y eso era falso. `feat/voice-snippets` lo usa en el camino del menú, donde sí hace falta. Queda decidir: usarlo en todos los caminos o borrar el estado muerto. |
 | `feat/dictionary-quick-add`        | **Agregar la variante desde donde se descubre.** Validando HU-001, whisper escribió `dotfly` y hubo que abrir el diccionario y teclear la variante a mano. La app ya sabe qué oyó y qué pegó: podría ofrecer «agregar `dotfly` como variante de…» desde el historial o desde una notificación tras pegar. Requiere un cambio de modelo: `TranscriptionEntry` hoy guarda solo el texto ya corregido, así que habría que conservar también el texto crudo. |
 | `feat/preferences-navigation`      | **La navegación de Preferencias se quedó sin espacio.** Con la pestaña de Diccionario ya son 9 pestañas en un `TabView` de 580 pt: los títulos se comprimen y dejan de leerse. Es un problema de UX distinto al tamaño del archivo — se arregla cambiando el patrón de navegación (barra lateral tipo Ajustes del Sistema, o agrupar en menos pestañas), no partiendo el archivo. Pedido por Jesús al revisar la UI del diccionario el 2026-08-28. |
