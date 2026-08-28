@@ -47,8 +47,19 @@ class FloatingTranscriptionViewModel: ObservableObject {
         if isActive { stop() } else { start() }
     }
 
+    /// Cuándo empezó el tramo actual, y cuánto se acumuló antes de pausar. La
+    /// cabecera muestra tiempo de escucha real, no tiempo desde que se abrió la
+    /// ventana.
+    private var startedAt: Date?
+    private var accumulated: TimeInterval = 0
+
+    var listeningSeconds: TimeInterval {
+        accumulated + (startedAt.map { Date().timeIntervalSince($0) } ?? 0)
+    }
+
     func start() {
         guard !isActive else { return }
+        startedAt = Date()
         displayText = ""
         finalizedText = ""
         lastFragment = ""
@@ -59,6 +70,8 @@ class FloatingTranscriptionViewModel: ObservableObject {
 
     func stop() {
         guard isActive else { return }
+        if let startedAt { accumulated += Date().timeIntervalSince(startedAt) }
+        startedAt = nil
         streamer.stop()
         isActive = false
     }
@@ -69,6 +82,8 @@ class FloatingTranscriptionViewModel: ObservableObject {
     }
 
     func clear() {
+        accumulated = 0
+        startedAt = isActive ? Date() : nil
         displayText = ""
         finalizedText = ""
         lastFragment = ""

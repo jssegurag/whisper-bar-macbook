@@ -2206,6 +2206,60 @@ func testHotkeyBinding() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - Historial y ventana en vivo — Textos y formatos
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testHistoryPresentation() {
+    suite("HistoryPresentation — Tres estados vacíos, no dos frases genéricas")
+
+    assertEqual(HistoryPresentation.emptyMessage(total: 0, query: ""),
+        "Aún no has dictado nada. Lo que dictes aparecerá aquí.",
+        "sin nada dictado dice qué va a pasar")
+    assertEqual(HistoryPresentation.emptyMessage(total: 12, query: "factura"),
+        "Nada coincide con «factura».",
+        "buscando sin resultados repite lo buscado")
+    assertEqual(HistoryPresentation.emptyMessage(total: 12, query: "  factura  "),
+        "Nada coincide con «factura».",
+        "y recorta los espacios de la búsqueda")
+    assertEqual(HistoryPresentation.emptyMessage(total: 0, query: "  "),
+        "Aún no has dictado nada. Lo que dictes aparecerá aquí.",
+        "una búsqueda de solo espacios no cuenta como búsqueda")
+
+    assertEqual(HistoryPresentation.resultsLabel(count: 1), "1 resultado", "singular")
+    assertEqual(HistoryPresentation.resultsLabel(count: 4), "4 resultados", "plural")
+
+    assertEqual(HistoryPresentation.duration(3.44), "3.4 s", "segundos con un decimal")
+    assertEqual(HistoryPresentation.duration(75), "1:15", "más de un minuto pasa a reloj")
+
+    // La fecha se omite dentro del mismo día: repetir «hoy» en cada fila es ruido.
+    let ahora = Date()
+    let hoy = HistoryPresentation.time(ahora, now: ahora, locale: Locale(identifier: "es_ES"))
+    let ayer = HistoryPresentation.time(ahora.addingTimeInterval(-86400 * 2), now: ahora,
+                                       locale: Locale(identifier: "es_ES"))
+    assert(!hoy.contains("/"), "hoy se muestra solo la hora: \(hoy)")
+    assert(ayer.contains("/"), "de otro día se muestra también la fecha: \(ayer)")
+}
+
+func testLiveMeta() {
+    suite("LiveMeta — Cabecera de la ventana en vivo")
+
+    assertEqual(LiveMeta.words(in: ""), 0, "texto vacío no tiene palabras")
+    assertEqual(LiveMeta.words(in: "  hola   mundo\n bonito "), 3,
+        "cuenta palabras ignorando espacios y saltos de sobra")
+
+    assertEqual(LiveMeta.clock(0), "0:00", "cero")
+    assertEqual(LiveMeta.clock(138), "2:18", "el ejemplo del handoff")
+    assertEqual(LiveMeta.clock(3723), "1:02:03", "con horas aparece la hora")
+    assertEqual(LiveMeta.clock(-5), "0:00", "un negativo no imprime basura")
+
+    // Nada que informar todavía: «0 palabras · 0:00» es ruido en la cabecera.
+    assertEqual(LiveMeta.summary(words: 0, seconds: 0), "", "sin datos no se muestra nada")
+    assertEqual(LiveMeta.summary(words: 1, seconds: 0), "· 1 palabra", "singular, sin reloj aún")
+    assertEqual(LiveMeta.summary(words: 142, seconds: 138), "· 142 palabras · 2:18",
+        "el formato exacto del handoff")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -2276,6 +2330,8 @@ struct TestRunner {
         testAppNotificationContent()
         testStreamingPriority()
         testHotkeyBinding()
+        testHistoryPresentation()
+        testLiveMeta()
         testModelDownloaderFormatting()
 
         // Summary

@@ -68,6 +68,7 @@ swiftc \
     "$DIR/Sources/PreferencesComponents.swift" \
     "$DIR/Sources/PreferencesWindowController.swift" \
     "$DIR/Sources/TranscriptionHistory.swift" \
+    "$DIR/Sources/HistoryPresentation.swift" \
     "$DIR/Sources/HistoryView.swift" \
     "$DIR/Sources/HistoryWindowController.swift" \
     "$DIR/Sources/DictionaryView.swift" \

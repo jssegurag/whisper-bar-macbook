@@ -41,6 +41,10 @@ class TranscriptionHistory {
 
     var allEntries: [TranscriptionEntry] { entries }
 
+    /// Se emite al agregar o limpiar. La ventana de Historial se refresca con
+    /// esto, en vez de obligar al usuario a pulsar «Actualizar».
+    static let didChange = Notification.Name("gluffi.historyDidChange")
+
     func add(_ entry: TranscriptionEntry) {
         entries.insert(entry, at: 0)
         let max = config.maxHistoryCount
@@ -48,11 +52,13 @@ class TranscriptionHistory {
             entries = Array(entries.prefix(max))
         }
         save()
+        NotificationCenter.default.post(name: TranscriptionHistory.didChange, object: nil)
     }
 
     func clear() {
         entries.removeAll()
         save()
+        NotificationCenter.default.post(name: TranscriptionHistory.didChange, object: nil)
     }
 
     // MARK: - Persistencia
