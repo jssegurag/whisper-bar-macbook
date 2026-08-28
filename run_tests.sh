@@ -21,6 +21,10 @@ swiftc \
     "$DIR/Sources/AudioRecorder.swift" \
     "$DIR/Sources/Transcriber.swift" \
     "$DIR/Sources/PhraseRewriter.swift" \
+    "$DIR/Sources/SecretBox.swift" \
+    "$DIR/Sources/SnippetAuth.swift" \
+    "$DIR/Sources/SnippetStore.swift" \
+    "$DIR/Sources/RewritePipeline.swift" \
     "$DIR/Sources/CustomDictionary.swift" \
     "$DIR/Sources/DictionaryProcessor.swift" \
     "$DIR/Sources/HotkeyManager.swift" \
@@ -51,6 +55,8 @@ swiftc \
     -framework SwiftUI \
     -framework CoreGraphics \
     -framework UserNotifications \
+    -framework CryptoKit \
+    -framework LocalAuthentication \
     -target "$TARGET"
 
 echo "→ Compilación exitosa"
