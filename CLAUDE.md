@@ -85,9 +85,10 @@ The app follows a **modular, single-responsibility** design:
 - Positioned to not interfere with user's active app
 
 **PreferencesView.swift & PreferencesWindowController.swift** — Settings UI
-- SwiftUI-based preferences for language, whisper-cli/model paths, LLM enable/disable
-- Custom prompt for LLM, streaming parameters (step/length/keep ms)
-- Minimum recording duration threshold
+- `PreferencesView` is only the TabView shell. Each tab lives in its own file: `PreferencesGeneralTab.swift`, `PreferencesModelsTab.swift`, `PreferencesLLMTab.swift`, `PreferencesTranslationTab.swift`, `PreferencesVoiceActionsTab.swift`, `PreferencesAudioTab.swift`, `PreferencesStreamingTab.swift`, `PreferencesShortcutsTab.swift`
+- `PreferencesComponents.swift` holds what several tabs share: `UpdateRow` and `PathField`
+- The Dictionary and Snippets tabs live with their feature instead, in `DictionaryView.swift` and `SnippetsView.swift`
+- Why: the ten screens used to sit in one 806-line file, so changing one tab risked the other nine and two people editing different tabs always conflicted. Splitting it is step 1 of the sequence in `docs/AUDITORIA-UX.md` — make the change easy, then make the easy change
 
 **HistoryView.swift & HistoryWindowController.swift** — Transcription history
 - SwiftUI search interface for past transcriptions

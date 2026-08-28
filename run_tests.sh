@@ -43,6 +43,15 @@ swiftc \
     "$DIR/Sources/PillView.swift" \
     "$DIR/Sources/PillWindowController.swift" \
     "$DIR/Sources/PreferencesView.swift" \
+    "$DIR/Sources/PreferencesGeneralTab.swift" \
+    "$DIR/Sources/PreferencesModelsTab.swift" \
+    "$DIR/Sources/PreferencesLLMTab.swift" \
+    "$DIR/Sources/PreferencesTranslationTab.swift" \
+    "$DIR/Sources/PreferencesVoiceActionsTab.swift" \
+    "$DIR/Sources/PreferencesAudioTab.swift" \
+    "$DIR/Sources/PreferencesStreamingTab.swift" \
+    "$DIR/Sources/PreferencesShortcutsTab.swift" \
+    "$DIR/Sources/PreferencesComponents.swift" \
     "$DIR/Sources/PreferencesWindowController.swift" \
     "$DIR/Sources/TranscriptionHistory.swift" \
     "$DIR/Sources/HistoryView.swift" \
