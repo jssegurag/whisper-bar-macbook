@@ -293,7 +293,14 @@ Exact modifier matching prevents false matches. Requires Accessibility permissio
 
 ### Paste Target Capture
 
-AppDelegate captures the foreground application **before** starting recording, because the floating pill or menu might steal focus. This captured app is the actual target for Cmd+V. Critical for reliability: without this, paste could go to the wrong window.
+AppDelegate captures the foreground application **before** starting recording, because the floating pill or menu might steal focus, and `paste(text:)` activates that app before posting Cmd+V.
+
+Two things this fixes, both of which were broken:
+
+1. `paste(text:)` used to ignore `pasteTargetApp` entirely and post Cmd+V to whatever was frontmost. The captured value was dead state.
+2. `currentPasteTarget()` returned `nil` when WhisperBar itself was frontmost — which is exactly what happens after the user opens Preferences, History or Snippets, since those call `NSApp.activate`. Dictating right after left the transcription in the history with nothing pasted anywhere.
+
+`PasteTargetTracker` subscribes to `NSWorkspace.didActivateApplicationNotification` and remembers the last **external** app, so the target resolves to the frontmost app when it belongs to someone else, and to the last app the user actually worked in when the frontmost is one of our own windows. With no external app ever seen, it returns `nil` — not pasting beats pasting into the wrong window.
 
 ### Cancel Recording / Transcription
 
