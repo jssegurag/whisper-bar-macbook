@@ -106,6 +106,7 @@ struct DictionaryView: View {
             } label: {
                 Label("Agregar", systemImage: "plus")
             }
+            .buttonStyle(.borderedProminent)
         }
         .padding(8)
         .background(Color(nsColor: .controlBackgroundColor))
@@ -132,32 +133,35 @@ struct DictionaryView: View {
     }
 
     /// H6 — probar antes de confiar.
+    /// «PROBARLO» va fijo en el pie, no como un campo más de la lista: es lo que
+    /// convierte el diccionario de una lista de datos en algo verificable.
     private var testBench: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Probar")
-                .font(.caption.weight(.semibold))
-                .foregroundColor(.secondary)
+            Text("PROBARLO")
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(.tertiary)
             TextField("Escribe una frase como la oiría whisper…", text: $testInput)
                 .textFieldStyle(.roundedBorder)
+                .frame(height: 28)
             if !testInput.isEmpty {
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: testOutput == testInput ? "equal.circle" : "arrow.turn.down.right")
-                        .foregroundColor(testOutput == testInput ? .secondary : .accentColor)
-                    Text(testOutput == testInput ? "Sin cambios: ninguna entrada aplica." : testOutput)
-                        .foregroundColor(testOutput == testInput ? .secondary : .primary)
-                        .textSelection(.enabled)
-                }
-                .font(.callout)
+                let applied = testOutput != testInput
+                Text(applied ? "Quedaría \(testOutput)" : "Igual: ninguna entrada aplica.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(applied ? Theme.brandHigh : .secondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(8)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
     }
 
     private var footer: some View {
         HStack {
-            Text("\(entries.count) término\(entries.count == 1 ? "" : "s") · \(entries.filter { $0.isActive }.count) activo\(entries.filter { $0.isActive }.count == 1 ? "" : "s")")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            Text(countsLabel)
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
             if let statusMessage {
                 Text("· \(statusMessage)")
                     .font(.caption)
@@ -170,6 +174,12 @@ struct DictionaryView: View {
                 .disabled(entries.isEmpty)
         }
         .padding(8)
+    }
+
+    private var countsLabel: String {
+        let active = entries.filter(\.isActive).count
+        let terms = entries.count == 1 ? "1 término" : "\(entries.count) términos"
+        return "\(terms) · \(active) activo\(active == 1 ? "" : "s")"
     }
 
     // MARK: - Acciones
@@ -332,38 +342,61 @@ struct DictionaryRow: View {
     let onEdit: () -> Void
     let onDelete: () -> Void
 
+    @State private var hoveringDelete = false
+
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .center, spacing: 10) {
             Toggle("", isOn: Binding(get: { entry.isActive }, set: { onToggle($0) }))
+                .toggleStyle(.switch)
+                .controlSize(.mini)
                 .labelsHidden()
-                .help(entry.isActive ? "Activo — se aplica a las transcripciones" : "Inactivo — se ignora")
+                .help(entry.isActive ? "Activo" : "Inactivo — no se aplica al dictar")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.canonical)
-                    .fontWeight(.medium)
-                    .foregroundColor(entry.isActive ? .primary : .secondary)
+                    .font(.system(size: 13, weight: .semibold))
                 if entry.variants.isEmpty {
                     Text("sin variantes")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.tertiary)
                 } else {
                     Text(entry.variants.joined(separator: " · "))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            Button { onEdit() } label: { Image(systemName: "pencil") }
-                .buttonStyle(.borderless)
-                .help("Editar")
-            Button { onDelete() } label: { Image(systemName: "trash") }
-                .buttonStyle(.borderless)
-                .help("Eliminar")
+            // Cuántas veces corrigió algo de verdad. Un término con cero usos en
+            // meses probablemente no hacía falta.
+            Text(usageLabel)
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+                .monospacedDigit()
+
+            Button("Editar") { onEdit() }
+                .controlSize(.small)
+            Button { onDelete() } label: {
+                Image(systemName: "trash")
+                    .foregroundStyle(hoveringDelete ? Theme.danger : .secondary)
+            }
+            .buttonStyle(.borderless)
+            .onHover { hoveringDelete = $0 }
+            .help("Eliminar")
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 5)
+        // La fila inactiva se atenúa entera: se lee de un golpe cuáles no aplican.
+        .opacity(entry.isActive ? 1 : 0.4)
+    }
+
+    private var usageLabel: String {
+        switch entry.usageCount {
+        case 0:  return "sin usos"
+        case 1:  return "1 uso"
+        default: return "\(entry.usageCount) usos"
+        }
     }
 }
 

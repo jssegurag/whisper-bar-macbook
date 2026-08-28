@@ -19,7 +19,7 @@ class DictionaryWindowController {
         let win = NSWindow(contentViewController: hostingController)
         win.title = "Gluffi — Diccionario"
         win.styleMask = [.titled, .closable, .resizable, .miniaturizable]
-        win.setContentSize(NSSize(width: 560, height: 520))
+        win.setContentSize(NSSize(width: 580, height: 540))
         win.center()
         win.isReleasedWhenClosed = false
         win.makeKeyAndOrderFront(nil)

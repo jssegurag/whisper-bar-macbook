@@ -8,17 +8,37 @@ struct DictionaryEntry: Codable, Identifiable, Equatable {
     var variants: [String]     // las formas que whisper produce
     var isActive: Bool
     let createdAt: Date
+    /// Cuántas veces ha corregido algo de verdad. Sirve para saber qué entradas
+    /// sobran: un término con cero usos en meses probablemente no hacía falta.
+    var usageCount: Int
 
     init(id: UUID = UUID(),
          canonical: String,
          variants: [String] = [],
          isActive: Bool = true,
-         createdAt: Date = Date()) {
-        self.id        = id
-        self.canonical = canonical
-        self.variants  = variants
-        self.isActive  = isActive
-        self.createdAt = createdAt
+         createdAt: Date = Date(),
+         usageCount: Int = 0) {
+        self.id         = id
+        self.canonical  = canonical
+        self.variants   = variants
+        self.isActive   = isActive
+        self.createdAt  = createdAt
+        self.usageCount = usageCount
+    }
+
+    /// Los archivos guardados antes de que existiera el contador no lo traen.
+    enum CodingKeys: String, CodingKey {
+        case id, canonical, variants, isActive, createdAt, usageCount
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id         = try container.decode(UUID.self, forKey: .id)
+        canonical  = try container.decode(String.self, forKey: .canonical)
+        variants   = try container.decode([String].self, forKey: .variants)
+        isActive   = try container.decode(Bool.self, forKey: .isActive)
+        createdAt  = try container.decode(Date.self, forKey: .createdAt)
+        usageCount = try container.decodeIfPresent(Int.self, forKey: .usageCount) ?? 0
     }
 
     /// Todas las formas por las que esta entrada debe reconocerse. La canónica
@@ -123,6 +143,18 @@ class CustomDictionary {
     func delete(id: UUID) {
         entries.removeAll { $0.id == id }
         save()
+    }
+
+    /// Suma un uso a las entradas cuyas formas canónicas aparecen en `canonicals`.
+    /// Lo llama el pipeline tras corregir un dictado real.
+    func recordUsage(of canonicals: Set<String>) {
+        guard !canonicals.isEmpty else { return }
+        var changed = false
+        for index in entries.indices where canonicals.contains(entries[index].canonical) {
+            entries[index].usageCount += 1
+            changed = true
+        }
+        if changed { save() }
     }
 
     // MARK: - Importar / exportar

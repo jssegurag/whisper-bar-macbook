@@ -81,10 +81,18 @@ struct PhraseRewriter {
     /// Reescribe `text` sustituyendo cada coincidencia por su reemplazo.
     /// Preserva los espacios originales y la puntuación pegada a los bordes.
     static func apply(to text: String, index: Index) -> String {
-        guard !index.isEmpty, !text.isEmpty else { return text }
+        applyReporting(to: text, index: index).text
+    }
+
+    /// Igual que `apply`, pero además dice **qué** reemplazos se usaron. El
+    /// contador de usos del diccionario se alimenta de esto: sin saber qué
+    /// entradas aplican, el usuario no puede limpiar las que ya no sirven.
+    static func applyReporting(to text: String, index: Index) -> (text: String, used: Set<String>) {
+        var used: Set<String> = []
+        guard !index.isEmpty, !text.isEmpty else { return (text, used) }
 
         let (tokens, gaps, leading) = tokenize(text)
-        guard !tokens.isEmpty else { return text }
+        guard !tokens.isEmpty else { return (text, used) }
 
         var result = leading
         var i = 0
@@ -100,6 +108,7 @@ struct PhraseRewriter {
                     guard let candidate = candidateKey(tokens: tokens, start: i, count: n) else { continue }
                     if let value = index.byPhrase[candidate.key] {
                         replacement = candidate.prefix + value + candidate.suffix
+                        used.insert(value)
                         consumed = n
                         break
                     }
@@ -110,7 +119,7 @@ struct PhraseRewriter {
             result += gaps[i + consumed - 1]
             i += consumed
         }
-        return result
+        return (result, used)
     }
 
     // MARK: - Interno

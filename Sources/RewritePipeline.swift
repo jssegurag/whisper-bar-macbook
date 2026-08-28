@@ -17,7 +17,19 @@ struct RewritePipeline {
     static func apply(to text: String,
                       dictionary: [DictionaryEntry],
                       snippetRules: [PhraseRewriter.Rule]) -> String {
-        let corrected = DictionaryProcessor.apply(to: text, entries: dictionary)
-        return PhraseRewriter.apply(to: corrected, rules: snippetRules)
+        applyReporting(to: text, dictionary: dictionary, snippetRules: snippetRules).text
+    }
+
+    /// Igual, pero dice qué términos del diccionario aplicaron, para el contador
+    /// de usos.
+    static func applyReporting(to text: String,
+                               dictionary: [DictionaryEntry],
+                               snippetRules: [PhraseRewriter.Rule])
+        -> (text: String, dictionaryUsed: Set<String>) {
+
+        let corrected = PhraseRewriter.applyReporting(
+            to: text, index: DictionaryProcessor.buildIndex(from: dictionary))
+        let expanded = PhraseRewriter.apply(to: corrected.text, rules: snippetRules)
+        return (expanded, corrected.used)
     }
 }

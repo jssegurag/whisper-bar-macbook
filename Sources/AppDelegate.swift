@@ -350,7 +350,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func applyRewrites(_ text: String) -> String {
         let entries = config.dictionaryEnabled ? CustomDictionary.shared.activeEntries : []
         let rules   = config.snippetsEnabled ? SnippetStore.shared.rules() : []
-        return RewritePipeline.apply(to: text, dictionary: entries, snippetRules: rules)
+        let result = RewritePipeline.applyReporting(to: text, dictionary: entries,
+                                                  snippetRules: rules)
+        // Solo cuenta lo que corrigió un dictado real: el campo de prueba de la
+        // ventana del diccionario no debe inflar el contador.
+        CustomDictionary.shared.recordUsage(of: result.dictionaryUsed)
+        return result.text
     }
 
     // MARK: - Monitor de tecla Escape

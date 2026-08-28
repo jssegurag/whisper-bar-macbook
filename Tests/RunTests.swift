@@ -2260,6 +2260,78 @@ func testLiveMeta() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - Contador de usos del diccionario
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testDictionaryUsageCount() {
+    suite("Diccionario — Contador de usos")
+
+    // El motor dice qué reemplazos aplicó: sin eso no hay contador posible.
+    let entries = [
+        DictionaryEntry(canonical: "DocFly", variants: ["doc fly"]),
+        DictionaryEntry(canonical: "Oriuno", variants: ["oriundo"]),
+    ]
+    let index = DictionaryProcessor.buildIndex(from: entries)
+
+    let uno = PhraseRewriter.applyReporting(to: "subilo a doc fly", index: index)
+    assertEqual(uno.text, "subilo a DocFly", "el texto sale corregido igual que antes")
+    assertEqual(uno.used, ["DocFly"], "reporta solo la entrada que aplicó")
+
+    let dos = PhraseRewriter.applyReporting(to: "doc fly y oriundo", index: index)
+    assertEqual(dos.used, ["DocFly", "Oriuno"], "reporta las dos cuando aplican las dos")
+
+    let ninguna = PhraseRewriter.applyReporting(to: "texto sin términos", index: index)
+    assert(ninguna.used.isEmpty, "sin coincidencias no reporta nada")
+
+    // Repetir el mismo término en una frase cuenta como un uso de esa entrada,
+    // no como dos: lo que interesa es si el término sirve, no cuántas palabras.
+    let repetida = PhraseRewriter.applyReporting(to: "doc fly y doc fly", index: index)
+    assertEqual(repetida.used.count, 1, "el mismo término repetido se reporta una vez")
+
+    // El pipeline completo lo propaga
+    let pipeline = RewritePipeline.applyReporting(
+        to: "subilo a doc fly",
+        dictionary: entries,
+        snippetRules: [PhraseRewriter.Rule(phrases: ["mi correo"], replacement: "yo@ejemplo.com")])
+    assertEqual(pipeline.dictionaryUsed, ["DocFly"], "el pipeline propaga qué términos aplicaron")
+
+    // Y el store los suma y persiste
+    withTempDictionary { dict, file in
+        _ = try? dict.add(canonical: "DocFly", variants: ["doc fly"])
+        _ = try? dict.add(canonical: "Oriuno", variants: [])
+        assertEqual(dict.entries.first?.usageCount, 0, "una entrada nueva empieza en cero")
+
+        dict.recordUsage(of: ["DocFly"])
+        dict.recordUsage(of: ["DocFly"])
+        assertEqual(dict.entries.first { $0.canonical == "DocFly" }?.usageCount, 2,
+            "dos usos suman dos")
+        assertEqual(dict.entries.first { $0.canonical == "Oriuno" }?.usageCount, 0,
+            "y no toca a las demás")
+
+        dict.recordUsage(of: [])
+        assertEqual(dict.entries.first { $0.canonical == "DocFly" }?.usageCount, 2,
+            "un reporte vacío no cambia nada")
+
+        // Sobrevive al archivo
+        let reloaded = CustomDictionary(storageURL: file)
+        assertEqual(reloaded.entries.first { $0.canonical == "DocFly" }?.usageCount, 2,
+            "el contador persiste")
+    }
+
+    // Los archivos guardados antes de que existiera el contador no lo traen y
+    // deben seguir abriéndose.
+    let viejo = "[{\"id\":\"7A1E6C10-0001-4000-A000-000000000001\",\"canonical\":\"DocFly\","
+        + "\"variants\":[\"doc fly\"],\"isActive\":true,\"createdAt\":\"2026-08-20T14:10:00Z\"}]"
+    let url = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("dict_legacy_\(UUID().uuidString).json")
+    try? Data(viejo.utf8).write(to: url)
+    let legacy = CustomDictionary(storageURL: url)
+    assertEqual(legacy.entries.count, 1, "un archivo sin usageCount todavía se lee")
+    assertEqual(legacy.entries.first?.usageCount, 0, "y el contador arranca en cero")
+    try? FileManager.default.removeItem(at: url)
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -2332,6 +2404,7 @@ struct TestRunner {
         testHotkeyBinding()
         testHistoryPresentation()
         testLiveMeta()
+        testDictionaryUsageCount()
         testModelDownloaderFormatting()
 
         // Summary
