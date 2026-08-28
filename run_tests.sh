@@ -30,6 +30,7 @@ swiftc \
     "$DIR/Sources/CustomDictionary.swift" \
     "$DIR/Sources/DictionaryProcessor.swift" \
     "$DIR/Sources/HotkeyManager.swift" \
+    "$DIR/Sources/PasteTargetTracker.swift" \
     "$DIR/Sources/AudioFeedback.swift" \
     "$DIR/Sources/LLMProcessor.swift" \
     "$DIR/Sources/TranslationProcessor.swift" \

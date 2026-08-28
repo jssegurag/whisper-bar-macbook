@@ -29,6 +29,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// la app destino puede perder foco efectivo y Cmd+V no llegaría al editor.
     private var pasteTargetApp: NSRunningApplication?
 
+    /// Recuerda la última app externa activa. Nuestras ventanas roban el foco, así
+    /// que sin esto el destino del paste se pierde en cuanto el usuario abre
+    /// Preferencias, el Historial o los Snippets.
+    private let pasteTracker = PasteTargetTracker()
+
     /// Bandera de cancelación: impide el paste si el usuario canceló durante transcripción.
     private var isCancelled = false
 
@@ -145,6 +150,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         setIconEmoji("🎙")
+        // Rastrea qué app externa está activa para saber dónde pegar después.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil, queue: .main) { [weak self] note in
+                let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+                self?.pasteTracker.record(app)
+        }
+        pasteTracker.record(NSWorkspace.shared.frontmostApplication)
+
         rebuildMenu()
     }
 
@@ -403,10 +417,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// App frontmost actual, ignorando WhisperBar mismo (por si el pill robara foco).
+    /// Destino del paste: el frontmost si es de otra app, y si el frontmost somos
+    /// nosotros —porque el usuario tiene abierta una de nuestras ventanas—, la
+    /// última app externa que usó.
     private func currentPasteTarget() -> NSRunningApplication? {
-        let frontmost = NSWorkspace.shared.frontmostApplication
-        if frontmost?.processIdentifier == getpid() { return nil }
-        return frontmost
+        pasteTracker.target(frontmost: NSWorkspace.shared.frontmostApplication)
+            as? NSRunningApplication
     }
 
     /// Restaura UI a estado idle (icono menubar + pill) y limpia destino del paste.
@@ -591,21 +607,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Paste (preserva el clipboard del usuario)
 
-    /// Activa la app capturada antes de pegar. Necesario cuando la inserción viene
-    /// del menú de la barra: el clic pasó por nuestra app, así que ⌘V podría no
-    /// llegar al editor del usuario.
-    private func pasteIntoCapturedTarget(_ text: String) {
-        guard let target = pasteTargetApp, !target.isActive else {
-            paste(text: text)
+    private func paste(text: String) {
+        // Activar la app destino antes de postear ⌘V. Antes este método ignoraba
+        // `pasteTargetApp` por completo y posteaba a lo que estuviera al frente:
+        // si el usuario tenía abierta una ventana nuestra, el texto se perdía.
+        let target = pasteTargetApp ?? currentPasteTarget()
+        if let target, !target.isActive {
+            target.activate(options: [])
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+                self?.postPaste(text: text)
+            }
             return
         }
-        target.activate(options: [])
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            self?.paste(text: text)
-        }
+        postPaste(text: text)
     }
 
-    private func paste(text: String) {
+    private func postPaste(text: String) {
         let previous = NSPasteboard.general.string(forType: .string)
 
         NSPasteboard.general.clearContents()
@@ -664,7 +681,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
               let snippet = SnippetStore.shared.snippets.first(where: { $0.id == id }) else { return }
         do {
             let body = try SnippetStore.shared.body(of: snippet)
-            pasteIntoCapturedTarget(body)
+            paste(text: body)
         } catch {
             notify("No se pudo leer «\(snippet.name)»: \(error.localizedDescription)")
         }
