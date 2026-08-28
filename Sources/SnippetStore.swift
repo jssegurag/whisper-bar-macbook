@@ -196,6 +196,20 @@ class SnippetStore {
         save()
     }
 
+    /// Marca o desmarca como sensible, recifrando o descifrando el cuerpo.
+    /// Existe para que la lista pueda hacerlo con un clic: obligar a abrir el
+    /// formulario solo para cambiar un interruptor son clics de sobra.
+    func setSensitive(id: UUID, _ sensitive: Bool) throws {
+        guard let index = snippets.firstIndex(where: { $0.id == id }) else { return }
+        var snippet = snippets[index]
+        guard snippet.isSensitive != sensitive else { return }
+        let text = try body(of: snippet)
+        snippet.isSensitive = sensitive
+        try store(body: text, in: &snippet, isSensitive: sensitive)
+        snippets[index] = snippet
+        save()
+    }
+
     func setActive(id: UUID, _ active: Bool) {
         guard let index = snippets.firstIndex(where: { $0.id == id }) else { return }
         snippets[index].isActive = active

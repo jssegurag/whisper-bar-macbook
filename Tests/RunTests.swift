@@ -1622,6 +1622,40 @@ func testSnippetStoreSensitiveEncryption() {
     }
 }
 
+func testSnippetStoreSetSensitive() {
+    suite("SnippetStore — Cambiar sensible desde la lista")
+
+    withTempSnippets { store, file in
+        let created = try? store.add(name: "Cédula", triggers: ["mi cédula"], body: "1020304050")
+        guard let id = created?.id else { assert(false, "add falló"); return }
+
+        // Marcar: el cuerpo pasa a cifrado y desaparece del archivo en claro.
+        try? store.setSensitive(id: id, true)
+        var snippet = store.snippets.first { $0.id == id }
+        assert(snippet?.isSensitive == true, "queda marcado como sensible")
+        assert(snippet?.plainBody == nil, "ya no guarda el cuerpo en claro")
+        assert(snippet?.sealedBody != nil, "guarda el cuerpo cifrado")
+        var onDisk = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+        assert(!onDisk.contains("1020304050"), "el valor sale del archivo en claro")
+        assertEqual(try? store.body(of: snippet!), "1020304050",
+            "el valor sigue recuperable a través de la llave")
+
+        // Desmarcar: vuelve a claro, sin perder el contenido.
+        try? store.setSensitive(id: id, false)
+        snippet = store.snippets.first { $0.id == id }
+        assert(snippet?.isSensitive == false, "queda desmarcado")
+        assertEqual(snippet?.plainBody, "1020304050", "el cuerpo vuelve a claro intacto")
+        assert(snippet?.sealedBody == nil, "se limpia el cuerpo cifrado")
+        onDisk = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+        assert(onDisk.contains("1020304050"), "vuelve a aparecer en el archivo")
+
+        // Sin cambio real no toca nada.
+        try? store.setSensitive(id: id, false)
+        assertEqual(store.snippets.first { $0.id == id }?.plainBody, "1020304050",
+            "aplicar el mismo valor es inocuo")
+    }
+}
+
 func testSnippetStorePersistence() {
     suite("SnippetStore — Persistencia")
 
@@ -1907,6 +1941,7 @@ struct TestRunner {
         testSnippetAuthSession()
         testSnippetStoreCRUD()
         testSnippetStoreSensitiveEncryption()
+        testSnippetStoreSetSensitive()
         testSnippetStorePersistence()
         testSnippetStoreSearchAndCollisions()
         testSnippetStoreRules()

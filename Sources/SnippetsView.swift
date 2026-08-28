@@ -58,6 +58,9 @@ struct SnippetsView: View {
                                 store.setActive(id: snippet.id, active)
                                 reload()
                             },
+                            onToggleSensitive: { sensitive in
+                                setSensitive(snippet, sensitive)
+                            },
                             onReveal: { revealSensitive() },
                             onEdit:   { requestEdit(snippet) },
                             onDelete: { pendingDeletion = snippet }
@@ -209,6 +212,31 @@ struct SnippetsView: View {
         }
     }
 
+    /// Marcar como sensible no exige autenticación: se está ocultando, no mostrando.
+    /// Desmarcar sí, porque deja el valor en claro en el disco.
+    private func setSensitive(_ snippet: Snippet, _ sensitive: Bool) {
+        func commit() {
+            do {
+                try store.setSensitive(id: snippet.id, sensitive)
+                reload()
+                statusMessage = sensitive
+                    ? "«\(snippet.name)» quedó cifrado."
+                    : "«\(snippet.name)» ya no está cifrado."
+            } catch {
+                statusMessage = error.localizedDescription
+            }
+        }
+
+        if sensitive || isUnlocked {
+            commit()
+            return
+        }
+        auth.unlock(reason: "Quitar la protección de «\(snippet.name)»") { ok in
+            isUnlocked = ok
+            if ok { commit() }
+        }
+    }
+
     /// Editar un sensible exige autenticación: el formulario muestra el valor.
     private func requestEdit(_ snippet: Snippet) {
         guard snippet.isSensitive, !isUnlocked else {
@@ -264,6 +292,7 @@ struct SnippetRow: View {
     let bodyPreview: String
     let isMasked: Bool
     let onToggle: (Bool) -> Void
+    let onToggleSensitive: (Bool) -> Void
     let onReveal: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
@@ -279,12 +308,17 @@ struct SnippetRow: View {
                     Text(snippet.name)
                         .fontWeight(.medium)
                         .foregroundColor(snippet.isActive ? .primary : .secondary)
-                    if snippet.isSensitive {
-                        Image(systemName: "lock.fill")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .help("Sensible: cifrado, y hace falta autenticarse para verlo")
+                    // Cambiar «sensible» desde la lista: abrir el formulario solo
+                    // para eso serían clics de sobra.
+                    Button { onToggleSensitive(!snippet.isSensitive) } label: {
+                        Image(systemName: snippet.isSensitive ? "lock.fill" : "lock.open")
+                            .font(.caption)
+                            .foregroundColor(snippet.isSensitive ? .accentColor : .secondary)
                     }
+                    .buttonStyle(.borderless)
+                    .help(snippet.isSensitive
+                          ? "Sensible: cifrado y con autenticación para verse. Clic para quitar la protección."
+                          : "Sin protección. Clic para cifrarlo y exigir autenticación para verlo.")
                 }
                 // El disparador es lo que hay que recordar, así que va visible.
                 Text(snippet.triggers.map { "«\($0)»" }.joined(separator: " · "))
