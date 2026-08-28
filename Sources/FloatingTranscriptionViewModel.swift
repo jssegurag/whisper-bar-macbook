@@ -26,6 +26,12 @@ class FloatingTranscriptionViewModel: ObservableObject {
     /// tests no escriban en el diccionario real del usuario.
     var dictionaryEntries: () -> [DictionaryEntry] = { CustomDictionary.shared.activeEntries }
 
+    /// Reglas de snippets a aplicar. Sin los sensibles: esta ventana flota sobre
+    /// lo que sea que el usuario esté compartiendo por pantalla.
+    var snippetRules: () -> [PhraseRewriter.Rule] = {
+        SnippetStore.shared.rules(includeSensitive: false)
+    }
+
     init() {
         streamer.onFinalizedText = { [weak self] text in
             guard let self else { return }
@@ -87,9 +93,10 @@ class FloatingTranscriptionViewModel: ObservableObject {
 
         // Diccionario personalizado: solo sobre texto ya finalizado. Aplicarlo al
         // parcial haría parpadear la ventana mientras whisper reescribe la frase.
-        let corrected = Config.shared.dictionaryEnabled
-            ? DictionaryProcessor.apply(to: trimmed, entries: dictionaryEntries())
-            : trimmed
+        let corrected = RewritePipeline.apply(
+            to: trimmed,
+            dictionary: Config.shared.dictionaryEnabled ? dictionaryEntries() : [],
+            snippetRules: Config.shared.snippetsEnabled ? snippetRules() : [])
 
         if finalizedText.isEmpty {
             finalizedText = corrected

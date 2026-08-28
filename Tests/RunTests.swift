@@ -1,5 +1,6 @@
 import Foundation
 import Cocoa
+import CryptoKit
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MARK: - Test Harness
@@ -1510,6 +1511,380 @@ func testDictionaryStreamingIntegration() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - 29. SecretBox — Cifrado de cuerpos sensibles
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testSecretBoxRoundTrip() {
+    suite("SecretBox — Cifrado AES-GCM")
+
+    let box = SecretBox(key: SymmetricKey(size: .bits256))
+    let secret = "jesus.segura@trycore.com"
+
+    guard let sealed = try? box.seal(secret) else {
+        assert(false, "seal falló"); return
+    }
+    assert(!sealed.isEmpty, "seal produce datos")
+    assert(!String(decoding: sealed, as: UTF8.self).contains(secret),
+        "el texto en claro no aparece en el resultado cifrado")
+
+    let opened = try? box.open(sealed)
+    assertEqual(opened, secret, "open recupera el texto original")
+
+    // Manipular un byte debe hacer fallar la apertura: AES-GCM autentica.
+    var tampered = sealed
+    tampered[tampered.count - 1] ^= 0xFF
+    var failed = false
+    do { _ = try box.open(tampered) } catch { failed = true }
+    assert(failed, "un texto cifrado alterado no se puede abrir")
+
+    // Otra llave no abre lo cifrado con la primera.
+    let otherBox = SecretBox(key: SymmetricKey(size: .bits256))
+    var wrongKeyFailed = false
+    do { _ = try otherBox.open(sealed) } catch { wrongKeyFailed = true }
+    assert(wrongKeyFailed, "otra llave no puede abrir el contenido")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - 30. SnippetAuth — Puerta de autenticación
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testSnippetAuthSession() {
+    suite("SnippetAuth — Una autenticación por sesión")
+
+    let auth = SnippetAuth()
+    assert(!auth.isUnlockedForSession, "arranca bloqueado")
+
+    // Cancelar deja todo bloqueado y no debe dejar rastro de éxito.
+    var prompts = 0
+    auth.evaluator = { _, completion in prompts += 1; completion(false) }
+    var granted = true
+    auth.unlock { granted = $0 }
+    assert(!granted, "cancelar la autenticación devuelve false")
+    assert(!auth.isUnlockedForSession, "cancelar no desbloquea la sesión")
+    assertEqual(prompts, 1, "se pidió autenticación una vez")
+
+    // Autenticar bien desbloquea el resto de la sesión sin volver a preguntar:
+    // pedir Touch ID en cada snippet gasta la paciencia sin ganar seguridad.
+    auth.evaluator = { _, completion in prompts += 1; completion(true) }
+    auth.unlock { granted = $0 }
+    assert(granted, "autenticar correctamente devuelve true")
+    assert(auth.isUnlockedForSession, "queda desbloqueado para la sesión")
+    assertEqual(prompts, 2, "se pidió autenticación por segunda vez")
+
+    auth.unlock { granted = $0 }
+    assert(granted, "una segunda consulta sigue concedida")
+    assertEqual(prompts, 2, "no vuelve a pedir autenticación en la misma sesión")
+
+    auth.lock()
+    assert(!auth.isUnlockedForSession, "lock() vuelve a bloquear")
+
+    // Capacidad real de esta máquina; informativo, no condiciona el resto.
+    print("  \u{001B}[33mℹ canAuthenticate en esta máquina: \(auth.canAuthenticate)\u{001B}[0m")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - 31. SnippetStore — CRUD, cifrado en disco, importar/exportar
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Store respaldado por archivo temporal y llave en memoria: los tests no tocan
+/// los snippets del usuario ni su Keychain.
+private func withTempSnippets(_ body: (SnippetStore, URL) -> Void) {
+    let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("whisperbar_snippets_\(UUID().uuidString)")
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let file = dir.appendingPathComponent("snippets.json")
+    let key = SymmetricKey(size: .bits256)
+    body(SnippetStore(storageURL: file, secretBoxProvider: { SecretBox(key: key) }), file)
+    try? FileManager.default.removeItem(at: dir)
+}
+
+func testSnippetStoreCRUD() {
+    suite("SnippetStore — CRUD")
+
+    withTempSnippets { store, _ in
+        assertEqual(store.snippets.count, 0, "arranca vacío")
+
+        let created = try? store.add(name: "Correo",
+                                     triggers: ["mi correo", "mi mail"],
+                                     body: "jesus.segura@trycore.com")
+        assert(created != nil, "add crea el snippet")
+        assertEqual(store.snippets.count, 1, "queda en la lista")
+        assertEqual(store.snippets.first?.triggers.count, 2, "conserva los dos disparadores")
+
+        // Validaciones: nombre, disparadores y cuerpo son obligatorios.
+        for (name, triggers, body, what) in [
+            ("  ",     ["x"], "y",  "nombre vacío"),
+            ("Nombre", [],    "y",  "sin disparadores"),
+            ("Nombre", ["x"], "  ", "cuerpo vacío"),
+        ] as [(String, [String], String, String)] {
+            var rejected = false
+            do { _ = try store.add(name: name, triggers: triggers, body: body) } catch { rejected = true }
+            assert(rejected, "add rechaza \(what)")
+        }
+        assertEqual(store.snippets.count, 1, "los rechazos no agregan nada")
+
+        guard let id = created?.id else { return }
+        let createdAt = store.snippets.first?.createdAt
+
+        try? store.update(id: id, name: "Correo Trycore", triggers: ["mi correo"],
+                          body: "jesus.segura@trycore.com", isSensitive: false, isActive: true)
+        assertEqual(store.snippets.first?.name, "Correo Trycore", "update cambia el nombre")
+        assertEqual(store.snippets.first?.id, id, "update conserva el id")
+        assertEqual(store.snippets.first?.createdAt, createdAt, "update conserva createdAt")
+
+        store.setActive(id: id, false)
+        assertEqual(store.activeSnippets.count, 0, "desactivado sale de activeSnippets")
+        store.setActive(id: id, true)
+
+        _ = try? store.add(name: "Firma", triggers: ["mi firma"], body: "Jesús Segura\nTrycore")
+        store.delete(id: id)
+        assertEqual(store.snippets.count, 1, "delete quita solo el pedido")
+        assertEqual(store.snippets.first?.name, "Firma", "el resto queda intacto")
+
+        // Cuerpo multilínea: una firma depende de sus saltos internos.
+        let firma = store.snippets.first!
+        assertEqual(try? store.body(of: firma), "Jesús Segura\nTrycore",
+            "el cuerpo conserva los saltos de línea internos")
+    }
+}
+
+func testSnippetStoreSensitiveEncryption() {
+    suite("SnippetStore — Los sensibles se cifran en disco")
+
+    withTempSnippets { store, file in
+        _ = try? store.add(name: "Cédula", triggers: ["mi cédula"],
+                           body: "1020304050", isSensitive: true)
+        _ = try? store.add(name: "Correo", triggers: ["mi correo"],
+                           body: "jesus.segura@trycore.com")
+
+        let onDisk = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+        assert(!onDisk.contains("1020304050"),
+            "el cuerpo sensible NO aparece en claro en el archivo")
+        assert(onDisk.contains("jesus.segura@trycore.com"),
+            "el cuerpo no sensible sí aparece en claro, como el diccionario")
+
+        let sensitive = store.snippets.first { $0.isSensitive }
+        assert(sensitive?.plainBody == nil, "el sensible no guarda cuerpo en claro")
+        assert(sensitive?.sealedBody != nil, "el sensible guarda cuerpo cifrado")
+        assertEqual(try? store.body(of: sensitive!), "1020304050",
+            "body() descifra sin exigir autenticación: insertar no es ver")
+
+        // Pasar de sensible a normal y al revés reescribe el almacenamiento.
+        try? store.update(id: sensitive!.id, name: "Cédula", triggers: ["mi cédula"],
+                          body: "1020304050", isSensitive: false, isActive: true)
+        let now = store.snippets.first { $0.name == "Cédula" }
+        assert(now?.sealedBody == nil, "al desmarcar sensible se borra el cifrado")
+        assertEqual(now?.plainBody, "1020304050", "al desmarcar queda en claro")
+    }
+}
+
+func testSnippetStoreSetSensitive() {
+    suite("SnippetStore — Cambiar sensible desde la lista")
+
+    withTempSnippets { store, file in
+        let created = try? store.add(name: "Cédula", triggers: ["mi cédula"], body: "1020304050")
+        guard let id = created?.id else { assert(false, "add falló"); return }
+
+        // Marcar: el cuerpo pasa a cifrado y desaparece del archivo en claro.
+        try? store.setSensitive(id: id, true)
+        var snippet = store.snippets.first { $0.id == id }
+        assert(snippet?.isSensitive == true, "queda marcado como sensible")
+        assert(snippet?.plainBody == nil, "ya no guarda el cuerpo en claro")
+        assert(snippet?.sealedBody != nil, "guarda el cuerpo cifrado")
+        var onDisk = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+        assert(!onDisk.contains("1020304050"), "el valor sale del archivo en claro")
+        assertEqual(try? store.body(of: snippet!), "1020304050",
+            "el valor sigue recuperable a través de la llave")
+
+        // Desmarcar: vuelve a claro, sin perder el contenido.
+        try? store.setSensitive(id: id, false)
+        snippet = store.snippets.first { $0.id == id }
+        assert(snippet?.isSensitive == false, "queda desmarcado")
+        assertEqual(snippet?.plainBody, "1020304050", "el cuerpo vuelve a claro intacto")
+        assert(snippet?.sealedBody == nil, "se limpia el cuerpo cifrado")
+        onDisk = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+        assert(onDisk.contains("1020304050"), "vuelve a aparecer en el archivo")
+
+        // Sin cambio real no toca nada.
+        try? store.setSensitive(id: id, false)
+        assertEqual(store.snippets.first { $0.id == id }?.plainBody, "1020304050",
+            "aplicar el mismo valor es inocuo")
+    }
+}
+
+func testSnippetStorePersistence() {
+    suite("SnippetStore — Persistencia")
+
+    let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("whisperbar_snippets_\(UUID().uuidString)")
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let file = dir.appendingPathComponent("snippets.json")
+    let key = SymmetricKey(size: .bits256)
+    let provider: () throws -> SecretBox = { SecretBox(key: key) }
+
+    let store = SnippetStore(storageURL: file, secretBoxProvider: provider)
+    _ = try? store.add(name: "Correo", triggers: ["mi correo"], body: "jesus@trycore.com")
+    _ = try? store.add(name: "Cédula", triggers: ["mi cédula"], body: "1020304050", isSensitive: true)
+
+    // Instancia nueva, misma llave: ve todo.
+    let reloaded = SnippetStore(storageURL: file, secretBoxProvider: provider)
+    assertEqual(reloaded.snippets.count, 2, "una instancia nueva relee los snippets")
+    let sensitive = reloaded.snippets.first { $0.isSensitive }
+    assertEqual(try? reloaded.body(of: sensitive!), "1020304050",
+        "el cuerpo cifrado se descifra tras releer el archivo")
+
+    // Instancia nueva con otra llave: los sensibles quedan ilegibles, y eso es
+    // lo correcto — es lo que pasa si el archivo viaja a otro Mac.
+    let otherKey = SymmetricKey(size: .bits256)
+    let foreign = SnippetStore(storageURL: file, secretBoxProvider: { SecretBox(key: otherKey) })
+    let foreignSensitive = foreign.snippets.first { $0.isSensitive }
+    var unreadable = false
+    do { _ = try foreign.body(of: foreignSensitive!) } catch { unreadable = true }
+    assert(unreadable, "con otra llave el cuerpo sensible no se puede leer")
+    assertEqual(try? foreign.body(of: foreign.snippets.first { !$0.isSensitive }!),
+        "jesus@trycore.com",
+        "los no sensibles siguen legibles sin la llave")
+
+    try? FileManager.default.removeItem(at: dir)
+}
+
+func testSnippetStoreSearchAndCollisions() {
+    suite("SnippetStore — Búsqueda y colisiones")
+
+    withTempSnippets { store, _ in
+        _ = try? store.add(name: "Correo", triggers: ["mi correo"], body: "jesus@trycore.com")
+        _ = try? store.add(name: "Cédula", triggers: ["mi cédula"], body: "1020304050", isSensitive: true)
+
+        assertEqual(store.search("").count, 2, "búsqueda vacía devuelve todo")
+        assertEqual(store.search("CEDULA").count, 1, "busca por nombre ignorando mayúsculas y acentos")
+        assertEqual(store.search("mi correo").count, 1, "busca por disparador")
+        assertEqual(store.search("1020304050").count, 0,
+            "la búsqueda NO entra en los cuerpos: un dato sensible no se filtra por el buscador")
+
+        let claimers = store.snippetsClaiming(["MI CORREO"])
+        assertEqual(claimers.count, 1, "detecta qué snippet ya usa un disparador")
+        assertEqual(claimers.first?.name, "Correo", "identifica cuál")
+        assertEqual(store.snippetsClaiming(["mi correo"], excluding: claimers.first?.id).count, 0,
+            "un snippet no choca consigo mismo al editarse")
+
+        // Colisión cruzada: el diccionario corre antes y rompe el disparador.
+        let entries = [DictionaryEntry(canonical: "Correo Corporativo", variants: ["correo"])]
+        let crossed = store.dictionaryCollisions(for: ["mi correo"], entries: entries)
+        assertEqual(crossed.count, 1,
+            "detecta que una entrada del diccionario reescribe el disparador")
+        assertEqual(crossed.first?.entry.canonical, "Correo Corporativo",
+            "identifica la entrada culpable")
+
+        let clean = store.dictionaryCollisions(for: ["mi cédula"], entries: entries)
+        assertEqual(clean.count, 0, "sin colisión no reporta nada")
+    }
+}
+
+func testSnippetStoreRules() {
+    suite("SnippetStore — Reglas para el motor")
+
+    withTempSnippets { store, _ in
+        _ = try? store.add(name: "Correo", triggers: ["mi correo"], body: "jesus@trycore.com")
+        _ = try? store.add(name: "Cédula", triggers: ["mi cédula"], body: "1020304050", isSensitive: true)
+        _ = try? store.add(name: "Inactivo", triggers: ["nunca"], body: "x", isActive: false)
+
+        assertEqual(store.rules().count, 2, "las reglas excluyen los inactivos")
+        assertEqual(store.rules(includeSensitive: false).count, 1,
+            "includeSensitive: false deja fuera los sensibles — la ventana flotante "
+            + "puede estar sobre una pantalla compartida")
+    }
+}
+
+func testSnippetStoreImportExport() {
+    suite("SnippetStore — Importar / exportar")
+
+    withTempSnippets { source, _ in
+        _ = try? source.add(name: "Correo", triggers: ["mi correo"], body: "jesus@trycore.com")
+        _ = try? source.add(name: "Firma", triggers: ["mi firma"], body: "Jesús Segura")
+        _ = try? source.add(name: "Cédula", triggers: ["mi cédula"], body: "1020304050", isSensitive: true)
+
+        let out = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("snippets_export_\(UUID().uuidString).json")
+        let omitted = (try? source.export(to: out)) ?? -1
+        assertEqual(omitted, 1, "export informa cuántos sensibles omitió")
+
+        let exported = (try? String(contentsOf: out, encoding: .utf8)) ?? ""
+        assert(!exported.contains("1020304050"),
+            "el archivo exportado no contiene el dato sensible, ni cifrado ni en claro")
+        assert(exported.contains("\"omittedSensitive\""),
+            "el archivo dice cuántos se omitieron: nadie debe creer que respaldó todo")
+
+        withTempSnippets { target, _ in
+            _ = try? target.add(name: "Correo", triggers: ["otro"], body: "ya existía")
+            let added = (try? target.importSnippets(from: out)) ?? -1
+            assertEqual(added, 1, "importa solo lo que no tenía por nombre")
+            assertEqual(target.snippets.count, 2, "no duplica nombres existentes")
+
+            var failed = false
+            let bad = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("bad_\(UUID().uuidString).json")
+            try? Data("no soy snippets".utf8).write(to: bad)
+            do { _ = try target.importSnippets(from: bad) } catch { failed = true }
+            assert(failed, "un archivo corrupto lanza error")
+            assertEqual(target.snippets.count, 2, "el store queda intacto tras un import fallido")
+            try? FileManager.default.removeItem(at: bad)
+        }
+
+        try? FileManager.default.removeItem(at: out)
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - 32. RewritePipeline — Orden de reescritura
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testRewritePipelineOrder() {
+    suite("RewritePipeline — Criterios de aceptación H1")
+
+    let correo = PhraseRewriter.Rule(phrases: ["mi correo"], replacement: "jesus.segura@trycore.com")
+
+    // Inserción con contexto alrededor
+    assertEqual(RewritePipeline.apply(to: "agrega mi correo", dictionary: [], snippetRules: [correo]),
+        "agrega jesus.segura@trycore.com",
+        "el disparador se sustituye en el sitio")
+    assertEqual(RewritePipeline.apply(to: "escríbele a Juan, agrega mi correo y quedo atento",
+                                      dictionary: [], snippetRules: [correo]),
+        "escríbele a Juan, agrega jesus.segura@trycore.com y quedo atento",
+        "funciona embebido en una frase más larga")
+    assertEqual(RewritePipeline.apply(to: "mi correo", dictionary: [], snippetRules: [correo]),
+        "jesus.segura@trycore.com",
+        "si la frase es solo el disparador, el resultado es solo el snippet")
+
+    // Cuerpo multilínea
+    let firma = PhraseRewriter.Rule(phrases: ["mi firma"], replacement: "Jesús Segura\nTrycore")
+    assertEqual(RewritePipeline.apply(to: "cierra con mi firma", dictionary: [], snippetRules: [firma]),
+        "cierra con Jesús Segura\nTrycore",
+        "un cuerpo multilínea conserva sus saltos")
+
+    // Coincidencia más larga primero
+    let corta = PhraseRewriter.Rule(phrases: ["mi firma corta"], replacement: "JS")
+    assertEqual(RewritePipeline.apply(to: "pon mi firma corta", dictionary: [],
+                                      snippetRules: [firma, corta]),
+        "pon JS",
+        "gana el disparador más largo")
+
+    // Sin snippets: cero regresión
+    let original = "texto sin disparadores registrados"
+    assertEqual(RewritePipeline.apply(to: original, dictionary: [], snippetRules: []),
+        original,
+        "sin snippets el texto sale idéntico")
+
+    // El orden importa: el diccionario corre primero, así que nunca reescribe el
+    // cuerpo insertado. Si corriera después, cambiaría la firma del propio usuario.
+    let dictionary = [DictionaryEntry(canonical: "DocFly", variants: ["doc fly"])]
+    let conBody = PhraseRewriter.Rule(phrases: ["mi empresa"], replacement: "doc fly (literal)")
+    assertEqual(RewritePipeline.apply(to: "trabajo en mi empresa y en doc fly",
+                                      dictionary: dictionary, snippetRules: [conBody]),
+        "trabajo en doc fly (literal) y en DocFly",
+        "el diccionario corrige el texto dictado pero no toca el cuerpo del snippet")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -1546,7 +1921,6 @@ struct TestRunner {
         testConfigFloatingPillDefaults()
         testConfigAudioFeedback()
         testPillCancelCallback()
-        testPasteTargetTracker()
         testTranscriberOutputCleaning()
         testTranscriberErrorMessages()
         testTranscriberStderrFlood()
@@ -1563,6 +1937,17 @@ struct TestRunner {
         testDictionaryImportExport()
         testDictionaryConfigFlag()
         testDictionaryStreamingIntegration()
+        testSecretBoxRoundTrip()
+        testSnippetAuthSession()
+        testSnippetStoreCRUD()
+        testSnippetStoreSensitiveEncryption()
+        testSnippetStoreSetSensitive()
+        testSnippetStorePersistence()
+        testSnippetStoreSearchAndCollisions()
+        testSnippetStoreRules()
+        testSnippetStoreImportExport()
+        testRewritePipelineOrder()
+        testPasteTargetTracker()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")

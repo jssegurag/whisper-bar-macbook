@@ -3,7 +3,7 @@ import CoreGraphics
 import UserNotifications
 
 /// Coordina todos los módulos y gestiona la barra de menú.
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Dependencias
 
@@ -251,13 +251,42 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         actionsItem.isEnabled = false
         menu.addItem(actionsItem)
 
+        // Insertar sin dictar: nadie recuerda sus propios comandos a los tres meses.
+        let activeSnippets = SnippetStore.shared.activeSnippets
+        if !activeSnippets.isEmpty {
+            let insertItem = NSMenuItem(title: "Insertar snippet", action: nil, keyEquivalent: "")
+            let submenu = NSMenu()
+            for snippet in activeSnippets {
+                let item = NSMenuItem(title: snippet.name,
+                                      action: #selector(insertSnippet(_:)),
+                                      keyEquivalent: "")
+                item.representedObject = snippet.id.uuidString
+                submenu.addItem(item)
+            }
+            insertItem.submenu = submenu
+            menu.addItem(.separator())
+            menu.addItem(insertItem)
+        }
+
         menu.addItem(.separator())
         menu.addItem(withTitle: "Preferencias…", action: #selector(openPreferences), keyEquivalent: ",")
         menu.addItem(withTitle: "Historial…", action: #selector(openHistory), keyEquivalent: "h")
         menu.addItem(withTitle: "Diccionario…", action: #selector(openDictionary), keyEquivalent: "d")
+        menu.addItem(withTitle: "Snippets…", action: #selector(openSnippets), keyEquivalent: "s")
         menu.addItem(withTitle: "Salir", action: #selector(quit), keyEquivalent: "q")
 
+        menu.delegate = self
         statusItem.menu = menu
+    }
+
+    // MARK: - NSMenuDelegate
+
+    /// Captura la app destino al abrir el menú, antes de que el clic pueda mover
+    /// el foco. Sin esto, "Insertar snippet" no sabe dónde pegar.
+    func menuWillOpen(_ menu: NSMenu) {
+        if pasteTargetApp == nil {
+            pasteTargetApp = currentPasteTarget()
+        }
     }
 
     private func statusMenuItem(for ok: Bool, ok okText: String, err errText: String) -> NSMenuItem {
@@ -360,14 +389,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         resetIdleUI()
     }
 
-    // MARK: - Diccionario personalizado
+    // MARK: - Reescritura del texto transcrito
 
-    /// Reescribe los términos registrados por el usuario a su forma canónica.
-    /// Devuelve el texto intacto si el diccionario está apagado o vacío.
-    private func applyDictionary(_ text: String) -> String {
-        guard config.dictionaryEnabled else { return text }
-        return DictionaryProcessor.apply(to: text,
-                                         entries: CustomDictionary.shared.activeEntries)
+    /// Aplica diccionario y snippets en ese orden (ver RewritePipeline).
+    /// Devuelve el texto intacto si ambos están apagados o vacíos.
+    private func applyRewrites(_ text: String) -> String {
+        let entries = config.dictionaryEnabled ? CustomDictionary.shared.activeEntries : []
+        let rules   = config.snippetsEnabled ? SnippetStore.shared.rules() : []
+        return RewritePipeline.apply(to: text, dictionary: entries, snippetRules: rules)
     }
 
     // MARK: - Monitor de tecla Escape
@@ -443,10 +472,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                 guard !self.isCancelled else { return }
 
-                // Diccionario personalizado: después del LLM, que "corregiría" los
+                // Diccionario y snippets: después del LLM, que "corregiría" los
                 // términos propios del usuario hacia el español estándar, y antes
                 // del detector de acciones, para que "abre Oriuno" reconozca la app.
-                let correctedText = self.applyDictionary(finalText)
+                let correctedText = self.applyRewrites(finalText)
 
                 // Detección de acciones por voz
                 if self.config.voiceActionsEnabled {
@@ -513,7 +542,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             case .success(let text) where !text.isEmpty:
                 DispatchQueue.main.async { self.audioFeedback.stop() }
                 guard !self.isCancelled else { return }
-                let correctedText = self.applyDictionary(text)
+                let correctedText = self.applyRewrites(text)
                 let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
                 let entry = TranscriptionEntry(text: correctedText, duration: duration, sourceApp: sourceApp)
                 self.history.add(entry)
@@ -638,6 +667,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openDictionary() {
         DictionaryWindowController.shared.showWindow()
+    }
+
+    @objc private func openSnippets() {
+        SnippetsWindowController.shared.showWindow()
+    }
+
+    /// Pega un snippet sin dictar. Insertar no exige autenticación aunque sea
+    /// sensible: la puerta protege *ver* el valor, no usarlo.
+    @objc private func insertSnippet(_ sender: NSMenuItem) {
+        guard let idString = sender.representedObject as? String,
+              let id = UUID(uuidString: idString),
+              let snippet = SnippetStore.shared.snippets.first(where: { $0.id == id }) else { return }
+        do {
+            let body = try SnippetStore.shared.body(of: snippet)
+            paste(text: body)
+        } catch {
+            notify("No se pudo leer «\(snippet.name)»: \(error.localizedDescription)")
+        }
     }
 
     @objc private func quit() { NSApp.terminate(nil) }

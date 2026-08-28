@@ -15,6 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Floating pill UI for quick recording toggle
 - Searchable transcription history with timestamps
 - Custom dictionary that rewrites the user's own vocabulary (brands, clients, acronyms) to its canonical form
+- Voice snippets: say a trigger phrase, get a preconfigured text; sensitive ones are encrypted and gated behind Touch ID
 
 ## Architecture Overview
 
@@ -108,6 +109,37 @@ The app follows a **modular, single-responsibility** design:
 - Singleton with JSON serialization to Application Support directory
 - Limits history to maxHistoryCount (default 100)
 
+**PhraseRewriter.swift** — Shared rewriting engine (pure functions)
+- Phrase in → text out. Used by both the dictionary (misheard form → canonical) and snippets (trigger → body): same mechanism, only the size ratio differs
+- Matches windows of 1..N words, longest first; compares lowercased and accent-folded; writes the replacement verbatim; whole tokens only; preserves edge punctuation and original whitespace
+- `DictionaryProcessor` is a thin layer over it, kept as its own type so the dictionary's API and tests didn't have to change
+
+**RewritePipeline.swift** — The order rewrites happen in
+- Dictionary first, snippets second. Exists as a named type because the order **is** part of the feature: snippet bodies are literal text the user wrote, and a dictionary pass afterwards would rewrite their own signature
+
+**SecretBox.swift** — AES-GCM 256 for sensitive snippet bodies
+- Key in Keychain (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`), ciphertext in the app's JSON. A key stored next to the ciphertext is not encryption, it's obfuscation
+- Key provider is injectable (tests never touch the real Keychain) and lazy: a user who never marks a snippet sensitive never sees a Keychain prompt
+- Keychain items are bound to the code signature, and ad-hoc signing changes the hash on every build — so macOS re-prompts after each `build.sh`, same toll as Accessibility, same cause
+
+**SnippetAuth.swift** — LocalAuthentication gate
+- Touch ID or system password, asked **once per app session**, not per snippet
+- Deliberately does not gate insertion: dictating a trigger pastes the value without authenticating, or the feature would be useless. It gates *viewing and editing* in the window
+- `evaluator` is injectable so tests never raise a system dialog
+
+**SnippetStore.swift** — Snippet model & persistence
+- `Snippet`: name (the menu label), triggers, body (plain or sealed), isSensitive, isActive
+- JSON in ~/Library/Application Support/WhisperBar/snippets.json; sensitive bodies stored encrypted
+- `search` never looks inside bodies — a sensitive value must not leak through the search box
+- `dictionaryCollisions(for:entries:)` detects a dictionary entry that rewrites a trigger, which would silently keep the snippet from ever firing
+- `rules(includeSensitive:)` — `false` for the live floating window, which may be on a shared screen
+- Export skips sensitive snippets and records how many were omitted, so nobody believes they backed up everything
+
+**SnippetsView.swift & SnippetsWindowController.swift** — Snippets UI
+- Deliberately mirrors the dictionary window: conventions get learned once
+- Rows show the trigger prominently (it is the thing the user must recall) and mask sensitive bodies with a Show button
+- Closing the window re-locks the session
+
 **CustomDictionary.swift** — Custom dictionary model & persistence
 - `DictionaryEntry`: canonical form, variants whisper produces, isActive, createdAt
 - The canonical form is itself a match target: registering "DocFly" already fixes "docfly" and "DOC FLY"
@@ -154,7 +186,7 @@ Transcriber returns text
   ↓
 [Optional] LLMProcessor corrects with llama-cli
   ↓
-[If enabled] DictionaryProcessor rewrites custom terms to canonical form
+[If enabled] RewritePipeline: dictionary rewrites custom terms, then snippets expand
   ↓
 [If enabled] VoiceActionDetector classifies intent via LLM
   ↓
@@ -182,6 +214,7 @@ All settings stored in `com.user.WhisperBar` UserDefaults domain:
 - `audioFeedbackPreset` — preset ID: `theta` | `deep` | `528hz` | `alpha` | `beta` | `432hz` | `custom` (default: `theta`)
 - `audioFeedbackCustomPath` — path to user-supplied audio file (used when preset = `custom`)
 - `dictionaryEnabled` — apply the custom dictionary to transcriptions (default: true; inert when the dictionary is empty)
+- `snippetsEnabled` — expand voice snippets (default: true; inert with no snippets)
 
 ## Build & Development
 
@@ -291,6 +324,7 @@ Tests are organized by module/feature with colored output. No external testing f
 - **Configuration** — Validation, auto-detection, defaults, audio feedback settings
 - **State management** — ViewModel and window controller state transitions
 - **Cancel callback** — `onPillCancelTapped` assignment and invocation
+- **Voice snippets** — AES-GCM round trip and tamper detection, the sensitive body never appearing in plaintext on disk, search not reaching into bodies, one-auth-per-session logic (with an injected evaluator, so no system dialog), cross-collisions with the dictionary, export omitting sensitive entries, and the pipeline order
 - **Custom dictionary** — normalization, index building, every H1 acceptance criterion (n-gram splits, accents, punctuation, longest-match precedence, inactive entries, idempotence), CRUD, persistence round-trip, import/export, and the streaming rule that only finalized text is rewritten
 - **whisper-cli subprocess** — stderr flood (~270 KB) must not stall the run, non-zero exit surfaces as `processFailed`, `cancel()` from another thread returns `cancelled` promptly. These suites install a fake `whisper-cli` (an `sh` script) via `Config`, so they run without whisper-cpp installed and restore the original UserDefaults afterwards
 
@@ -356,6 +390,24 @@ Insertion points: `AppDelegate.applyDictionary(_:)` called from `stopAndTranscri
 
 The engine deliberately does **not** do fuzzy matching: in a work email, replacing a word the user actually said is worse than one misspelling. Variants are explicit. See `docs/historias/HU-001-diccionario-personalizado.md` for the full story and what v2 leaves out.
 
+### Voice Snippets
+
+Say "agrega mi correo" and the configured email is written. Triggers are explicit phrases, not LLM intent detection: a false positive here does not misspell a word, it **inserts your email into a message where it did not belong**.
+
+Substitution happens in place, so one behavior covers both cases — if the utterance is only the trigger, the result is only the snippet.
+
+What the auth gate protects, and what it does not:
+
+- **Protects** viewing and editing a sensitive body in the window (someone at your unlocked Mac, someone watching a shared screen).
+- **Does not protect** usage: dictating the trigger, or picking it from the menu, pastes without authenticating.
+- **Does not protect** against malware running as the user, which can ask the Keychain for the key the same way the app does.
+
+Sensitive snippets are excluded from the live floating transcription window — it floats over whatever the user is screen-sharing.
+
+The menu carries an **Insertar snippet** submenu because nobody remembers their own voice commands three months later. That path uses `pasteTargetApp`, captured in `menuWillOpen`, and activates the target before posting Cmd+V.
+
+See `docs/historias/HU-002-snippets-por-voz.md` for the full story, the key-storage options that were weighed, and what v2 leaves out.
+
 ### Streaming Real-Time Transcription
 
 The floating window (FloatingTranscriptionWindowController) receives whisper-stream output chunks and renders live updates via FloatingTranscriptionViewModel. The ViewModel implements:
@@ -374,6 +426,7 @@ The floating window (FloatingTranscriptionWindowController) receives whisper-str
 - **Config (UserDefaults):** `com.user.WhisperBar` domain
 - **History (JSON):** `~/Library/Application Support/WhisperBar/history.json`
 - **Dictionary (JSON):** `~/Library/Application Support/WhisperBar/dictionary.json`
+- **Snippets (JSON):** `~/Library/Application Support/WhisperBar/snippets.json` (sensitive bodies encrypted; key in Keychain under service `com.user.WhisperBar`, account `snippets-encryption-key-v1`)
 - **Audio temporary:** `/tmp/whisperbar_recording.wav`
 - **Whisper model:** `~/.whisper-realtime/ggml-*.bin`
 - **LLM model:** `~/.whisper-realtime/*.gguf`

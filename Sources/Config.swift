@@ -227,6 +227,15 @@ class Config {
         set { defaults.set(newValue, forKey: "dictionaryEnabled") }
     }
 
+    // MARK: - Snippets por voz
+
+    /// Si los snippets se insertan al pronunciar sus disparadores.
+    /// Sin snippets registrados es inerte, así que el default es true.
+    var snippetsEnabled: Bool {
+        get { defaults.object(forKey: "snippetsEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "snippetsEnabled") }
+    }
+
     // MARK: - Validación
 
     var isWhisperCliValid: Bool {

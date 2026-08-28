@@ -17,6 +17,8 @@ struct PreferencesView: View {
                 .tabItem { Label("Streaming", systemImage: "waveform.circle") }
             DictionaryTab()
                 .tabItem { Label("Diccionario", systemImage: "character.book.closed") }
+            SnippetsTab()
+                .tabItem { Label("Snippets", systemImage: "text.badge.plus") }
             AudioTab()
                 .tabItem { Label("Audio", systemImage: "waveform") }
             ShortcutsTab()
