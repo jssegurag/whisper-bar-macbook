@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Estado** | Diseño acordado — pendiente decisión sobre almacenamiento de la llave (ver Seguridad) |
+| **Estado** | Implementada — llave en Keychain (opción A). Validada por tests; pendiente prueba en dictado real |
 | **Rama** | `feat/voice-snippets` (sale de `feat/custom-dictionary`) |
 | **Alcance** | v1 determinística, con protección de datos sensibles. Marcadores dinámicos y respaldo por LLM quedan fuera. |
 
@@ -72,7 +72,7 @@ Tres opciones reales:
 | **(B) Llave derivada de una frase de paso del usuario** | Lo mismo que (A), y además resiste a malware que corre como el usuario | El usuario teclea la frase en cada arranque; si se cachea, vuelve a (A) sin sus ventajas |
 | **(C) Llave embebida en el binario** | Nada. Es ofuscación | Cero, pero no se puede llamar cifrado |
 
-**Recomendación: (A).** Cumple lo pedido —los datos siguen en el archivo de la app, no en el Keychain— y solo la llave de 256 bits se guarda allí, que es el único lugar del sistema hecho para eso. (C) queda descartada por deshonesta.
+**Decidida: (A)**, el 28-08-2026, por ser la que se implementa sin cobrarle una contraseña al usuario en cada arranque. Cumple lo pedido —los datos siguen en el archivo de la app, no en el Keychain— y solo la llave de 256 bits se guarda allí, que es el único lugar del sistema hecho para eso. (C) queda descartada por deshonesta.
 
 **Lo que hay que aceptar con (A):** tras cada `build.sh`, la primera vez que la app lea un snippet sensible, macOS pedirá permiso al Keychain. Es el mismo peaje que ya pagan con Accesibilidad y por la misma causa: firma ad-hoc. Se elimina de raíz con un Developer ID de Apple, que además acabaría con la revocación de Accesibilidad.
 
