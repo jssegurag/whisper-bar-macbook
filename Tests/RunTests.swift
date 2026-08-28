@@ -2147,6 +2147,65 @@ func testStreamingPriority() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - HotkeyBinding — Atajos editables
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testHotkeyBinding() {
+    suite("HotkeyBinding — Símbolos, modos y validación")
+
+    // Orden de macOS: ⌃⌥⇧⌘, no el orden en que se pulsaron.
+    assertEqual(HotkeyBinding.glyphs(for: [.command, .option]), "⌥⌘",
+        "los símbolos salen en el orden de macOS")
+    assertEqual(HotkeyBinding.glyphs(for: [.command, .option, .shift]), "⌥⇧⌘", "con shift")
+    assertEqual(HotkeyBinding.glyphs(for: [.control, .command, .shift, .option]), "⌃⌥⇧⌘",
+        "los cuatro en orden")
+    assertEqual(HotkeyBinding.glyphs(for: []), "", "sin modificadores no hay símbolos")
+
+    // Un solo modificador se dispararía constantemente: ⌘ se usa a cada rato.
+    let unaSola = HotkeyBinding.validate([.command], for: .transcribe, others: [])
+    assertEqual(unaSola, .tooFew, "una sola tecla se rechaza")
+    assert(unaSola.message?.contains("dos teclas") ?? false, "y explica por qué")
+
+    let dos = HotkeyBinding.validate([.command, .option], for: .transcribe, others: [])
+    assertEqual(dos, .ok, "dos teclas valen")
+
+    // Choque entre atajos: hay que nombrar cuál lo tiene.
+    let otros = [HotkeyBinding(action: .translate, modifiers: [.command, .shift], mode: .hold)]
+    let choque = HotkeyBinding.validate([.command, .shift], for: .transcribe, others: otros)
+    assertEqual(choque, .conflict(with: .translate), "detecta el choque")
+    assertContains(choque.message ?? "", "Dictar y traducir", "y nombra la acción que ya la usa")
+
+    // Editar el propio atajo sin cambiarlo no es un choque consigo mismo.
+    let mismo = [HotkeyBinding(action: .transcribe, modifiers: [.command, .option], mode: .hold)]
+    assertEqual(HotkeyBinding.validate([.command, .option], for: .transcribe, others: mismo), .ok,
+        "una acción no choca consigo misma")
+
+    // Los modificadores irrelevantes no cuentan como teclas.
+    assertEqual(HotkeyBinding.validate([.command, .capsLock], for: .transcribe, others: []), .tooFew,
+        "capsLock no cuenta para el mínimo de dos")
+
+    // Modos: la ventana en vivo se abre y se cierra, no se mantiene pulsada.
+    assert(HotkeyBinding.Action.transcribe.supportsModes, "dictar admite los dos modos")
+    assert(HotkeyBinding.Action.translate.supportsModes, "traducir también")
+    assert(!HotkeyBinding.Action.floating.supportsModes,
+        "la transcripción en vivo no admite «mantener pulsado»")
+
+    for mode in HotkeyBinding.Mode.allCases {
+        assert(!mode.title.isEmpty, "\(mode.rawValue) tiene nombre")
+        assert(mode.explanation.count > 20, "\(mode.rawValue) explica cómo se usa")
+    }
+
+    // Los de fábrica son los tres originales, y no chocan entre ellos.
+    let defaults = HotkeyBinding.Action.allCases.map {
+        HotkeyBinding(action: $0, modifiers: $0.defaultModifiers, mode: .hold)
+    }
+    for binding in defaults {
+        assertEqual(HotkeyBinding.validate(binding.modifiers, for: binding.action, others: defaults),
+                    .ok, "el atajo de fábrica de \(binding.action.title) es válido")
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -2216,6 +2275,7 @@ struct TestRunner {
         testIdleWord()
         testAppNotificationContent()
         testStreamingPriority()
+        testHotkeyBinding()
         testModelDownloaderFormatting()
 
         // Summary

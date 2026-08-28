@@ -87,30 +87,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         // Transcripción: ⌘⌥
-        hotkey.register(id: "transcribe", modifiers: [.command, .option],
-            onKeyDown: { [weak self] in
-                self?.recordingMode = .transcribe
-                self?.startRecording()
-            },
-            onKeyUp: { [weak self] in self?.stopAndTranscribe() }
-        )
-
-        // Traducción: ⌘⌥⇧
-        hotkey.register(id: "translate", modifiers: [.command, .option, .shift],
-            onKeyDown: { [weak self] in
-                self?.recordingMode = .translate
-                self?.startRecording()
-            },
-            onKeyUp: { [weak self] in self?.stopAndTranslate() }
-        )
-
-        // Transcripción flotante: ⌘⌥⌃
-        hotkey.register(id: "floating", modifiers: [.command, .option, .control],
-            onKeyDown: { },
-            onKeyUp:   { [weak self] in self?.toggleFloatingTranscription() }
-        )
-
-        hotkey.setupWhenReady()
+        registerHotkeys()
+        NotificationCenter.default.addObserver(
+            forName: .gluffiHotkeysChanged, object: nil, queue: .main) { [weak self] _ in
+                self?.registerHotkeys()
+                self?.rebuildMenu()
+        }
 
         if !config.isValid {
             Notifier.shared.post(AppNotification.setupIncomplete(SetupStatus.current(config)))
@@ -634,6 +616,37 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // MARK: - Notificaciones
+
+    /// Registra los tres atajos desde Config. Se vuelve a llamar cuando el usuario
+    /// los cambia en Preferencias, sin reiniciar la app.
+    private func registerHotkeys() {
+        hotkey.tearDown()
+        hotkey.unregisterAll()
+        for binding in config.hotkeyBindings {
+            switch binding.action {
+            case .transcribe:
+                hotkey.register(id: "transcribe", modifiers: binding.modifiers, mode: binding.mode,
+                                onKeyDown: { [weak self] in
+                                    self?.recordingMode = .transcribe
+                                    self?.startRecording()
+                                },
+                                onKeyUp: { [weak self] in self?.stopAndTranscribe() })
+            case .translate:
+                hotkey.register(id: "translate", modifiers: binding.modifiers, mode: binding.mode,
+                                onKeyDown: { [weak self] in
+                                    self?.recordingMode = .translate
+                                    self?.startRecording()
+                                },
+                                onKeyUp: { [weak self] in self?.stopAndTranslate() })
+            case .floating:
+                // Abrir y cerrar es una sola pulsación: aquí no hay «mantener».
+                hotkey.register(id: "floating", modifiers: binding.modifiers, mode: .hold,
+                                onKeyDown: { [weak self] in self?.toggleFloatingTranscription() },
+                                onKeyUp: {})
+            }
+        }
+        hotkey.setupWhenReady()
+    }
 
     /// Conecta los botones de las notificaciones. Se llama al arrancar.
     private func setupNotifications() {

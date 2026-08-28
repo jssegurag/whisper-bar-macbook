@@ -40,6 +40,7 @@ swiftc \
     "$DIR/Sources/SnippetsWindowController.swift" \
     "$DIR/Sources/CustomDictionary.swift" \
     "$DIR/Sources/DictionaryProcessor.swift" \
+    "$DIR/Sources/HotkeyBinding.swift" \
     "$DIR/Sources/HotkeyManager.swift" \
     "$DIR/Sources/PasteTargetTracker.swift" \
     "$DIR/Sources/AudioFeedback.swift" \

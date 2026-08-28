@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 /// Configuración centralizada via UserDefaults.
 /// Las rutas se auto-detectan si no están configuradas explícitamente.
@@ -228,6 +229,43 @@ class Config {
     }
 
     // MARK: - Snippets por voz
+
+    // MARK: - Atajos
+
+    /// Modificadores del atajo, guardados como el rawValue de ModifierFlags.
+    /// Sin valor guardado se usa el de fábrica de cada acción.
+    func hotkeyModifiers(for action: HotkeyBinding.Action) -> NSEvent.ModifierFlags {
+        let key = "hotkey.\(action.rawValue).modifiers"
+        guard let raw = defaults.object(forKey: key) as? UInt else {
+            return action.defaultModifiers
+        }
+        return NSEvent.ModifierFlags(rawValue: raw)
+    }
+
+    func setHotkeyModifiers(_ modifiers: NSEvent.ModifierFlags,
+                            for action: HotkeyBinding.Action) {
+        defaults.set(modifiers.rawValue, forKey: "hotkey.\(action.rawValue).modifiers")
+    }
+
+    func hotkeyMode(for action: HotkeyBinding.Action) -> HotkeyBinding.Mode {
+        guard action.supportsModes,
+              let raw = defaults.string(forKey: "hotkey.\(action.rawValue).mode"),
+              let mode = HotkeyBinding.Mode(rawValue: raw) else { return .hold }
+        return mode
+    }
+
+    func setHotkeyMode(_ mode: HotkeyBinding.Mode, for action: HotkeyBinding.Action) {
+        defaults.set(mode.rawValue, forKey: "hotkey.\(action.rawValue).mode")
+    }
+
+    /// Los tres atajos tal como están configurados.
+    var hotkeyBindings: [HotkeyBinding] {
+        HotkeyBinding.Action.allCases.map {
+            HotkeyBinding(action: $0,
+                          modifiers: hotkeyModifiers(for: $0),
+                          mode: hotkeyMode(for: $0))
+        }
+    }
 
     // MARK: - Píldora flotante
 
