@@ -62,6 +62,23 @@ imperativo, ≤ 72 caracteres. El cuerpo explica el *por qué*, no el *qué*.
 
 ---
 
+## Orden de mezcla y conflictos previstos
+
+Las dos ramas `fix/` son independientes en `Sources/`, pero ambas añaden suites al
+final de `Tests/RunTests.swift` y registran sus llamadas en la misma lista de
+`TestRunner.main()`. La segunda que se mezcle dará conflicto en esa región.
+
+Orden recomendado:
+
+1. `fix/transcriber-subprocess-reliability` — sección de tests nº 24.
+2. `fix/audiorecorder-start-failure` — sección de tests nº 25.
+
+Resolución del conflicto: conservar **ambas** suites y **ambas** llamadas; no hay
+solapamiento de contenido. Tras resolver, `bash run_tests.sh` debe dar 151 tests
+(118 en `main` + 20 de la primera + 13 de la segunda).
+
+---
+
 ## Propuestas no iniciadas
 
 Ramas acordadas pero sin código. Se mueven a "activas" al crearse.
