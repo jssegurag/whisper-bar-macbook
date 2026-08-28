@@ -74,8 +74,11 @@ Orden recomendado:
 2. `fix/audiorecorder-start-failure` — sección de tests nº 25.
 
 Resolución del conflicto: conservar **ambas** suites y **ambas** llamadas; no hay
-solapamiento de contenido. Tras resolver, `bash run_tests.sh` debe dar 151 tests
-(118 en `main` + 20 de la primera + 13 de la segunda).
+solapamiento de contenido. Ojo con un detalle: el hunk parte a la mitad de la última
+función del lado `HEAD` (la llave de cierre queda en la línea compartida que sigue al
+marcador `>>>>>>>`), así que hay que cerrar esa función con `}` antes de pegar el
+bloque entrante. Tras resolver, `bash run_tests.sh` debe dar **151 tests** (118 en
+`main` + 20 de la primera rama + 13 de la segunda); verificado con un merge de prueba.
 
 ---
 
