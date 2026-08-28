@@ -117,7 +117,9 @@ Orden recomendado:
 2. `fix/audiorecorder-start-failure` — sección de tests nº 25.
 3. `feat/custom-dictionary` — secciones nº 26 a 28.
 4. `feat/voice-snippets` — secciones nº 29 a 32. Ya trae `fix/paste-target-window` mezclado.
-5. `refactor/split-preferences-view` — sin tests nuevos; sale del extremo de la cadena.
+5. `refactor/split-preferences-view` — sin tests nuevos.
+6. `rename/gluffi`.
+7. `design/gluffi-redesign` — el último. Sale de `rename/gluffi` y trae toda la cadena.
 
 `fix/paste-target-window` puede entrar en cualquier punto antes del 4. Sale del diccionario, así que solo choca con la nº 25. Ya trae la nº 24 porque sale de la rama del Transcriber, así que solo choca con la nº 25.
 
@@ -153,6 +155,22 @@ bloque entrante. Tras resolver, `bash run_tests.sh` debe dar **151 tests** (118 
 - **Historia:** `docs/historias/HU-002-snippets-por-voz.md`, en la propia rama.
 - **Depende de:** `feat/custom-dictionary`. El primer commit generaliza el motor del diccionario sin cambiar comportamiento —los 68 tests del diccionario pasan sin tocarse, ese es su criterio de revisión— y los siguientes agregan la funcionalidad. Se revisa commit por commit.
 - **Estado:** implementada, 276 tests en verde.
+
+### `rename/gluffi`
+
+- **Propósito:** la app pasa a llamarse Gluffi. Renombra todo lo visible y reemplaza el icono.
+- **Alcance:** `Info.plist`, títulos de ventana, menú, notificaciones, textos de permisos, `Assets/`, `build.sh`, README y docs.
+- **No cambia** el bundle identifier, el servicio del Keychain ni la carpeta de datos: los tres guardan datos del usuario y cambian juntos, con migración, el día que haya Developer ID. Está comentado en cada sitio.
+- **Depende de:** `refactor/split-preferences-view`.
+- **Estado:** PR #16.
+
+### `design/gluffi-redesign`
+
+- **Propósito:** implementar el handoff de diseño completo, §9 pasos 1–7.
+- **Alcance:** icono y menú, ventana de Configuración nueva, píldora, notificaciones, Preferencias con barra lateral, Historial, ventana en vivo, Diccionario y Snippets. 15 commits, uno por paso más las correcciones que salieron al probar.
+- **Depende de:** `rename/gluffi`. Es el extremo de la cadena: mezclar al final de todo.
+- **Se revisa commit por commit.** Los pasos dependen entre sí y un diff plano de 15 commits no se puede leer.
+- **Estado:** PR #17, 446 tests en verde.
 
 ---
 
