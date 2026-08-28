@@ -1,5 +1,6 @@
 import Foundation
 import Cocoa
+import AVFoundation
 import CryptoKit
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -920,6 +921,52 @@ func testPillCancelCallback() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - 25. AudioRecorder — Formato y fallo al iniciar
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testAudioRecorderSettings() {
+    suite("AudioRecorder — Formato exigido por Whisper")
+
+    let s = AudioRecorder.recordSettings
+    assertEqual(s[AVFormatIDKey] as? Int, Int(kAudioFormatLinearPCM),
+        "formato = PCM lineal")
+    assertEqual(s[AVSampleRateKey] as? Double, 16_000.0,
+        "sample rate = 16 kHz (requerido por whisper-cli)")
+    assertEqual(s[AVNumberOfChannelsKey] as? Int, 1,
+        "canales = 1 (mono)")
+    assertEqual(s[AVLinearPCMBitDepthKey] as? Int, 16,
+        "profundidad = 16 bits")
+    assertEqual(s[AVLinearPCMIsFloatKey] as? Bool, false,
+        "PCM entero, no float")
+    assertEqual(s[AVLinearPCMIsBigEndianKey] as? Bool, false,
+        "PCM little-endian")
+}
+
+func testAudioRecorderStartFailure() {
+    suite("AudioRecorder — Fallo al iniciar no es silencioso (regresión)")
+
+    // start() descartaba el Bool de AVAudioRecorder.record(). Con el permiso
+    // denegado o el micrófono ocupado, record() devuelve false pero la app marcaba
+    // isRecording = true y grababa un WAV vacío: transcripción en blanco, sin error.
+    let error = AudioRecorder.AudioRecorderError.couldNotStart
+    let message = error.errorDescription ?? ""
+    assert(!message.isEmpty, "couldNotStart tiene mensaje para el usuario")
+    assertContains(message, "Micrófono",
+        "el mensaje apunta al permiso de Micrófono")
+    assertContains(message, "ocupado",
+        "el mensaje contempla el micrófono ocupado por otra app")
+
+    let recorder = AudioRecorder()
+    assert(!recorder.isRecording,
+        "isRecording arranca en false, no se asume grabación")
+    assertEqual(recorder.stop(), 0,
+        "stop() sin grabación previa devuelve 0 s, no basura")
+    assert(!recorder.isRecording,
+        "isRecording sigue false después de un stop() sin grabar")
+    assertEqual(recorder.outputURL.lastPathComponent, "whisperbar_recording.wav",
+        "outputURL apunta al WAV temporal esperado")
+}
+
 // MARK: - PasteTargetTracker — A quién pegarle
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -2368,6 +2415,8 @@ struct TestRunner {
         testConfigFloatingPillDefaults()
         testConfigAudioFeedback()
         testPillCancelCallback()
+        testAudioRecorderSettings()
+        testAudioRecorderStartFailure()
         testTranscriberOutputCleaning()
         testTranscriberErrorMessages()
         testTranscriberStderrFlood()

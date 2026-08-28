@@ -60,8 +60,9 @@ The app follows a **modular, single-responsibility** design:
 - Handles both transcription and translation workflows
 
 **AudioRecorder.swift** — Audio capture from microphone
-- Records in PCM 16kHz mono (Whisper's required format)
-- Tracks recording duration for minimum threshold validation
+- Records in PCM 16kHz mono (Whisper's required format), exposed as `AudioRecorder.recordSettings`
+- `start()` throws `AudioRecorderError.couldNotStart` when `AVAudioRecorder.record()` returns false (mic permission denied or device busy). Ignoring that Bool used to leave the app "recording" against an empty WAV, so the user got a blank transcription with no error
+- Tracks recording duration for minimum threshold validation; `stop()` releases the recorder and returns 0 when nothing was recording
 - Stores temporary WAV file in NSTemporaryDirectory
 
 **Transcriber.swift** — whisper-cli integration
@@ -345,6 +346,7 @@ Tests are organized by module/feature with colored output. No external testing f
 - **Configuration** — Validation, auto-detection, defaults, audio feedback settings
 - **State management** — ViewModel and window controller state transitions
 - **Cancel callback** — `onPillCancelTapped` assignment and invocation
+- **Recording format & start failure** — `recordSettings` is PCM 16 kHz mono 16-bit, and `AudioRecorderError.couldNotStart` carries a message pointing at the Microphone permission (the tests do not open the mic, so they run unattended)
 - **Voice snippets** — AES-GCM round trip and tamper detection, the sensitive body never appearing in plaintext on disk, search not reaching into bodies, one-auth-per-session logic (with an injected evaluator, so no system dialog), cross-collisions with the dictionary, export omitting sensitive entries, and the pipeline order
 - **Custom dictionary** — normalization, index building, every H1 acceptance criterion (n-gram splits, accents, punctuation, longest-match precedence, inactive entries, idempotence), CRUD, persistence round-trip, import/export, and the streaming rule that only finalized text is rewritten
 - **whisper-cli subprocess** — stderr flood (~270 KB) must not stall the run, non-zero exit surfaces as `processFailed`, `cancel()` from another thread returns `cancelled` promptly. These suites install a fake `whisper-cli` (an `sh` script) via `Config`, so they run without whisper-cpp installed and restore the original UserDefaults afterwards
