@@ -44,7 +44,10 @@ The app follows a **modular, single-responsibility** design:
 
 **Transcriber.swift** — whisper-cli integration
 - Invokes whisper-cli as subprocess with 60s timeout
-- Parses output: filters timestamp lines and joins transcribed segments
+- Drains stdout **and** stderr concurrently while the process runs. whisper-cli streams progress to stderr; an undrained pipe fills the kernel buffer (~64 KB) and blocks the subprocess mid-write, which used to surface as a bogus 60s timeout on long audio
+- `cancel()` is thread-safe (NSLock guards process + cancelled flag) and only terminates an already-launched process; a stale `cancel()` (fired while merely recording) does not poison the next transcription
+- Errors: `invalidConfig`, `timeout(seconds:)`, `cancelled`, `processFailed(status:stderr:)` — a non-zero exit reports the last stderr lines instead of silently returning empty text
+- Parses output via `cleanOutput`: filters timestamp lines and joins transcribed segments
 - Returns cleaned text ready for LLM or pasting
 
 **LLMProcessor.swift** — llama.cpp post-processing
@@ -227,6 +230,7 @@ Tests are organized by module/feature with colored output. No external testing f
 - **Configuration** — Validation, auto-detection, defaults, audio feedback settings
 - **State management** — ViewModel and window controller state transitions
 - **Cancel callback** — `onPillCancelTapped` assignment and invocation
+- **whisper-cli subprocess** — stderr flood (~270 KB) must not stall the run, non-zero exit surfaces as `processFailed`, `cancel()` from another thread returns `cancelled` promptly. These suites install a fake `whisper-cli` (an `sh` script) via `Config`, so they run without whisper-cpp installed and restore the original UserDefaults afterwards
 
 Run with `bash run_tests.sh`; exit code 0 = all pass, 1 = failures. Currently: 122 tests.
 
