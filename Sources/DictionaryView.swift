@@ -219,6 +219,7 @@ struct DictionaryTab: View {
     @State private var isEnabled: Bool
     @State private var total: Int
     @State private var active: Int
+    @State private var showingHelp = false
 
     init() {
         _isEnabled = State(initialValue: Config.shared.dictionaryEnabled)
@@ -229,18 +230,19 @@ struct DictionaryTab: View {
     var body: some View {
         Form {
             Section("Diccionario personalizado") {
-                Toggle("Corregir mis términos en las transcripciones", isOn: $isEnabled)
-                    .onChange(of: isEnabled) { Config.shared.dictionaryEnabled = $0 }
-                Text("whisper transcribe fonéticamente y no conoce tu vocabulario. Registra las palabras de tu día a día — marcas, clientes, siglas — y se escribirán siempre con su forma correcta.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Section("Ejemplos") {
-                DictionaryExampleRow(heard: "doc fly",         written: "DocFly")
-                DictionaryExampleRow(heard: "o riuno",         written: "Oriuno")
-                DictionaryExampleRow(heard: "banco de bogota", written: "Banco de Bogotá")
+                HStack(spacing: 6) {
+                    Toggle("Corregir mis términos en las transcripciones", isOn: $isEnabled)
+                        .onChange(of: isEnabled) { Config.shared.dictionaryEnabled = $0 }
+                    Button { showingHelp = true } label: {
+                        Image(systemName: "questionmark.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Cómo funciona el diccionario")
+                    .popover(isPresented: $showingHelp, arrowEdge: .trailing) {
+                        DictionaryHelpPopover()
+                    }
+                    Spacer()
+                }
             }
 
             Section("Tu inventario") {
@@ -270,6 +272,39 @@ struct DictionaryTab: View {
     private func refreshCounts() {
         total  = CustomDictionary.shared.entries.count
         active = CustomDictionary.shared.activeEntries.count
+    }
+}
+
+/// Explicación bajo demanda: el «?» junto al interruptor. Fuera de la pestaña
+/// para no gastar espacio permanente en algo que se lee una vez.
+struct DictionaryHelpPopover: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Cómo funciona")
+                .font(.headline)
+
+            Text("whisper transcribe fonéticamente y no conoce tu vocabulario. Registra las palabras de tu día a día — marcas, clientes, siglas, apellidos — y se escribirán siempre con la forma que tú definas.")
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
+            Text("Ejemplos")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.secondary)
+            DictionaryExampleRow(heard: "doc fly",         written: "DocFly")
+            DictionaryExampleRow(heard: "o riuno",         written: "Oriuno")
+            DictionaryExampleRow(heard: "banco de bogota", written: "Banco de Bogotá")
+
+            Divider()
+
+            Text("No distingue mayúsculas ni acentos al reconocer, pero escribe siempre tu forma exacta. Reconoce frases completas, no solo palabras, y nunca cambia una palabra distinta que las contenga: «documento fly» se queda igual.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(width: 340)
     }
 }
 
