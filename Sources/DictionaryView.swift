@@ -209,6 +209,93 @@ struct DictionaryView: View {
     }
 }
 
+// MARK: - Pestaña de Preferencias
+
+/// Punto de entrada del diccionario dentro de Preferencias: el interruptor, el
+/// resumen del inventario y el acceso al administrador completo. El CRUD vive en
+/// su propia ventana para no engordar PreferencesView.
+struct DictionaryTab: View {
+
+    @State private var isEnabled: Bool
+    @State private var total: Int
+    @State private var active: Int
+
+    init() {
+        _isEnabled = State(initialValue: Config.shared.dictionaryEnabled)
+        _total     = State(initialValue: CustomDictionary.shared.entries.count)
+        _active    = State(initialValue: CustomDictionary.shared.activeEntries.count)
+    }
+
+    var body: some View {
+        Form {
+            Section("Diccionario personalizado") {
+                Toggle("Corregir mis términos en las transcripciones", isOn: $isEnabled)
+                    .onChange(of: isEnabled) { Config.shared.dictionaryEnabled = $0 }
+                Text("whisper transcribe fonéticamente y no conoce tu vocabulario. Registra las palabras de tu día a día — marcas, clientes, siglas — y se escribirán siempre con su forma correcta.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section("Ejemplos") {
+                DictionaryExampleRow(heard: "doc fly",         written: "DocFly")
+                DictionaryExampleRow(heard: "o riuno",         written: "Oriuno")
+                DictionaryExampleRow(heard: "banco de bogota", written: "Banco de Bogotá")
+            }
+
+            Section("Tu inventario") {
+                HStack {
+                    Image(systemName: "character.book.closed")
+                        .foregroundColor(.secondary)
+                    Text(total == 0
+                         ? "Sin términos registrados todavía"
+                         : "\(total) término\(total == 1 ? "" : "s") · \(active) activo\(active == 1 ? "" : "s")")
+                    Spacer()
+                }
+                HStack {
+                    Button("Administrar diccionario…") {
+                        DictionaryWindowController.shared.showWindow()
+                    }
+                    .keyboardShortcut("d", modifiers: [.command])
+                    Text("También en el menú de la barra: Diccionario…")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear { refreshCounts() }
+    }
+
+    private func refreshCounts() {
+        total  = CustomDictionary.shared.entries.count
+        active = CustomDictionary.shared.activeEntries.count
+    }
+}
+
+/// Muestra qué oye whisper y qué se escribe. La misma idea que el campo de
+/// prueba, pero sin pedirle nada al usuario.
+struct DictionaryExampleRow: View {
+    let heard: String
+    let written: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(heard)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.secondary)
+                .strikethrough(true, color: .secondary)
+            Image(systemName: "arrow.right")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Text(written)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.accentColor)
+            Spacer()
+        }
+    }
+}
+
 // MARK: - Fila
 
 struct DictionaryRow: View {
