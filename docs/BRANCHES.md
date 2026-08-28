@@ -60,6 +60,13 @@ imperativo, ≤ 72 caracteres. El cuerpo explica el *por qué*, no el *qué*.
 - **Depende de:** —
 - **Estado:** listo para PR.
 
+### `chore/github-actions-ci`
+
+- **Propósito:** que los tests se corran solos en cada PR. Hoy solo se ejecutan cuando alguien se acuerda.
+- **Alcance:** `.github/workflows/ci.yml`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/` (bug y feature), notas en `CONTRIBUTING.md` y `CLAUDE.md`.
+- **Depende de:** — (sale de `main`; conviene mezclarla **primero** para que los demás PRs ya se validen solos).
+- **Estado:** listo para PR. El workflow no se ha ejecutado nunca: GitHub Actions solo corre al subir la rama, así que la primera corrida es la prueba real. Lo verificable en local está verificado: YAML válido y los dos comandos del workflow pasan.
+
 ### `chore/ui-preview-harness`
 
 - **Propósito:** revisar diseño de ventanas sin instalar la app ni perder el permiso de Accesibilidad.
@@ -91,6 +98,7 @@ La segunda que se mezcle dará conflicto en esas regiones.
 
 Orden recomendado:
 
+0. `chore/github-actions-ci` — primero, para que los PRs siguientes se validen solos.
 1. `fix/transcriber-subprocess-reliability` — sección de tests nº 24.
 2. `fix/audiorecorder-start-failure` — sección de tests nº 25.
 3. `feat/custom-dictionary` — secciones nº 26 a 28. Ya trae la nº 24 porque sale de la rama del Transcriber, así que solo choca con la nº 25.
@@ -139,7 +147,6 @@ Ramas acordadas pero sin código. Se mueven a "activas" al crearse.
 
 | Rama propuesta                     | Propósito                                                                 |
 |------------------------------------|---------------------------------------------------------------------------|
-| `chore/github-actions-ci`          | CI que corra `run_tests.sh` en cada PR. Hoy nadie garantiza que se ejecuten. |
 | `chore/swiftpm-build`              | `Package.swift` en lugar de los 23 archivos listados a mano en `build.sh`; olvidar un archivo nuevo rompe el build. |
 | `refactor/split-preferences-view`  | `PreferencesView.swift` tiene 802 líneas y viola el "un archivo = una responsabilidad" del propio proyecto. |
 | `feat/dictionary-quick-add`        | **Agregar la variante desde donde se descubre.** Validando HU-001, whisper escribió `dotfly` y hubo que abrir el diccionario y teclear la variante a mano. La app ya sabe qué oyó y qué pegó: podría ofrecer «agregar `dotfly` como variante de…» desde el historial o desde una notificación tras pegar. Requiere un cambio de modelo: `TranscriptionEntry` hoy guarda solo el texto ya corregido, así que habría que conservar también el texto crudo. |
