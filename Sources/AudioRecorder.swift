@@ -41,8 +41,14 @@ class AudioRecorder {
     func currentLevel() -> CGFloat {
         guard let recorder, isRecording else { return 0 }
         recorder.updateMeters()
-        let dB = recorder.averagePower(forChannel: 0)
-        let normalized = (Double(dB) + 50) / 45
+        // El pico manda sobre el promedio: el promedio de una ventana de voz
+        // normal se queda en la mitad baja de la escala y la onda apenas se movía.
+        // Se atenúa 6 dB para que un golpe seco no sature la barra entera.
+        let average = Double(recorder.averagePower(forChannel: 0))
+        let peak = Double(recorder.peakPower(forChannel: 0))
+        let dB = max(average, peak - 6)
+        // −45 dB es silencio de sala, −5 dB ya está saturando.
+        let normalized = (dB + 45) / 40
         return CGFloat(min(max(normalized, 0), 1))
     }
 

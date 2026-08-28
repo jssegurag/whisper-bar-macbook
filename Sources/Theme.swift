@@ -44,6 +44,17 @@ enum Theme {
     static let menuRowRadius: CGFloat = 5
     static let tileHeight: CGFloat   = 56
     static let tileRadius: CGFloat   = 7
+    // MARK: - Píldora
+
+    /// El handoff especifica 46. Se baja a 38 por decisión del cliente al probarla:
+    /// a 46 se sentía gruesa flotando sobre el escritorio. Todo lo demás de la
+    /// píldora se deriva de esta altura.
+    static let pillHeight: CGFloat = 38
+    static let pillPadding: CGFloat = 14
+    static let pillGap: CGFloat = 9
+    /// Alto de la barra más alta de la onda. Deja ~8 px de aire arriba y abajo.
+    static let waveMaxHeight: CGFloat = 22
+
     /// Ancho útil de una fila dentro del menú, descontando el padding lateral.
     static var menuContentWidth: CGFloat { menuWidth - menuPadding * 2 }
 }
