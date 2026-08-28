@@ -1,6 +1,7 @@
-# Binario compilado (generado por build.sh)
+# Binarios compilados (generados por build.sh y por el arnés de UI)
 Gluffi_bin
 WhisperBar_bin
+PreviewUI
 
 # macOS
 .DS_Store

@@ -261,6 +261,27 @@ Architecture detection is automatic (arm64 vs x86_64).
 
 **After building:** macOS revokes Accessibility permission due to signature change. Re-enable in System Settings → Privacy & Security → Accessibility.
 
+### Preview the UI without installing
+
+```bash
+bash preview_ui.sh
+```
+
+Compiles every file in `Sources/` except `main.swift`, plus `Tools/PreviewUI.swift`
+(its own entry point), and opens the real Preferences and History windows.
+
+Why it exists: `build.sh` re-signs the bundle, which makes macOS revoke Accessibility
+every time. The harness never installs or signs, never instantiates `AppDelegate` (so
+no global hotkeys and no microphone/Accessibility prompts), and runs with `HOME`
+pointed at a throwaway directory seeded from `Tools/sample-dictionary.json` — so
+toggling settings or editing dictionary entries during a design review never touches
+the user's real config.
+
+It deliberately opens only windows that exist on every branch; anything else is
+reached from inside (the dictionary manager, for instance, from its Preferences tab).
+It does **not** replace `build.sh` for validation: it exercises no hotkeys, no
+recording and no whisper-cli.
+
 ### Run Tests
 
 ```bash
@@ -276,6 +297,21 @@ Comprehensive integration test suite covering:
 - End-to-end scenarios: streaming simulation, hallucination filtering
 
 Tests use a simple custom harness (in Tests/RunTests.swift) with colored output and pass/fail counts. All 20+ test suites must pass.
+
+### Continuous Integration
+
+`.github/workflows/ci.yml` runs `run_tests.sh` and `build.sh` on `macos-14` for every
+pull request and every push to `main`. A red PR does not get merged.
+
+`build.sh` runs in CI on purpose, not just a compile check: it catches the easiest
+mistake to make in this project — adding a file to `Sources/` and forgetting to
+register it in `build.sh` (and `run_tests.sh`).
+
+The runner has no `whisper-cpp` and no model, and they are deliberately not installed
+(~3 GB). The subprocess suites install a fake `whisper-cli` themselves, and the suites
+with conditional assertions on detected binaries simply skip those branches — so the
+test total CI prints is lower than on a dev machine. **Never assert a test count**;
+the exit code is the contract.
 
 ### Development Workflow
 
@@ -313,7 +349,7 @@ Tests are organized by module/feature with colored output. No external testing f
 - **Custom dictionary** — normalization, index building, every H1 acceptance criterion (n-gram splits, accents, punctuation, longest-match precedence, inactive entries, idempotence), CRUD, persistence round-trip, import/export, and the streaming rule that only finalized text is rewritten
 - **whisper-cli subprocess** — stderr flood (~270 KB) must not stall the run, non-zero exit surfaces as `processFailed`, `cancel()` from another thread returns `cancelled` promptly. These suites install a fake `whisper-cli` (an `sh` script) via `Config`, so they run without whisper-cpp installed and restore the original UserDefaults afterwards
 
-Run with `bash run_tests.sh`; exit code 0 = all pass, 1 = failures. Currently: 122 tests.
+Run with `bash run_tests.sh`; exit code 0 = all pass, 1 = failures. The runner prints the total on every run — don't hardcode it here, it drifts (this line claimed 122 while `main` actually had 118).
 
 ## Important Details
 
@@ -407,6 +443,9 @@ The floating window (FloatingTranscriptionWindowController) receives whisper-str
 - **Tests:** `/Tests/RunTests.swift`
 - **Build intermediate:** `./Gluffi_bin` (compiled binary before bundling; safe to delete)
 - **Build output:** `~/Applications/Gluffi.app`
+- **UI preview harness:** `/Tools/PreviewUI.swift` + `preview_ui.sh` (build artifacts go to `$TMPDIR/whisperbar-preview`, never the repo)
+- **Build intermediate:** `./WhisperBar_bin` (compiled binary before bundling; safe to delete)
+- **Build output:** `~/Applications/WhisperBar.app`
 - **Config (UserDefaults):** `com.user.WhisperBar` domain
 - **History (JSON):** `~/Library/Application Support/WhisperBar/history.json`
 - **Dictionary (JSON):** `~/Library/Application Support/WhisperBar/dictionary.json`

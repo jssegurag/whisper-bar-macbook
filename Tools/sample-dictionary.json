@@ -1,0 +1,53 @@
+[
+  {
+    "id": "7A1E6C10-0001-4000-A000-000000000001",
+    "canonical": "DocFly",
+    "variants": [
+      "doc fly",
+      "dog fly",
+      "doc flai",
+      "dotfly"
+    ],
+    "isActive": true,
+    "createdAt": "2026-08-20T14:10:00Z"
+  },
+  {
+    "id": "7A1E6C10-0002-4000-A000-000000000002",
+    "canonical": "Oriuno",
+    "variants": [
+      "o riuno",
+      "oriundo"
+    ],
+    "isActive": true,
+    "createdAt": "2026-08-21T09:30:00Z"
+  },
+  {
+    "id": "7A1E6C10-0003-4000-A000-000000000003",
+    "canonical": "Banco de Bogotá",
+    "variants": [
+      "banco de bogota"
+    ],
+    "isActive": true,
+    "createdAt": "2026-08-22T11:05:00Z"
+  },
+  {
+    "id": "7A1E6C10-0004-4000-A000-000000000004",
+    "canonical": "Trycore S.A.S",
+    "variants": [
+      "try core",
+      "trycore sas"
+    ],
+    "isActive": true,
+    "createdAt": "2026-08-23T16:45:00Z"
+  },
+  {
+    "id": "7A1E6C10-0005-4000-A000-000000000005",
+    "canonical": "Jhonata",
+    "variants": [
+      "jonata",
+      "yonata"
+    ],
+    "isActive": false,
+    "createdAt": "2026-08-24T08:00:00Z"
+  }
+]
