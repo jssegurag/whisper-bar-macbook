@@ -25,6 +25,8 @@ swiftc \
     "$DIR/Sources/SnippetAuth.swift" \
     "$DIR/Sources/SnippetStore.swift" \
     "$DIR/Sources/RewritePipeline.swift" \
+    "$DIR/Sources/SnippetsView.swift" \
+    "$DIR/Sources/SnippetsWindowController.swift" \
     "$DIR/Sources/CustomDictionary.swift" \
     "$DIR/Sources/DictionaryProcessor.swift" \
     "$DIR/Sources/HotkeyManager.swift" \
