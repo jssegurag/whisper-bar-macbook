@@ -212,6 +212,32 @@ Entonces veo un error claro y mi diccionario queda intacto
 
 ---
 
+## Validación
+
+**28-08-2026 — dictado real, aceptada.** Con `whisper-cpp` de Homebrew y `ggml-large-v3`
+en un Mac con Apple Silicon:
+
+| Qué se probó | Resultado |
+|---|---|
+| Dictado real con `⌘⌥`, término no registrado | whisper escribió `dotfly` — una variante que ningún test contemplaba |
+| Se agregó `dotfly` como variante de `DocFly` y se repitió el dictado | escribió `DocFly` |
+
+Eso cierra H1 y H2 de punta a punta: atajo global, captura de micrófono, whisper-cli,
+diccionario y pegado en la app destino.
+
+Automatizado antes de eso, sintetizando audio con `say` y pasándolo por `Config` →
+`Transcriber` → `DictionaryProcessor`: de tres frases, `large-v3` ya escribía bien dos
+(«DocFly», «Banco de Bogotá») y el diccionario corrigió la tercera (`oriundo` →
+`Oriuno`). Los dos casos donde el modelo acertó validaron la idempotencia.
+
+**Lo que la validación enseñó:** `large-v3` acierta solo con marcas que aparecen en su
+entrenamiento. El valor del diccionario se concentra en términos que el modelo no puede
+saber — nombres inventados, apellidos, siglas internas — y en variantes que nadie
+anticipa hasta oírlas, como `dotfly`. Anticipar variantes en la mesa de diseño no
+funciona; hay que descubrirlas dictando.
+
+---
+
 ## Módulos nuevos
 
 | Archivo | Responsabilidad |
