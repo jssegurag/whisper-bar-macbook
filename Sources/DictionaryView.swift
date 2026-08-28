@@ -121,7 +121,7 @@ struct DictionaryView: View {
                  : "Sin resultados para “\(searchText)”")
                 .foregroundColor(.secondary)
             if searchText.isEmpty {
-                Text("Registra las palabras de tu día a día — marcas, clientes, siglas — y WhisperBar las escribirá siempre con la forma correcta.")
+                Text("Registra las palabras de tu día a día — marcas, clientes, siglas — y Gluffi las escribirá siempre con la forma correcta.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -182,7 +182,7 @@ struct DictionaryView: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
-        panel.message = "Selecciona un diccionario exportado de WhisperBar"
+        panel.message = "Selecciona un diccionario exportado de Gluffi"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let added = try dictionary.importEntries(from: url)
@@ -198,7 +198,7 @@ struct DictionaryView: View {
     private func exportDictionary() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
-        panel.nameFieldStringValue = "whisperbar-diccionario.json"
+        panel.nameFieldStringValue = "gluffi-diccionario.json"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try dictionary.export(to: url)

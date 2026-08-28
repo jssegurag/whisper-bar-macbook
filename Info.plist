@@ -5,23 +5,23 @@
     <key>CFBundleIdentifier</key>
     <string>com.user.WhisperBar</string>
     <key>CFBundleName</key>
-    <string>WhisperBar</string>
+    <string>Gluffi</string>
     <key>CFBundleDisplayName</key>
-    <string>WhisperBar</string>
+    <string>Gluffi</string>
     <key>CFBundleVersion</key>
     <string>1.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
-    <string>WhisperBar</string>
+    <string>Gluffi</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>WhisperBar necesita el micrófono para grabar y transcribir tu voz.</string>
+    <string>Gluffi necesita el micrófono para grabar y transcribir tu voz.</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>WhisperBar necesita controlar otras aplicaciones para ejecutar acciones por voz (recordatorios, abrir apps).</string>
+    <string>Gluffi necesita controlar otras aplicaciones para ejecutar acciones por voz (recordatorios, abrir apps).</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>NSPrincipalClass</key>

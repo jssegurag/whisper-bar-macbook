@@ -138,7 +138,7 @@ struct SnippetsView: View {
             Text(searchText.isEmpty ? "Sin snippets aún" : "Sin resultados para “\(searchText)”")
                 .foregroundColor(.secondary)
             if searchText.isEmpty {
-                Text("Di «agrega mi correo» y WhisperBar escribe tu correo. Tú defines la frase y el texto.")
+                Text("Di «agrega mi correo» y Gluffi escribe tu correo. Tú defines la frase y el texto.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -253,7 +253,7 @@ struct SnippetsView: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
-        panel.message = "Selecciona un archivo de snippets exportado de WhisperBar"
+        panel.message = "Selecciona un archivo de snippets exportado de Gluffi"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let added = try store.importSnippets(from: url)
@@ -269,7 +269,7 @@ struct SnippetsView: View {
     private func exportSnippets() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
-        panel.nameFieldStringValue = "whisperbar-snippets.json"
+        panel.nameFieldStringValue = "gluffi-snippets.json"
         panel.message = "Los snippets marcados como sensibles no se exportan."
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
@@ -533,7 +533,7 @@ struct SnippetsHelpPopover: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Cómo funciona")
                 .font(.headline)
-            Text("Dictas la frase que tú elijas y WhisperBar escribe el texto que le asignaste.")
+            Text("Dictas la frase que tú elijas y Gluffi escribe el texto que le asignaste.")
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
 

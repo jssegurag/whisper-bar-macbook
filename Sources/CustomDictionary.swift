@@ -58,6 +58,8 @@ class CustomDictionary {
     private static func defaultStorageURL() -> URL {
         let dir = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            // Ver la nota en TranscriptionHistory: la carpeta conserva el nombre
+            // interno para no obligar a migrar los datos del usuario.
             .appendingPathComponent("WhisperBar", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("dictionary.json")
@@ -144,7 +146,7 @@ class CustomDictionary {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         guard let incoming = try? decoder.decode([DictionaryEntry].self, from: data) else {
-            throw DictionaryError.unreadableFile("el contenido no es un diccionario de WhisperBar")
+            throw DictionaryError.unreadableFile("el contenido no es un diccionario de Gluffi")
         }
 
         let existing = Set(entries.map { DictionaryProcessor.normalize($0.canonical) })

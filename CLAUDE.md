@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**WhisperBar** is a native macOS menu bar application for offline voice-to-text transcription. It captures audio input via hotkey (⌘⌥), transcribes it locally using whisper.cpp, and pastes the result directly at the cursor. Written in Swift with SwiftUI for preferences/history UI.
+**Gluffi** is a native macOS menu bar application for offline voice-to-text transcription. It captures audio input via hotkey (⌘⌥), transcribes it locally using whisper.cpp, and pastes the result directly at the cursor. Written in Swift with SwiftUI for preferences/history UI.
 
 **Key capabilities:**
 - Offline transcription via whisper-cli (no external APIs)
@@ -16,6 +16,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Searchable transcription history with timestamps
 - Custom dictionary that rewrites the user's own vocabulary (brands, clients, acronyms) to its canonical form
 - Voice snippets: say a trigger phrase, get a preconfigured text; sensitive ones are encrypted and gated behind Touch ID
+
+## Naming
+
+The app is called **Gluffi**. Everything the user sees says Gluffi: the bundle display
+name, window titles, the menu, notifications, exported filenames.
+
+Three things deliberately still say `WhisperBar`, and **must not be "fixed"**:
+
+- `CFBundleIdentifier` = `com.user.WhisperBar` — the `UserDefaults` domain derives from
+  it, so changing it wipes every setting.
+- `SecretBox.keychainService` = `com.user.WhisperBar` — the encryption key for sensitive
+  snippets is looked up by this service/account pair; changing it makes already-stored
+  sensitive snippets unreadable.
+- `~/Library/Application Support/WhisperBar/` — holds `history.json`, `dictionary.json`
+  and `snippets.json`.
+
+All three change together, with a migration, the day the app gets a real bundle
+identifier for a Developer ID signature. Doing it piecemeal costs one migration each.
+
+The repo and the internal project keep the whisper name; that is not a leftover.
 
 ## Architecture Overview
 
@@ -235,7 +255,7 @@ All settings stored in `com.user.WhisperBar` UserDefaults domain:
 bash build.sh
 ```
 
-Compiles every file listed in `build.sh` to a single binary, bundles with Info.plist and icon, ad-hoc code signs, and installs to `~/Applications/WhisperBar.app`. Adding a source file means adding it to both `build.sh` and `run_tests.sh`.
+Compiles every file listed in `build.sh` to a single binary, bundles with Info.plist and icon, ad-hoc code signs, and installs to `~/Applications/Gluffi.app`. Adding a source file means adding it to both `build.sh` and `run_tests.sh`.
 
 Architecture detection is automatic (arm64 vs x86_64).
 
@@ -262,7 +282,7 @@ Tests use a simple custom harness (in Tests/RunTests.swift) with colored output 
 1. **Edit source file** in `Sources/*.swift`
 2. **Build:** `bash build.sh`
 3. **Test (if touching test-relevant code):** `bash run_tests.sh`
-4. **Run app:** Open `~/Applications/WhisperBar.app` or `open ~/Applications/WhisperBar.app`
+4. **Run app:** Open `~/Applications/Gluffi.app` or `open ~/Applications/Gluffi.app`
 5. **Verify hotkey:** ⌘⌥S (or check menu for current binding)
 6. **Grant Accessibility permission if needed** after rebuild
 
@@ -323,7 +343,7 @@ AppDelegate captures the foreground application **before** starting recording, b
 Two things this fixes, both of which were broken:
 
 1. `paste(text:)` used to ignore `pasteTargetApp` entirely and post Cmd+V to whatever was frontmost. The captured value was dead state.
-2. `currentPasteTarget()` returned `nil` when WhisperBar itself was frontmost — which is exactly what happens after the user opens Preferences, History or Snippets, since those call `NSApp.activate`. Dictating right after left the transcription in the history with nothing pasted anywhere.
+2. `currentPasteTarget()` returned `nil` when Gluffi itself was frontmost — which is exactly what happens after the user opens Preferences, History or Snippets, since those call `NSApp.activate`. Dictating right after left the transcription in the history with nothing pasted anywhere.
 
 `PasteTargetTracker` subscribes to `NSWorkspace.didActivateApplicationNotification` and remembers the last **external** app, so the target resolves to the frontmost app when it belongs to someone else, and to the last app the user actually worked in when the frontmost is one of our own windows. With no external app ever seen, it returns `nil` — not pasting beats pasting into the wrong window.
 
@@ -385,8 +405,8 @@ The floating window (FloatingTranscriptionWindowController) receives whisper-str
 
 - **Source code:** `/Sources/`
 - **Tests:** `/Tests/RunTests.swift`
-- **Build intermediate:** `./WhisperBar_bin` (compiled binary before bundling; safe to delete)
-- **Build output:** `~/Applications/WhisperBar.app`
+- **Build intermediate:** `./Gluffi_bin` (compiled binary before bundling; safe to delete)
+- **Build output:** `~/Applications/Gluffi.app`
 - **Config (UserDefaults):** `com.user.WhisperBar` domain
 - **History (JSON):** `~/Library/Application Support/WhisperBar/history.json`
 - **Dictionary (JSON):** `~/Library/Application Support/WhisperBar/dictionary.json`

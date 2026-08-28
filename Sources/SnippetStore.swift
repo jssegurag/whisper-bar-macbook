@@ -90,6 +90,8 @@ class SnippetStore {
     private static func defaultStorageURL() -> URL {
         let dir = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            // Ver la nota en TranscriptionHistory: la carpeta conserva el nombre
+            // interno para no obligar a migrar los datos del usuario.
             .appendingPathComponent("WhisperBar", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("snippets.json")
@@ -266,7 +268,7 @@ class SnippetStore {
         } else if let bare = try? decoder.decode([Snippet].self, from: data) {
             incoming = bare
         } else {
-            throw StoreError.unreadableFile("el contenido no es un archivo de snippets de WhisperBar")
+            throw StoreError.unreadableFile("el contenido no es un archivo de snippets de Gluffi")
         }
 
         let existing = Set(snippets.map { PhraseRewriter.normalize($0.name) })

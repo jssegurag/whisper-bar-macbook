@@ -16,7 +16,7 @@ class PreferencesWindowController {
 
         let hostingController = NSHostingController(rootView: PreferencesView())
         let win = NSWindow(contentViewController: hostingController)
-        win.title = "WhisperBar — Preferencias"
+        win.title = "Gluffi — Preferencias"
         win.styleMask = [.titled, .closable]
         win.center()
         win.isReleasedWhenClosed = false

@@ -38,6 +38,9 @@ struct SecretBox {
         }
     }
 
+    // El servicio conserva el bundle identifier actual. Cambiarlo dejaría
+    // ilegibles los snippets sensibles ya guardados: la llave se busca por este
+    // par servicio/cuenta. Se moverá cuando cambie el bundle id, con migración.
     static let keychainService = "com.user.WhisperBar"
     static let keychainAccount = "snippets-encryption-key-v1"
 
