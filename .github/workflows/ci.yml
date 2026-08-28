@@ -4,6 +4,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Disparador manual desde la pestaña Actions. Sirve para comprobar el workflow
+  # sin abrir un PR, y para relanzarlo tras cambiar un ajuste del repositorio.
+  workflow_dispatch:
 
 # Un push nuevo cancela la corrida anterior de la misma rama.
 concurrency:
