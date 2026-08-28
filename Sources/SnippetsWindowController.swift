@@ -16,7 +16,7 @@ class SnippetsWindowController: NSObject, NSWindowDelegate {
 
         let hostingController = NSHostingController(rootView: SnippetsView())
         let win = NSWindow(contentViewController: hostingController)
-        win.title = "WhisperBar — Snippets"
+        win.title = "Gluffi — Snippets"
         win.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         win.setContentSize(NSSize(width: 600, height: 560))
         win.center()

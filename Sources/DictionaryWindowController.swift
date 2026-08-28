@@ -17,7 +17,7 @@ class DictionaryWindowController {
 
         let hostingController = NSHostingController(rootView: DictionaryView())
         let win = NSWindow(contentViewController: hostingController)
-        win.title = "WhisperBar — Diccionario"
+        win.title = "Gluffi — Diccionario"
         win.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         win.setContentSize(NSSize(width: 560, height: 520))
         win.center()

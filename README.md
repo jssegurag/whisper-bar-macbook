@@ -1,4 +1,4 @@
-# WhisperBar 🎙
+# Gluffi 🎙
 
 > Dictado por voz offline para macOS — powered by [whisper.cpp](https://github.com/ggerganov/whisper.cpp)
 
@@ -6,7 +6,7 @@
 [![Swift](https://img.shields.io/badge/Swift-6-orange)](https://swift.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-WhisperBar vive en la barra de menú y transcribe tu voz directamente donde está el cursor.
+Gluffi vive en la barra de menú y transcribe tu voz directamente donde está el cursor.
 Todo ocurre localmente — ningún audio sale de tu Mac.
 
 ```
@@ -123,11 +123,11 @@ curl -L "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3
      -o ~/.whisper-realtime/ggml-large-v3.bin
 ```
 
-> WhisperBar detecta automáticamente el modelo disponible en `~/.whisper-realtime/`, priorizando los más precisos.
+> Gluffi detecta automáticamente el modelo disponible en `~/.whisper-realtime/`, priorizando los más precisos.
 
 ### 6. LLM para corrección (opcional)
 
-WhisperBar puede pasar la transcripción por un LLM local para corregir ortografía y puntuación automáticamente.
+Gluffi puede pasar la transcripción por un LLM local para corregir ortografía y puntuación automáticamente.
 
 ```bash
 brew install llama.cpp
@@ -146,7 +146,7 @@ Actívalo desde Preferencias (menú → Preferencias → pestaña Modelos) o por
 defaults write com.user.WhisperBar llmEnabled -bool true
 ```
 
-> WhisperBar auto-detecta `llama-cli` y modelos `.gguf` en `~/.whisper-realtime/`.
+> Gluffi auto-detecta `llama-cli` y modelos `.gguf` en `~/.whisper-realtime/`.
 
 ### 7. Clonar y compilar
 
@@ -156,14 +156,14 @@ cd whisper-bar-macbook
 bash build.sh
 ```
 
-El script detecta la arquitectura (Apple Silicon / Intel) y crea la app en `~/Applications/WhisperBar.app`.
+El script detecta la arquitectura (Apple Silicon / Intel) y crea la app en `~/Applications/Gluffi.app`.
 
 ### 8. Permisos (primera vez)
 
-Al abrir WhisperBar el sistema pedirá dos permisos:
+Al abrir Gluffi el sistema pedirá dos permisos:
 
 **Accesibilidad** — necesario para detectar el atajo de teclado global:
-> Configuración del Sistema → Privacidad y Seguridad → Accesibilidad → activar WhisperBar
+> Configuración del Sistema → Privacidad y Seguridad → Accesibilidad → activar Gluffi
 
 **Micrófono** — aparece automáticamente la primera vez que grabes.
 
@@ -172,14 +172,14 @@ Al abrir WhisperBar el sistema pedirá dos permisos:
 Si aparece "la app no puede abrirse porque es de un desarrollador no identificado":
 
 ```bash
-xattr -dr com.apple.quarantine ~/Applications/WhisperBar.app
+xattr -dr com.apple.quarantine ~/Applications/Gluffi.app
 ```
 
 ---
 
 ## Uso
 
-1. Abre `~/Applications/WhisperBar.app` — aparece 🎙 en la barra de menú
+1. Abre `~/Applications/Gluffi.app` — aparece 🎙 en la barra de menú
 2. Coloca el cursor donde quieras escribir
 3. **Mantén `⌘⌥`** — el ícono se anima mientras grabas
 4. **Suelta** — escucharás un sonido relajante mientras transcribe
@@ -279,7 +279,7 @@ El archivo vive en `~/Library/Application Support/WhisperBar/snippets.json`.
 
 ### Panel de preferencias (recomendado)
 
-Desde el menú de WhisperBar → **Preferencias…** (`⌘,`):
+Desde el menú de Gluffi → **Preferencias…** (`⌘,`):
 
 | Pestaña  | Opciones |
 |----------|----------|
@@ -291,6 +291,13 @@ Desde el menú de WhisperBar → **Preferencias…** (`⌘,`):
 | Atajos   | Atajo de grabación actual |
 
 ### Terminal (alternativa)
+
+> **Por qué los comandos dicen `WhisperBar`.** El nombre visible es Gluffi, pero el
+> identificador interno de la app sigue siendo `com.user.WhisperBar`, y la carpeta de
+> datos sigue siendo `~/Library/Application Support/WhisperBar/`. Es a propósito:
+> cambiarlos borraría los ajustes, el historial, el diccionario y los snippets que ya
+> tengas. Se cambiarán el día que la app se firme con un Developer ID, en una sola
+> migración.
 
 ```bash
 # Ver configuración actual
@@ -330,18 +337,18 @@ defaults write com.user.WhisperBar audioFeedbackCustomPath "/ruta/a/mi-sonido.mp
 Reinicia la app después de cambiar la configuración por terminal:
 
 ```bash
-pkill WhisperBar; open ~/Applications/WhisperBar.app
+pkill Gluffi; open ~/Applications/Gluffi.app
 ```
 
 ### Auto-inicio con el Mac
 
-> Configuración del Sistema → General → Elementos de inicio de sesión → `+` → seleccionar WhisperBar.app
+> Configuración del Sistema → General → Elementos de inicio de sesión → `+` → seleccionar Gluffi.app
 
 ---
 
 ## Historial
 
-WhisperBar guarda las últimas 100 transcripciones (configurable) con:
+Gluffi guarda las últimas 100 transcripciones (configurable) con:
 - Timestamp
 - Texto transcrito
 - App donde se pegó
@@ -356,7 +363,7 @@ Los datos se almacenan en `~/Library/Application Support/WhisperBar/history.json
 ## Arquitectura
 
 ```
-WhisperBar/
+Gluffi/
 ├── Sources/
 │   ├── main.swift                      # Punto de entrada
 │   ├── AppDelegate.swift               # Coordinador: menú, grabación, paste
@@ -412,10 +419,10 @@ ls ~/.whisper-realtime/*.gguf
 ```
 
 **El atajo ⌘⌥ no responde**
-> Configuración del Sistema → Privacidad y Seguridad → Accesibilidad → verificar que WhisperBar está activado
+> Configuración del Sistema → Privacidad y Seguridad → Accesibilidad → verificar que Gluffi está activado
 
 **No graba audio**
-> Configuración del Sistema → Privacidad y Seguridad → Micrófono → verificar que WhisperBar está activado
+> Configuración del Sistema → Privacidad y Seguridad → Micrófono → verificar que Gluffi está activado
 
 **Recompilar tras cambiar el código**
 ```bash
@@ -424,7 +431,7 @@ bash build.sh
 
 > ⚠️ **Después de cada `build.sh`** macOS revoca el permiso de Accesibilidad porque la firma cambia.
 > Ve a Configuración del Sistema → Privacidad y Seguridad → Accesibilidad,
-> desactiva WhisperBar y vuélvelo a activar.
+> desactiva Gluffi y vuélvelo a activar.
 
 ---
 

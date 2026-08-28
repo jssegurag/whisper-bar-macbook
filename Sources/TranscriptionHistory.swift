@@ -27,6 +27,9 @@ class TranscriptionHistory {
     private var storageURL: URL {
         let dir = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            // "WhisperBar" y no "Gluffi" a propósito: renombrar esta carpeta
+            // obligaría a migrar los datos del usuario. Se cambiará el día que
+            // cambie el bundle identifier, en una sola migración.
             .appendingPathComponent("WhisperBar", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("history.json")

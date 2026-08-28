@@ -102,7 +102,7 @@ Aplicando Krug (*Don't Make Me Think, Revisited*):
 
 **Las convenciones son tus amigas.** No se inventa nada: la ventana de snippets replica la del diccionario — búsqueda arriba, lista, campo de prueba, importar/exportar abajo. Se aprende una vez y sirve para las dos. Y macOS ya tiene una convención para esto (Ajustes → Teclado → Sustitución de texto): lista buscable, no un lenguaje de comandos.
 
-**El nombre de la página coincide con lo que hiciste clic.** Menú «Snippets…» → ventana «WhisperBar — Snippets».
+**El nombre de la página coincide con lo que hiciste clic.** Menú «Snippets…» → ventana «Gluffi — Snippets».
 
 **Quita la mitad de las palabras, y luego la mitad de lo que queda.** El popover de ayuda del diccionario tiene tres párrafos; el de snippets no pasa de dos frases más los ejemplos. *Y hay que aplicarle la misma tijera al del diccionario.*
 

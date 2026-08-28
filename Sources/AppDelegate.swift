@@ -129,7 +129,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hasPromptedForAccessibility = true
 
         // AXIsProcessTrustedWithOptions con prompt=true muestra el diálogo nativo
-        // del sistema ("WhisperBar quiere controlar esta computadora") y abre
+        // del sistema ("Gluffi quiere controlar esta computadora") y abre
         // Configuración del Sistema → Accesibilidad cuando el usuario lo acepta.
         // Activar la app primero garantiza que el diálogo aparezca en primer plano.
         NSApp.activate(ignoringOtherApps: true)
@@ -165,7 +165,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func rebuildMenu() {
         let menu = NSMenu()
 
-        menu.addItem(withTitle: "WhisperBar", action: nil, keyEquivalent: "")
+        menu.addItem(withTitle: "Gluffi", action: nil, keyEquivalent: "")
         menu.addItem(.separator())
 
         let hint = NSMenuItem(title: "Mantén ⌘⌥ para grabar", action: nil, keyEquivalent: "")
@@ -650,7 +650,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func notify(_ msg: String) {
         let content = UNMutableNotificationContent()
-        content.title = "WhisperBar"
+        content.title = "Gluffi"
         content.body  = msg
         let request = UNNotificationRequest(
             identifier: UUID().uuidString, content: content, trigger: nil)

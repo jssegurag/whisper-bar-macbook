@@ -1,4 +1,4 @@
-# Cómo contribuir a WhisperBar
+# Cómo contribuir a Gluffi
 
 ¡Gracias por tu interés en contribuir! Este documento explica cómo reportar bugs,
 proponer features y enviar pull requests.
@@ -68,7 +68,7 @@ Principios del proyecto:
 
 ```bash
 bash build.sh
-open ~/Applications/WhisperBar.app
+open ~/Applications/Gluffi.app
 ```
 
 Para revisar solo diseño de ventanas, sin instalar ni perder el permiso de

@@ -2,7 +2,7 @@
 set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
-APP="$HOME/Applications/WhisperBar.app"
+APP="$HOME/Applications/Gluffi.app"
 
 # Detectar arquitectura (Apple Silicon vs Intel)
 ARCH=$(uname -m)
@@ -60,7 +60,7 @@ swiftc \
     "$DIR/Sources/DictionaryWindowController.swift" \
     "$DIR/Sources/UpdateChecker.swift" \
     "$DIR/Sources/AppDelegate.swift" \
-    -o "$DIR/WhisperBar_bin" \
+    -o "$DIR/Gluffi_bin" \
     -framework Cocoa \
     -framework AVFoundation \
     -framework ApplicationServices \
@@ -73,7 +73,7 @@ swiftc \
 echo "→ Creando bundle..."
 mkdir -p "$APP/Contents/MacOS"
 mkdir -p "$APP/Contents/Resources"
-cp "$DIR/WhisperBar_bin" "$APP/Contents/MacOS/WhisperBar"
+cp "$DIR/Gluffi_bin" "$APP/Contents/MacOS/Gluffi"
 cp "$DIR/Info.plist"     "$APP/Contents/Info.plist"
 cp "$DIR/AppIcon.icns"   "$APP/Contents/Resources/AppIcon.icns"
 
@@ -81,10 +81,19 @@ echo "→ Firmando (ad-hoc)..."
 codesign --force --deep --sign - "$APP"
 
 echo ""
-echo "✓ WhisperBar.app instalada en: $APP"
+echo "✓ Gluffi.app instalada en: $APP"
+# La app se llamaba WhisperBar: el bundle viejo no se borra solo, y tener las dos
+# instaladas confunde a Spotlight y al Dock.
+if [ -d "$HOME/Applications/WhisperBar.app" ]; then
+    echo ""
+    echo "⚠  Quedó el bundle anterior en ~/Applications/WhisperBar.app"
+    echo "   Bórralo cuando confirmes que Gluffi funciona:"
+    echo "   rm -rf ~/Applications/WhisperBar.app"
+fi
+
 echo ""
 echo "Próximos pasos:"
-echo "  1. Abre ~/Applications/WhisperBar.app"
+echo "  1. Abre ~/Applications/Gluffi.app"
 echo "  2. Permite Accesibilidad cuando lo pida el sistema"
 echo "  3. Permite Micrófono cuando grabes por primera vez"
 echo "  4. Mantén ⌘⌥S para grabar, suelta para transcribir"
