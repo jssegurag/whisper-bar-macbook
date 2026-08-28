@@ -66,6 +66,17 @@ bash build.sh
 open ~/Applications/WhisperBar.app
 ```
 
+Para revisar solo diseño de ventanas, sin instalar ni perder el permiso de
+Accesibilidad:
+
+```bash
+bash preview_ui.sh
+```
+
+Abre las ventanas SwiftUI reales con un `HOME` desechable, así que puedes tocar
+los controles sin ensuciar tu configuración ni tu diccionario. No sustituye a
+`build.sh`: no ejercita atajos globales, grabación ni `whisper-cli`.
+
 Verifica que:
 - La app arranca sin errores
 - El atajo ⌘⌥S funciona

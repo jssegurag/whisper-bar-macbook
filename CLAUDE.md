@@ -179,6 +179,27 @@ Architecture detection is automatic (arm64 vs x86_64).
 
 **After building:** macOS revokes Accessibility permission due to signature change. Re-enable in System Settings → Privacy & Security → Accessibility.
 
+### Preview the UI without installing
+
+```bash
+bash preview_ui.sh
+```
+
+Compiles every file in `Sources/` except `main.swift`, plus `Tools/PreviewUI.swift`
+(its own entry point), and opens the real Preferences and History windows.
+
+Why it exists: `build.sh` re-signs the bundle, which makes macOS revoke Accessibility
+every time. The harness never installs or signs, never instantiates `AppDelegate` (so
+no global hotkeys and no microphone/Accessibility prompts), and runs with `HOME`
+pointed at a throwaway directory seeded from `Tools/sample-dictionary.json` — so
+toggling settings or editing dictionary entries during a design review never touches
+the user's real config.
+
+It deliberately opens only windows that exist on every branch; anything else is
+reached from inside (the dictionary manager, for instance, from its Preferences tab).
+It does **not** replace `build.sh` for validation: it exercises no hotkeys, no
+recording and no whisper-cli.
+
 ### Run Tests
 
 ```bash
@@ -281,6 +302,7 @@ The floating window (FloatingTranscriptionWindowController) receives whisper-str
 
 - **Source code:** `/Sources/` (22 Swift files)
 - **Tests:** `/Tests/RunTests.swift`
+- **UI preview harness:** `/Tools/PreviewUI.swift` + `preview_ui.sh` (build artifacts go to `$TMPDIR/whisperbar-preview`, never the repo)
 - **Build intermediate:** `./WhisperBar_bin` (compiled binary before bundling; safe to delete)
 - **Build output:** `~/Applications/WhisperBar.app`
 - **Config (UserDefaults):** `com.user.WhisperBar` domain
