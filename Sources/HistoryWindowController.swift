@@ -16,9 +16,9 @@ class HistoryWindowController {
 
         let hostingController = NSHostingController(rootView: HistoryView())
         let win = NSWindow(contentViewController: hostingController)
-        win.title = "WhisperBar — Historial"
+        win.title = "Gluffi — Historial"
         win.styleMask = [.titled, .closable, .resizable, .miniaturizable]
-        win.setContentSize(NSSize(width: 500, height: 600))
+        win.setContentSize(NSSize(width: 520, height: 600))
         win.center()
         win.isReleasedWhenClosed = false
         win.makeKeyAndOrderFront(nil)

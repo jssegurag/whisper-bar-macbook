@@ -78,6 +78,30 @@ final class UpdateChecker: ObservableObject {
 
     // MARK: - Privado
 
+    /// Instala un paquete con Homebrew. Lo usa la ventana de Configuración para
+    /// resolver «whisper-stream no está instalado» sin mandar al usuario a la
+    /// terminal.
+    func install(package: String, completion: @escaping (Bool, String) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/bin/bash")
+            proc.arguments = ["-lc", "brew install \(package) 2>&1 | tail -5"]
+            proc.environment = self.brewEnvironment()
+            let pipe = Pipe()
+            proc.standardOutput = pipe
+            proc.standardError = pipe
+            do { try proc.run() } catch {
+                DispatchQueue.main.async { completion(false, error.localizedDescription) }
+                return
+            }
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            proc.waitUntilExit()
+            let output = String(data: data, encoding: .utf8) ?? ""
+            let ok = proc.terminationStatus == 0
+            DispatchQueue.main.async { completion(ok, output) }
+        }
+    }
+
     private func runOutdatedCheck() -> (whisper: String?, llama: String?) {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: brewPath)

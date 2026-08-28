@@ -1,4 +1,4 @@
-# Cómo contribuir a WhisperBar
+# Cómo contribuir a Gluffi
 
 ¡Gracias por tu interés en contribuir! Este documento explica cómo reportar bugs,
 proponer features y enviar pull requests.
@@ -46,10 +46,15 @@ cd whisper-bar-macbook
 ### 2. Crear una rama
 
 ```bash
-git checkout -b feature/nombre-descriptivo
+git checkout -b feat/nombre-descriptivo
 # o
 git checkout -b fix/descripcion-del-bug
 ```
+
+La convención completa de nombres, las reglas de alcance ("una rama = un cambio
+defendible") y el registro de ramas activas están en
+[`docs/BRANCHES.md`](docs/BRANCHES.md). Al abrir una rama, agrégala allí con su
+propósito y su alcance; al mezclarla, quítala.
 
 ### 3. Hacer los cambios
 
@@ -63,8 +68,19 @@ Principios del proyecto:
 
 ```bash
 bash build.sh
-open ~/Applications/WhisperBar.app
+open ~/Applications/Gluffi.app
 ```
+
+Para revisar solo diseño de ventanas, sin instalar ni perder el permiso de
+Accesibilidad:
+
+```bash
+bash preview_ui.sh
+```
+
+Abre las ventanas SwiftUI reales con un `HOME` desechable, así que puedes tocar
+los controles sin ensuciar tu configuración ni tu diccionario. No sustituye a
+`build.sh`: no ejercita atajos globales, grabación ni `whisper-cli`.
 
 Verifica que:
 - La app arranca sin errores
@@ -92,8 +108,14 @@ docs: actualizar instrucciones de instalación para Intel
 ### 6. Abrir el Pull Request
 
 - Título claro que resume el cambio
-- Descripción de qué cambia y por qué
+- Llena la plantilla que aparece al abrirlo
 - Menciona el issue relacionado si aplica (`Fixes #42`)
+
+CI corre `run_tests.sh` y `build.sh` en cada PR sobre macOS con Apple Silicon.
+**Un PR en rojo no se mezcla.** El runner no tiene `whisper-cpp` ni el modelo
+—son ~3 GB— así que las suites del subproceso usan un `whisper-cli` falso y las
+que dependen de binarios detectados se omiten: el total de tests que imprime CI
+es menor que el de tu máquina. Lo que importa es que pase, no el conteo.
 
 ---
 

@@ -18,9 +18,31 @@ echo "→ Compilando tests + sources..."
 swiftc \
     "$DIR/Tests/RunTests.swift" \
     "$DIR/Sources/Config.swift" \
+    "$DIR/Sources/Theme.swift" \
+    "$DIR/Sources/IdleWord.swift" \
+    "$DIR/Sources/SetupStatus.swift" \
+    "$DIR/Sources/AppNotification.swift" \
+    "$DIR/Sources/Notifier.swift" \
+    "$DIR/Sources/SetupComponent.swift" \
+    "$DIR/Sources/ModelDownloader.swift" \
+    "$DIR/Sources/SetupView.swift" \
+    "$DIR/Sources/SetupWindowController.swift" \
+    "$DIR/Sources/MenuBarIcon.swift" \
+    "$DIR/Sources/MenuViews.swift" \
     "$DIR/Sources/AudioRecorder.swift" \
     "$DIR/Sources/Transcriber.swift" \
+    "$DIR/Sources/PhraseRewriter.swift" \
+    "$DIR/Sources/SecretBox.swift" \
+    "$DIR/Sources/SnippetAuth.swift" \
+    "$DIR/Sources/SnippetStore.swift" \
+    "$DIR/Sources/RewritePipeline.swift" \
+    "$DIR/Sources/SnippetsView.swift" \
+    "$DIR/Sources/SnippetsWindowController.swift" \
+    "$DIR/Sources/CustomDictionary.swift" \
+    "$DIR/Sources/DictionaryProcessor.swift" \
+    "$DIR/Sources/HotkeyBinding.swift" \
     "$DIR/Sources/HotkeyManager.swift" \
+    "$DIR/Sources/PasteTargetTracker.swift" \
     "$DIR/Sources/AudioFeedback.swift" \
     "$DIR/Sources/LLMProcessor.swift" \
     "$DIR/Sources/TranslationProcessor.swift" \
@@ -33,10 +55,24 @@ swiftc \
     "$DIR/Sources/PillView.swift" \
     "$DIR/Sources/PillWindowController.swift" \
     "$DIR/Sources/PreferencesView.swift" \
+    "$DIR/Sources/StreamingPriority.swift" \
+    "$DIR/Sources/LaunchAtLogin.swift" \
+    "$DIR/Sources/PreferencesTextSection.swift" \
+    "$DIR/Sources/PreferencesLiveSection.swift" \
+    "$DIR/Sources/PreferencesGeneralTab.swift" \
+    "$DIR/Sources/PreferencesTranslationTab.swift" \
+    "$DIR/Sources/PreferencesVoiceActionsTab.swift" \
+    "$DIR/Sources/PreferencesAudioTab.swift" \
+    "$DIR/Sources/PreferencesStreamingTab.swift" \
+    "$DIR/Sources/PreferencesShortcutsTab.swift" \
+    "$DIR/Sources/PreferencesComponents.swift" \
     "$DIR/Sources/PreferencesWindowController.swift" \
     "$DIR/Sources/TranscriptionHistory.swift" \
+    "$DIR/Sources/HistoryPresentation.swift" \
     "$DIR/Sources/HistoryView.swift" \
     "$DIR/Sources/HistoryWindowController.swift" \
+    "$DIR/Sources/DictionaryView.swift" \
+    "$DIR/Sources/DictionaryWindowController.swift" \
     "$DIR/Sources/UpdateChecker.swift" \
     "$DIR/Sources/AppDelegate.swift" \
     -o "$DIR/WhisperBar_tests" \
@@ -46,6 +82,8 @@ swiftc \
     -framework SwiftUI \
     -framework CoreGraphics \
     -framework UserNotifications \
+    -framework CryptoKit \
+    -framework LocalAuthentication \
     -target "$TARGET"
 
 echo "→ Compilación exitosa"

@@ -22,6 +22,16 @@ class FloatingTranscriptionViewModel: ObservableObject {
     /// Texto confirmado acumulado (líneas finalizadas por whisper-stream).
     var finalizedText: String = ""
 
+    /// Entradas del diccionario personalizado a aplicar. Inyectable para que los
+    /// tests no escriban en el diccionario real del usuario.
+    var dictionaryEntries: () -> [DictionaryEntry] = { CustomDictionary.shared.activeEntries }
+
+    /// Reglas de snippets a aplicar. Sin los sensibles: esta ventana flota sobre
+    /// lo que sea que el usuario esté compartiendo por pantalla.
+    var snippetRules: () -> [PhraseRewriter.Rule] = {
+        SnippetStore.shared.rules(includeSensitive: false)
+    }
+
     init() {
         streamer.onFinalizedText = { [weak self] text in
             guard let self else { return }
@@ -37,8 +47,19 @@ class FloatingTranscriptionViewModel: ObservableObject {
         if isActive { stop() } else { start() }
     }
 
+    /// Cuándo empezó el tramo actual, y cuánto se acumuló antes de pausar. La
+    /// cabecera muestra tiempo de escucha real, no tiempo desde que se abrió la
+    /// ventana.
+    private var startedAt: Date?
+    private var accumulated: TimeInterval = 0
+
+    var listeningSeconds: TimeInterval {
+        accumulated + (startedAt.map { Date().timeIntervalSince($0) } ?? 0)
+    }
+
     func start() {
         guard !isActive else { return }
+        startedAt = Date()
         displayText = ""
         finalizedText = ""
         lastFragment = ""
@@ -49,6 +70,8 @@ class FloatingTranscriptionViewModel: ObservableObject {
 
     func stop() {
         guard isActive else { return }
+        if let startedAt { accumulated += Date().timeIntervalSince(startedAt) }
+        startedAt = nil
         streamer.stop()
         isActive = false
     }
@@ -59,6 +82,8 @@ class FloatingTranscriptionViewModel: ObservableObject {
     }
 
     func clear() {
+        accumulated = 0
+        startedAt = isActive ? Date() : nil
         displayText = ""
         finalizedText = ""
         lastFragment = ""
@@ -81,10 +106,17 @@ class FloatingTranscriptionViewModel: ObservableObject {
             repeatCount = 0
         }
 
+        // Diccionario personalizado: solo sobre texto ya finalizado. Aplicarlo al
+        // parcial haría parpadear la ventana mientras whisper reescribe la frase.
+        let corrected = RewritePipeline.apply(
+            to: trimmed,
+            dictionary: Config.shared.dictionaryEnabled ? dictionaryEntries() : [],
+            snippetRules: Config.shared.snippetsEnabled ? snippetRules() : [])
+
         if finalizedText.isEmpty {
-            finalizedText = trimmed
+            finalizedText = corrected
         } else {
-            finalizedText += " " + trimmed
+            finalizedText += " " + corrected
         }
 
         // Buffer rolling: mantener solo los últimos N caracteres

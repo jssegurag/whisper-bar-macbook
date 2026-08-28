@@ -41,6 +41,9 @@ class AudioRecorder {
     func start() throws {
         guard !isRecording else { return }
         let rec = try AVAudioRecorder(url: outputURL, settings: AudioRecorder.recordSettings)
+        // La onda de la píldora sigue el volumen real de la voz. Sin esto sería
+        // una animación decorativa que se movería igual en silencio.
+        rec.isMeteringEnabled = true
 
         // record() devuelve false si el permiso está denegado o el micrófono está
         // ocupado. Descartar ese Bool dejaba la app en estado "grabando": el icono
@@ -54,6 +57,24 @@ class AudioRecorder {
         recorder    = rec
         isRecording = true
         startTime   = Date()
+    }
+
+    /// Nivel de voz actual, 0…1, para modular la onda de la píldora.
+    ///
+    /// El mapeo lleva −50 dB a 0 y −5 dB a 1: por debajo es silencio de sala, por
+    /// encima ya está saturando.
+    func currentLevel() -> CGFloat {
+        guard let recorder, isRecording else { return 0 }
+        recorder.updateMeters()
+        // El pico manda sobre el promedio: el promedio de una ventana de voz
+        // normal se queda en la mitad baja de la escala y la onda apenas se movía.
+        // Se atenúa 6 dB para que un golpe seco no sature la barra entera.
+        let average = Double(recorder.averagePower(forChannel: 0))
+        let peak = Double(recorder.peakPower(forChannel: 0))
+        let dB = max(average, peak - 6)
+        // −45 dB es silencio de sala, −5 dB ya está saturando.
+        let normalized = (dB + 45) / 40
+        return CGFloat(min(max(normalized, 0), 1))
     }
 
     /// Detiene la grabación y devuelve la duración en segundos.

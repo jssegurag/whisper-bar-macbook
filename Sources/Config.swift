@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 /// Configuración centralizada via UserDefaults.
 /// Las rutas se auto-detectan si no están configuradas explícitamente.
@@ -216,6 +217,75 @@ class Config {
     var audioFeedbackCustomPath: String {
         get { defaults.string(forKey: "audioFeedbackCustomPath") ?? "" }
         set { defaults.set(newValue, forKey: "audioFeedbackCustomPath") }
+    }
+
+    // MARK: - Diccionario personalizado
+
+    /// Si el diccionario personalizado se aplica a las transcripciones.
+    /// Con el diccionario vacío es inerte, así que el default es true.
+    var dictionaryEnabled: Bool {
+        get { defaults.object(forKey: "dictionaryEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "dictionaryEnabled") }
+    }
+
+    // MARK: - Snippets por voz
+
+    // MARK: - Atajos
+
+    /// Modificadores del atajo, guardados como el rawValue de ModifierFlags.
+    /// Sin valor guardado se usa el de fábrica de cada acción.
+    func hotkeyModifiers(for action: HotkeyBinding.Action) -> NSEvent.ModifierFlags {
+        let key = "hotkey.\(action.rawValue).modifiers"
+        guard let raw = defaults.object(forKey: key) as? UInt else {
+            return action.defaultModifiers
+        }
+        return NSEvent.ModifierFlags(rawValue: raw)
+    }
+
+    func setHotkeyModifiers(_ modifiers: NSEvent.ModifierFlags,
+                            for action: HotkeyBinding.Action) {
+        defaults.set(modifiers.rawValue, forKey: "hotkey.\(action.rawValue).modifiers")
+    }
+
+    func hotkeyMode(for action: HotkeyBinding.Action) -> HotkeyBinding.Mode {
+        guard action.supportsModes,
+              let raw = defaults.string(forKey: "hotkey.\(action.rawValue).mode"),
+              let mode = HotkeyBinding.Mode(rawValue: raw) else { return .hold }
+        return mode
+    }
+
+    func setHotkeyMode(_ mode: HotkeyBinding.Mode, for action: HotkeyBinding.Action) {
+        defaults.set(mode.rawValue, forKey: "hotkey.\(action.rawValue).mode")
+    }
+
+    /// Los tres atajos tal como están configurados.
+    var hotkeyBindings: [HotkeyBinding] {
+        HotkeyBinding.Action.allCases.map {
+            HotkeyBinding(action: $0,
+                          modifiers: hotkeyModifiers(for: $0),
+                          mode: hotkeyMode(for: $0))
+        }
+    }
+
+    // MARK: - Píldora flotante
+
+    /// Palabra en reposo de la píldora. Se persiste para que reiniciar la app no
+    /// fuerce un cambio: la regla es que la palabra no se mueva a la vista.
+    var idleWordIndex: Int {
+        get { defaults.integer(forKey: "idleWordIndex") }
+        set { defaults.set(newValue, forKey: "idleWordIndex") }
+    }
+
+    var idleWordChangedAt: Date? {
+        get { defaults.object(forKey: "idleWordChangedAt") as? Date }
+        set { defaults.set(newValue, forKey: "idleWordChangedAt") }
+    }
+
+    /// Si los snippets se insertan al pronunciar sus disparadores.
+    /// Sin snippets registrados es inerte, así que el default es true.
+    var snippetsEnabled: Bool {
+        get { defaults.object(forKey: "snippetsEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "snippetsEnabled") }
     }
 
     // MARK: - Validación

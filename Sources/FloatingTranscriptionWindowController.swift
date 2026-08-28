@@ -33,7 +33,7 @@ class FloatingTranscriptionWindowController: NSObject, NSWindowDelegate {
             rootView: FloatingTranscriptionView(viewModel: vm))
 
         let p = NSPanel(contentViewController: hostingController)
-        p.title = "WhisperBar — Transcripción en Vivo"
+        p.title = "Gluffi — Transcripción en Vivo"
         p.styleMask = [.nonactivatingPanel, .titled, .closable, .resizable, .utilityWindow]
         p.level = .floating
         p.hidesOnDeactivate = false

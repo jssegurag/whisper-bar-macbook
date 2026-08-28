@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**WhisperBar** is a native macOS menu bar application for offline voice-to-text transcription. It captures audio input via hotkey (⌘⌥), transcribes it locally using whisper.cpp, and pastes the result directly at the cursor. Written in Swift with SwiftUI for preferences/history UI.
+**Gluffi** is a native macOS menu bar application for offline voice-to-text transcription. It captures audio input via hotkey (⌘⌥), transcribes it locally using whisper.cpp, and pastes the result directly at the cursor. Written in Swift with SwiftUI for preferences/history UI.
 
 **Key capabilities:**
 - Offline transcription via whisper-cli (no external APIs)
@@ -14,6 +14,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Hotkey-driven workflow: hold ⌘⌥ to record, release to transcribe
 - Floating pill UI for quick recording toggle
 - Searchable transcription history with timestamps
+- Custom dictionary that rewrites the user's own vocabulary (brands, clients, acronyms) to its canonical form
+- Voice snippets: say a trigger phrase, get a preconfigured text; sensitive ones are encrypted and gated behind Touch ID
+
+## Naming
+
+The app is called **Gluffi**. Everything the user sees says Gluffi: the bundle display
+name, window titles, the menu, notifications, exported filenames.
+
+Three things deliberately still say `WhisperBar`, and **must not be "fixed"**:
+
+- `CFBundleIdentifier` = `com.user.WhisperBar` — the `UserDefaults` domain derives from
+  it, so changing it wipes every setting.
+- `SecretBox.keychainService` = `com.user.WhisperBar` — the encryption key for sensitive
+  snippets is looked up by this service/account pair; changing it makes already-stored
+  sensitive snippets unreadable.
+- `~/Library/Application Support/WhisperBar/` — holds `history.json`, `dictionary.json`
+  and `snippets.json`.
+
+All three change together, with a migration, the day the app gets a real bundle
+identifier for a Developer ID signature. Doing it piecemeal costs one migration each.
+
+The repo and the internal project keep the whisper name; that is not a leftover.
 
 ## Architecture Overview
 
@@ -45,7 +67,10 @@ The app follows a **modular, single-responsibility** design:
 
 **Transcriber.swift** — whisper-cli integration
 - Invokes whisper-cli as subprocess with 60s timeout
-- Parses output: filters timestamp lines and joins transcribed segments
+- Drains stdout **and** stderr concurrently while the process runs. whisper-cli streams progress to stderr; an undrained pipe fills the kernel buffer (~64 KB) and blocks the subprocess mid-write, which used to surface as a bogus 60s timeout on long audio
+- `cancel()` is thread-safe (NSLock guards process + cancelled flag) and only terminates an already-launched process; a stale `cancel()` (fired while merely recording) does not poison the next transcription
+- Errors: `invalidConfig`, `timeout(seconds:)`, `cancelled`, `processFailed(status:stderr:)` — a non-zero exit reports the last stderr lines instead of silently returning empty text
+- Parses output via `cleanOutput`: filters timestamp lines and joins transcribed segments
 - Returns cleaned text ready for LLM or pasting
 
 **LLMProcessor.swift** — llama.cpp post-processing
@@ -81,9 +106,10 @@ The app follows a **modular, single-responsibility** design:
 - Positioned to not interfere with user's active app
 
 **PreferencesView.swift & PreferencesWindowController.swift** — Settings UI
-- SwiftUI-based preferences for language, whisper-cli/model paths, LLM enable/disable
-- Custom prompt for LLM, streaming parameters (step/length/keep ms)
-- Minimum recording duration threshold
+- `PreferencesView` is only the TabView shell. Each tab lives in its own file: `PreferencesGeneralTab.swift`, `PreferencesModelsTab.swift`, `PreferencesLLMTab.swift`, `PreferencesTranslationTab.swift`, `PreferencesVoiceActionsTab.swift`, `PreferencesAudioTab.swift`, `PreferencesStreamingTab.swift`, `PreferencesShortcutsTab.swift`
+- `PreferencesComponents.swift` holds what several tabs share: `UpdateRow` and `PathField`
+- The Dictionary and Snippets tabs live with their feature instead, in `DictionaryView.swift` and `SnippetsView.swift`
+- Why: the ten screens used to sit in one 806-line file, so changing one tab risked the other nine and two people editing different tabs always conflicted. Splitting it is step 1 of the sequence in `docs/AUDITORIA-UX.md` — make the change easy, then make the easy change
 
 **HistoryView.swift & HistoryWindowController.swift** — Transcription history
 - SwiftUI search interface for past transcriptions
@@ -104,6 +130,58 @@ The app follows a **modular, single-responsibility** design:
 - TranscriptionEntry: text, duration, timestamp, sourceApp
 - Singleton with JSON serialization to Application Support directory
 - Limits history to maxHistoryCount (default 100)
+
+**PhraseRewriter.swift** — Shared rewriting engine (pure functions)
+- Phrase in → text out. Used by both the dictionary (misheard form → canonical) and snippets (trigger → body): same mechanism, only the size ratio differs
+- Matches windows of 1..N words, longest first; compares lowercased and accent-folded; writes the replacement verbatim; whole tokens only; preserves edge punctuation and original whitespace
+- `DictionaryProcessor` is a thin layer over it, kept as its own type so the dictionary's API and tests didn't have to change
+
+**RewritePipeline.swift** — The order rewrites happen in
+- Dictionary first, snippets second. Exists as a named type because the order **is** part of the feature: snippet bodies are literal text the user wrote, and a dictionary pass afterwards would rewrite their own signature
+
+**SecretBox.swift** — AES-GCM 256 for sensitive snippet bodies
+- Key in Keychain (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`), ciphertext in the app's JSON. A key stored next to the ciphertext is not encryption, it's obfuscation
+- Key provider is injectable (tests never touch the real Keychain) and lazy: a user who never marks a snippet sensitive never sees a Keychain prompt
+- Keychain items are bound to the code signature, and ad-hoc signing changes the hash on every build — so macOS re-prompts after each `build.sh`, same toll as Accessibility, same cause
+
+**SnippetAuth.swift** — LocalAuthentication gate
+- Touch ID or system password, asked **once per app session**, not per snippet
+- Deliberately does not gate insertion: dictating a trigger pastes the value without authenticating, or the feature would be useless. It gates *viewing and editing* in the window
+- `evaluator` is injectable so tests never raise a system dialog
+
+**SnippetStore.swift** — Snippet model & persistence
+- `Snippet`: name (the menu label), triggers, body (plain or sealed), isSensitive, isActive
+- JSON in ~/Library/Application Support/WhisperBar/snippets.json; sensitive bodies stored encrypted
+- `search` never looks inside bodies — a sensitive value must not leak through the search box
+- `dictionaryCollisions(for:entries:)` detects a dictionary entry that rewrites a trigger, which would silently keep the snippet from ever firing
+- `rules(includeSensitive:)` — `false` for the live floating window, which may be on a shared screen
+- Export skips sensitive snippets and records how many were omitted, so nobody believes they backed up everything
+
+**SnippetsView.swift & SnippetsWindowController.swift** — Snippets UI
+- Deliberately mirrors the dictionary window: conventions get learned once
+- Rows show the trigger prominently (it is the thing the user must recall) and mask sensitive bodies with a Show button
+- Closing the window re-locks the session
+
+**CustomDictionary.swift** — Custom dictionary model & persistence
+- `DictionaryEntry`: canonical form, variants whisper produces, isActive, createdAt
+- The canonical form is itself a match target: registering "DocFly" already fixes "docfly" and "DOC FLY"
+- JSON persistence in ~/Library/Application Support/WhisperBar/dictionary.json
+- `storageURL` is injectable so tests never touch the user's real dictionary
+- `sanitize` drops empty/duplicate variants and variants that only differ from the canonical by case or accents (the matcher already ignores both)
+- Import/export merges by canonical form; a corrupt file throws and leaves the dictionary untouched
+
+**DictionaryProcessor.swift** — Dictionary rewriting engine (pure functions)
+- Matches windows of 1..N words, longest window first — whisper splits names ("DocFly" arrives as "doc fly"), and "Banco de Bogotá" must win over "Banco"
+- Compares lowercased and accent-folded; always writes the canonical form verbatim
+- Operates on whole tokens, so "documento fly" is never rewritten
+- Preserves edge punctuation and the original whitespace, including newlines and tabs
+- Idempotent: applying it to already-corrected text changes nothing
+
+**DictionaryView.swift & DictionaryWindowController.swift** — Dictionary UI
+- Search, add/edit/delete with confirmation, per-entry active toggle
+- Live test field: type a phrase as whisper would hear it and see the corrected result
+- Warns when another entry already claims a form, naming which one takes precedence
+- Import/export via NSOpenPanel/NSSavePanel
 
 **AudioFeedback.swift** — Sound feedback during transcription
 - Defines `AudioPreset` struct: 6 built-in presets (theta/alpha/beta binaurals, 432Hz, 528Hz, deep drone) + custom file mode
@@ -130,6 +208,8 @@ Transcriber returns text
   ↓
 [Optional] LLMProcessor corrects with llama-cli
   ↓
+[If enabled] RewritePipeline: dictionary rewrites custom terms, then snippets expand
+  ↓
 [If enabled] VoiceActionDetector classifies intent via LLM
   ↓
 If action detected: VoiceActionExecutor handles it; else: paste text
@@ -155,6 +235,8 @@ All settings stored in `com.user.WhisperBar` UserDefaults domain:
 - `audioFeedbackVolume` — volume 0.0–1.0 (default: 1.0)
 - `audioFeedbackPreset` — preset ID: `theta` | `deep` | `528hz` | `alpha` | `beta` | `432hz` | `custom` (default: `theta`)
 - `audioFeedbackCustomPath` — path to user-supplied audio file (used when preset = `custom`)
+- `dictionaryEnabled` — apply the custom dictionary to transcriptions (default: true; inert when the dictionary is empty)
+- `snippetsEnabled` — expand voice snippets (default: true; inert with no snippets)
 
 ## Build & Development
 
@@ -174,11 +256,32 @@ All settings stored in `com.user.WhisperBar` UserDefaults domain:
 bash build.sh
 ```
 
-Compiles all 22 Swift source files to single binary, bundles with Info.plist and icon, ad-hoc code signs, and installs to `~/Applications/WhisperBar.app`.
+Compiles every file listed in `build.sh` to a single binary, bundles with Info.plist and icon, ad-hoc code signs, and installs to `~/Applications/Gluffi.app`. Adding a source file means adding it to both `build.sh` and `run_tests.sh`.
 
 Architecture detection is automatic (arm64 vs x86_64).
 
 **After building:** macOS revokes Accessibility permission due to signature change. Re-enable in System Settings → Privacy & Security → Accessibility.
+
+### Preview the UI without installing
+
+```bash
+bash preview_ui.sh
+```
+
+Compiles every file in `Sources/` except `main.swift`, plus `Tools/PreviewUI.swift`
+(its own entry point), and opens the real Preferences and History windows.
+
+Why it exists: `build.sh` re-signs the bundle, which makes macOS revoke Accessibility
+every time. The harness never installs or signs, never instantiates `AppDelegate` (so
+no global hotkeys and no microphone/Accessibility prompts), and runs with `HOME`
+pointed at a throwaway directory seeded from `Tools/sample-dictionary.json` — so
+toggling settings or editing dictionary entries during a design review never touches
+the user's real config.
+
+It deliberately opens only windows that exist on every branch; anything else is
+reached from inside (the dictionary manager, for instance, from its Preferences tab).
+It does **not** replace `build.sh` for validation: it exercises no hotkeys, no
+recording and no whisper-cli.
 
 ### Run Tests
 
@@ -196,12 +299,27 @@ Comprehensive integration test suite covering:
 
 Tests use a simple custom harness (in Tests/RunTests.swift) with colored output and pass/fail counts. All 20+ test suites must pass.
 
+### Continuous Integration
+
+`.github/workflows/ci.yml` runs `run_tests.sh` and `build.sh` on `macos-14` for every
+pull request and every push to `main`. A red PR does not get merged.
+
+`build.sh` runs in CI on purpose, not just a compile check: it catches the easiest
+mistake to make in this project — adding a file to `Sources/` and forgetting to
+register it in `build.sh` (and `run_tests.sh`).
+
+The runner has no `whisper-cpp` and no model, and they are deliberately not installed
+(~3 GB). The subprocess suites install a fake `whisper-cli` themselves, and the suites
+with conditional assertions on detected binaries simply skip those branches — so the
+test total CI prints is lower than on a dev machine. **Never assert a test count**;
+the exit code is the contract.
+
 ### Development Workflow
 
 1. **Edit source file** in `Sources/*.swift`
 2. **Build:** `bash build.sh`
 3. **Test (if touching test-relevant code):** `bash run_tests.sh`
-4. **Run app:** Open `~/Applications/WhisperBar.app` or `open ~/Applications/WhisperBar.app`
+4. **Run app:** Open `~/Applications/Gluffi.app` or `open ~/Applications/Gluffi.app`
 5. **Verify hotkey:** ⌘⌥S (or check menu for current binding)
 6. **Grant Accessibility permission if needed** after rebuild
 
@@ -229,8 +347,11 @@ Tests are organized by module/feature with colored output. No external testing f
 - **State management** — ViewModel and window controller state transitions
 - **Cancel callback** — `onPillCancelTapped` assignment and invocation
 - **Recording format & start failure** — `recordSettings` is PCM 16 kHz mono 16-bit, and `AudioRecorderError.couldNotStart` carries a message pointing at the Microphone permission (the tests do not open the mic, so they run unattended)
+- **Voice snippets** — AES-GCM round trip and tamper detection, the sensitive body never appearing in plaintext on disk, search not reaching into bodies, one-auth-per-session logic (with an injected evaluator, so no system dialog), cross-collisions with the dictionary, export omitting sensitive entries, and the pipeline order
+- **Custom dictionary** — normalization, index building, every H1 acceptance criterion (n-gram splits, accents, punctuation, longest-match precedence, inactive entries, idempotence), CRUD, persistence round-trip, import/export, and the streaming rule that only finalized text is rewritten
+- **whisper-cli subprocess** — stderr flood (~270 KB) must not stall the run, non-zero exit surfaces as `processFailed`, `cancel()` from another thread returns `cancelled` promptly. These suites install a fake `whisper-cli` (an `sh` script) via `Config`, so they run without whisper-cpp installed and restore the original UserDefaults afterwards
 
-Run with `bash run_tests.sh`; exit code 0 = all pass, 1 = failures. Currently: 122 tests.
+Run with `bash run_tests.sh`; exit code 0 = all pass, 1 = failures. The runner prints the total on every run — don't hardcode it here, it drifts (this line claimed 122 while `main` actually had 118).
 
 ## Important Details
 
@@ -255,7 +376,14 @@ Exact modifier matching prevents false matches. Requires Accessibility permissio
 
 ### Paste Target Capture
 
-AppDelegate captures the foreground application **before** starting recording, because the floating pill or menu might steal focus. This captured app is the actual target for Cmd+V. Critical for reliability: without this, paste could go to the wrong window.
+AppDelegate captures the foreground application **before** starting recording, because the floating pill or menu might steal focus, and `paste(text:)` activates that app before posting Cmd+V.
+
+Two things this fixes, both of which were broken:
+
+1. `paste(text:)` used to ignore `pasteTargetApp` entirely and post Cmd+V to whatever was frontmost. The captured value was dead state.
+2. `currentPasteTarget()` returned `nil` when Gluffi itself was frontmost — which is exactly what happens after the user opens Preferences, History or Snippets, since those call `NSApp.activate`. Dictating right after left the transcription in the history with nothing pasted anywhere.
+
+`PasteTargetTracker` subscribes to `NSWorkspace.didActivateApplicationNotification` and remembers the last **external** app, so the target resolves to the frontmost app when it belongs to someone else, and to the last app the user actually worked in when the frontmost is one of our own windows. With no external app ever seen, it returns `nil` — not pasting beats pasting into the wrong window.
 
 ### Cancel Recording / Transcription
 
@@ -271,6 +399,38 @@ The user can cancel at any point (during recording or while whisper-cli is runni
 
 The Esc monitor is always removed when the operation ends (normally or via cancel) so it doesn't interfere with other apps.
 
+### Custom Dictionary
+
+whisper transcribes phonetically and knows nobody's vocabulary: "Oriuno" comes back as "o riuno", "DocFly" as "doc flai". The dictionary rewrites those to the form the user registered.
+
+Order in the pipeline matters and is deliberate:
+
+- **After the LLM.** The LLM is asked to fix spelling, so it "corrects" the user's own terms back to standard Spanish. Running the dictionary first would let the LLM undo it.
+- **Before VoiceActionDetector.** So "abre Oriuno" resolves to the app.
+- **Only on finalized streaming text**, never on the partial text — whisper-stream rewrites the partial on every update, so correcting it would make the floating window flicker.
+
+Insertion points: `AppDelegate.applyDictionary(_:)` called from `stopAndTranscribe()` and `stopAndTranslate()` (proper nouns are not translated), and `FloatingTranscriptionViewModel.appendFinalizedText(_:)`. The ViewModel takes its entries through an injectable `dictionaryEntries` closure so tests don't write to the user's real dictionary.
+
+The engine deliberately does **not** do fuzzy matching: in a work email, replacing a word the user actually said is worse than one misspelling. Variants are explicit. See `docs/historias/HU-001-diccionario-personalizado.md` for the full story and what v2 leaves out.
+
+### Voice Snippets
+
+Say "agrega mi correo" and the configured email is written. Triggers are explicit phrases, not LLM intent detection: a false positive here does not misspell a word, it **inserts your email into a message where it did not belong**.
+
+Substitution happens in place, so one behavior covers both cases — if the utterance is only the trigger, the result is only the snippet.
+
+What the auth gate protects, and what it does not:
+
+- **Protects** viewing and editing a sensitive body in the window (someone at your unlocked Mac, someone watching a shared screen).
+- **Does not protect** usage: dictating the trigger, or picking it from the menu, pastes without authenticating.
+- **Does not protect** against malware running as the user, which can ask the Keychain for the key the same way the app does.
+
+Sensitive snippets are excluded from the live floating transcription window — it floats over whatever the user is screen-sharing.
+
+The menu carries an **Insertar snippet** submenu because nobody remembers their own voice commands three months later. That path uses `pasteTargetApp`, captured in `menuWillOpen`, and activates the target before posting Cmd+V.
+
+See `docs/historias/HU-002-snippets-por-voz.md` for the full story, the key-storage options that were weighed, and what v2 leaves out.
+
 ### Streaming Real-Time Transcription
 
 The floating window (FloatingTranscriptionWindowController) receives whisper-stream output chunks and renders live updates via FloatingTranscriptionViewModel. The ViewModel implements:
@@ -281,12 +441,17 @@ The floating window (FloatingTranscriptionWindowController) receives whisper-str
 
 ## File Locations
 
-- **Source code:** `/Sources/` (22 Swift files)
+- **Source code:** `/Sources/`
 - **Tests:** `/Tests/RunTests.swift`
+- **Build intermediate:** `./Gluffi_bin` (compiled binary before bundling; safe to delete)
+- **Build output:** `~/Applications/Gluffi.app`
+- **UI preview harness:** `/Tools/PreviewUI.swift` + `preview_ui.sh` (build artifacts go to `$TMPDIR/whisperbar-preview`, never the repo)
 - **Build intermediate:** `./WhisperBar_bin` (compiled binary before bundling; safe to delete)
 - **Build output:** `~/Applications/WhisperBar.app`
 - **Config (UserDefaults):** `com.user.WhisperBar` domain
 - **History (JSON):** `~/Library/Application Support/WhisperBar/history.json`
+- **Dictionary (JSON):** `~/Library/Application Support/WhisperBar/dictionary.json`
+- **Snippets (JSON):** `~/Library/Application Support/WhisperBar/snippets.json` (sensitive bodies encrypted; key in Keychain under service `com.user.WhisperBar`, account `snippets-encryption-key-v1`)
 - **Audio temporary:** `/tmp/whisperbar_recording.wav`
 - **Whisper model:** `~/.whisper-realtime/ggml-*.bin`
 - **LLM model:** `~/.whisper-realtime/*.gguf`
