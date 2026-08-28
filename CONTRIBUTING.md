@@ -46,10 +46,15 @@ cd whisper-bar-macbook
 ### 2. Crear una rama
 
 ```bash
-git checkout -b feature/nombre-descriptivo
+git checkout -b feat/nombre-descriptivo
 # o
 git checkout -b fix/descripcion-del-bug
 ```
+
+La convención completa de nombres, las reglas de alcance ("una rama = un cambio
+defendible") y el registro de ramas activas están en
+[`docs/BRANCHES.md`](docs/BRANCHES.md). Al abrir una rama, agrégala allí con su
+propósito y su alcance; al mezclarla, quítala.
 
 ### 3. Hacer los cambios
 
