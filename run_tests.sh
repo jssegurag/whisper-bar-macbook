@@ -39,6 +39,8 @@ swiftc \
     "$DIR/Sources/TranscriptionHistory.swift" \
     "$DIR/Sources/HistoryView.swift" \
     "$DIR/Sources/HistoryWindowController.swift" \
+    "$DIR/Sources/DictionaryView.swift" \
+    "$DIR/Sources/DictionaryWindowController.swift" \
     "$DIR/Sources/UpdateChecker.swift" \
     "$DIR/Sources/AppDelegate.swift" \
     -o "$DIR/WhisperBar_tests" \

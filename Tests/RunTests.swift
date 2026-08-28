@@ -1390,6 +1390,70 @@ func testDictionaryImportExport() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - 28. Diccionario — Integración con configuración y streaming
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testDictionaryConfigFlag() {
+    suite("Config — Interruptor del diccionario")
+
+    let defaults = UserDefaults.standard
+    let saved = defaults.object(forKey: "dictionaryEnabled")
+
+    defaults.removeObject(forKey: "dictionaryEnabled")
+    assertEqual(Config.shared.dictionaryEnabled, true,
+        "dictionaryEnabled default = true (inerte con diccionario vacío)")
+
+    Config.shared.dictionaryEnabled = false
+    assertEqual(Config.shared.dictionaryEnabled, false,
+        "dictionaryEnabled persiste false")
+    Config.shared.dictionaryEnabled = true
+    assertEqual(Config.shared.dictionaryEnabled, true,
+        "dictionaryEnabled persiste true")
+
+    if let v = saved { defaults.set(v, forKey: "dictionaryEnabled") }
+    else { defaults.removeObject(forKey: "dictionaryEnabled") }
+}
+
+func testDictionaryStreamingIntegration() {
+    suite("Streaming — El diccionario solo toca el texto finalizado")
+
+    let defaults = UserDefaults.standard
+    let saved = defaults.object(forKey: "dictionaryEnabled")
+    Config.shared.dictionaryEnabled = true
+
+    let vm = FloatingTranscriptionViewModel()
+    vm.dictionaryEntries = { [entry("DocFly", ["doc fly"])] }
+
+    vm.appendFinalizedText("subilo a doc fly")
+    assertEqual(vm.finalizedText, "subilo a DocFly",
+        "el texto finalizado se corrige al agregarse")
+    assertEqual(vm.displayText, "subilo a DocFly",
+        "lo mostrado refleja la corrección")
+
+    // El parcial NO se corrige: whisper lo reescribe en cada actualización y
+    // corregirlo haría parpadear la ventana.
+    vm.updatePartial("y luego doc fly")
+    assertEqual(vm.displayText, "subilo a DocFly y luego doc fly",
+        "el texto parcial se muestra crudo, sin corregir")
+
+    // Al finalizar ese mismo fragmento, sí se corrige.
+    vm.appendFinalizedText("y luego doc fly")
+    assertEqual(vm.finalizedText, "subilo a DocFly y luego DocFly",
+        "al finalizar el fragmento se aplica el diccionario")
+
+    // Con el interruptor apagado no se toca nada.
+    Config.shared.dictionaryEnabled = false
+    let off = FloatingTranscriptionViewModel()
+    off.dictionaryEntries = { [entry("DocFly", ["doc fly"])] }
+    off.appendFinalizedText("subilo a doc fly")
+    assertEqual(off.finalizedText, "subilo a doc fly",
+        "con dictionaryEnabled = false el texto sale crudo")
+
+    if let v = saved { defaults.set(v, forKey: "dictionaryEnabled") }
+    else { defaults.removeObject(forKey: "dictionaryEnabled") }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -1440,6 +1504,8 @@ struct TestRunner {
         testDictionarySanitize()
         testDictionarySearchAndConflicts()
         testDictionaryImportExport()
+        testDictionaryConfigFlag()
+        testDictionaryStreamingIntegration()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")
