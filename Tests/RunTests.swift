@@ -919,6 +919,62 @@ func testPillCancelCallback() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - PasteTargetTracker — A quién pegarle
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Doble de una app en ejecución: NSRunningApplication no se puede instanciar.
+private final class FakeApp: PasteTargetCandidate {
+    let processIdentifier: pid_t
+    init(_ pid: pid_t) { self.processIdentifier = pid }
+}
+
+func testPasteTargetTracker() {
+    suite("PasteTargetTracker — Destino del paste (regresión)")
+
+    let selfPid: pid_t = 1000
+    let tracker = PasteTargetTracker(selfPid: selfPid)
+    let editor = FakeApp(2000)
+    let browser = FakeApp(3000)
+    let ourselves = FakeApp(selfPid)
+
+    assert(tracker.lastExternalApp == nil, "arranca sin app externa conocida")
+
+    // El frontmost externo es el destino obvio.
+    assert(tracker.target(frontmost: editor) === editor,
+        "si el frontmost es de otra app, ese es el destino")
+
+    // El caso que rompía la funcionalidad: nuestras ventanas roban el foco
+    // (Preferencias, Historial, Snippets llaman NSApp.activate), así que al
+    // dictar el frontmost somos nosotros y el ⌘V se iba a nuestra propia ventana.
+    tracker.record(editor)
+    assert(tracker.target(frontmost: ourselves) === editor,
+        "si el frontmost somos nosotros, el destino es la última app externa")
+
+    // Nunca nos elegimos a nosotros mismos como destino.
+    tracker.record(ourselves)
+    assert(tracker.lastExternalApp === editor,
+        "record ignora nuestra propia app")
+    assert(tracker.target(frontmost: ourselves) === editor,
+        "seguimos apuntando al editor, no a nosotros")
+
+    // La última externa gana sobre la anterior.
+    tracker.record(browser)
+    assert(tracker.target(frontmost: ourselves) === browser,
+        "la app externa más reciente es la que manda")
+
+    // Sin nada registrado y con nosotros al frente, no hay destino: mejor no
+    // pegar que pegar en el lugar equivocado.
+    let fresh = PasteTargetTracker(selfPid: selfPid)
+    assert(fresh.target(frontmost: ourselves) == nil,
+        "sin app externa conocida no se inventa un destino")
+    assert(fresh.target(frontmost: nil) == nil,
+        "sin frontmost tampoco")
+
+    tracker.record(nil)
+    assert(tracker.target(frontmost: ourselves) === browser,
+        "record(nil) no borra el destino conocido")
+}
+
 // MARK: - 24. Transcriber — Subproceso whisper-cli
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -1490,6 +1546,7 @@ struct TestRunner {
         testConfigFloatingPillDefaults()
         testConfigAudioFeedback()
         testPillCancelCallback()
+        testPasteTargetTracker()
         testTranscriberOutputCleaning()
         testTranscriberErrorMessages()
         testTranscriberStderrFlood()

@@ -207,6 +207,27 @@ Architecture detection is automatic (arm64 vs x86_64).
 
 **After building:** macOS revokes Accessibility permission due to signature change. Re-enable in System Settings → Privacy & Security → Accessibility.
 
+### Preview the UI without installing
+
+```bash
+bash preview_ui.sh
+```
+
+Compiles every file in `Sources/` except `main.swift`, plus `Tools/PreviewUI.swift`
+(its own entry point), and opens the real Preferences and History windows.
+
+Why it exists: `build.sh` re-signs the bundle, which makes macOS revoke Accessibility
+every time. The harness never installs or signs, never instantiates `AppDelegate` (so
+no global hotkeys and no microphone/Accessibility prompts), and runs with `HOME`
+pointed at a throwaway directory seeded from `Tools/sample-dictionary.json` — so
+toggling settings or editing dictionary entries during a design review never touches
+the user's real config.
+
+It deliberately opens only windows that exist on every branch; anything else is
+reached from inside (the dictionary manager, for instance, from its Preferences tab).
+It does **not** replace `build.sh` for validation: it exercises no hotkeys, no
+recording and no whisper-cli.
+
 ### Run Tests
 
 ```bash
@@ -222,6 +243,21 @@ Comprehensive integration test suite covering:
 - End-to-end scenarios: streaming simulation, hallucination filtering
 
 Tests use a simple custom harness (in Tests/RunTests.swift) with colored output and pass/fail counts. All 20+ test suites must pass.
+
+### Continuous Integration
+
+`.github/workflows/ci.yml` runs `run_tests.sh` and `build.sh` on `macos-14` for every
+pull request and every push to `main`. A red PR does not get merged.
+
+`build.sh` runs in CI on purpose, not just a compile check: it catches the easiest
+mistake to make in this project — adding a file to `Sources/` and forgetting to
+register it in `build.sh` (and `run_tests.sh`).
+
+The runner has no `whisper-cpp` and no model, and they are deliberately not installed
+(~3 GB). The subprocess suites install a fake `whisper-cli` themselves, and the suites
+with conditional assertions on detected binaries simply skip those branches — so the
+test total CI prints is lower than on a dev machine. **Never assert a test count**;
+the exit code is the contract.
 
 ### Development Workflow
 
@@ -258,7 +294,7 @@ Tests are organized by module/feature with colored output. No external testing f
 - **Custom dictionary** — normalization, index building, every H1 acceptance criterion (n-gram splits, accents, punctuation, longest-match precedence, inactive entries, idempotence), CRUD, persistence round-trip, import/export, and the streaming rule that only finalized text is rewritten
 - **whisper-cli subprocess** — stderr flood (~270 KB) must not stall the run, non-zero exit surfaces as `processFailed`, `cancel()` from another thread returns `cancelled` promptly. These suites install a fake `whisper-cli` (an `sh` script) via `Config`, so they run without whisper-cpp installed and restore the original UserDefaults afterwards
 
-Run with `bash run_tests.sh`; exit code 0 = all pass, 1 = failures. Currently: 122 tests.
+Run with `bash run_tests.sh`; exit code 0 = all pass, 1 = failures. The runner prints the total on every run — don't hardcode it here, it drifts (this line claimed 122 while `main` actually had 118).
 
 ## Important Details
 
@@ -283,7 +319,14 @@ Exact modifier matching prevents false matches. Requires Accessibility permissio
 
 ### Paste Target Capture
 
-AppDelegate captures the foreground application **before** starting recording, because the floating pill or menu might steal focus. This captured app is the actual target for Cmd+V. Critical for reliability: without this, paste could go to the wrong window.
+AppDelegate captures the foreground application **before** starting recording, because the floating pill or menu might steal focus, and `paste(text:)` activates that app before posting Cmd+V.
+
+Two things this fixes, both of which were broken:
+
+1. `paste(text:)` used to ignore `pasteTargetApp` entirely and post Cmd+V to whatever was frontmost. The captured value was dead state.
+2. `currentPasteTarget()` returned `nil` when WhisperBar itself was frontmost — which is exactly what happens after the user opens Preferences, History or Snippets, since those call `NSApp.activate`. Dictating right after left the transcription in the history with nothing pasted anywhere.
+
+`PasteTargetTracker` subscribes to `NSWorkspace.didActivateApplicationNotification` and remembers the last **external** app, so the target resolves to the frontmost app when it belongs to someone else, and to the last app the user actually worked in when the frontmost is one of our own windows. With no external app ever seen, it returns `nil` — not pasting beats pasting into the wrong window.
 
 ### Cancel Recording / Transcription
 
@@ -325,6 +368,7 @@ The floating window (FloatingTranscriptionWindowController) receives whisper-str
 
 - **Source code:** `/Sources/`
 - **Tests:** `/Tests/RunTests.swift`
+- **UI preview harness:** `/Tools/PreviewUI.swift` + `preview_ui.sh` (build artifacts go to `$TMPDIR/whisperbar-preview`, never the repo)
 - **Build intermediate:** `./WhisperBar_bin` (compiled binary before bundling; safe to delete)
 - **Build output:** `~/Applications/WhisperBar.app`
 - **Config (UserDefaults):** `com.user.WhisperBar` domain
