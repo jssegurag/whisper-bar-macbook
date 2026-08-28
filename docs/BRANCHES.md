@@ -60,6 +60,14 @@ imperativo, ≤ 72 caracteres. El cuerpo explica el *por qué*, no el *qué*.
 - **Depende de:** —
 - **Estado:** listo para PR.
 
+### `feat/custom-dictionary`
+
+- **Propósito:** implementar HU-001 — diccionario personalizado con CRUD y corrección determinística.
+- **Alcance:** `Sources/CustomDictionary.swift`, `DictionaryProcessor.swift`, `DictionaryView.swift`, `DictionaryWindowController.swift` (nuevos); `AppDelegate.swift`, `Config.swift`, `FloatingTranscriptionViewModel.swift` (puntos de inserción); `build.sh`, `run_tests.sh`, `CLAUDE.md`, `Tests/RunTests.swift`.
+- **Historia:** `docs/historias/HU-001-diccionario-personalizado.md`, en la propia rama.
+- **Depende de:** `fix/transcriber-subprocess-reliability` — sale de esa rama, no de `main`. Tocar el pipeline saliendo de `main` reintroduciría en el diff el bug de la tubería sin drenar.
+- **Estado:** implementada, 206 tests en verde.
+
 ---
 
 ## Orden de mezcla y conflictos previstos
@@ -78,6 +86,9 @@ Orden recomendado:
 
 1. `fix/transcriber-subprocess-reliability` — sección de tests nº 24.
 2. `fix/audiorecorder-start-failure` — sección de tests nº 25.
+3. `feat/custom-dictionary` — secciones nº 26 a 28. Ya trae la nº 24 porque sale de la rama del Transcriber, así que solo choca con la nº 25.
+
+`feat/custom-dictionary` también edita `CLAUDE.md` cerca de "Key test areas", igual que esta rama y que las dos de `fix/`. Mismo criterio: conservar todos los bullets.
 
 Resolución del conflicto: conservar **ambas** suites y **ambas** llamadas; no hay
 solapamiento de contenido. Ojo con un detalle: el hunk parte a la mitad de la última
