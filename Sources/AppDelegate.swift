@@ -1,4 +1,5 @@
 import Cocoa
+import AVFoundation
 import CoreGraphics
 import UserNotifications
 
@@ -53,6 +54,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         setupMenuBar()
+        setupNotifications()
 
         // Permisos encadenados: cada uno espera al anterior para no solapar diálogos.
         // Si el permiso ya fue concedido, el callback se llama de inmediato (sin diálogo)
@@ -111,14 +113,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hotkey.setupWhenReady()
 
         if !config.isValid {
-            notify("⚠️ Configuración incompleta — abre el menú para ver el estado")
+            Notifier.shared.post(AppNotification.setupIncomplete(SetupStatus.current(config)))
         }
 
         // Verificar actualizaciones de Homebrew en segundo plano (sin bloquear el inicio).
         DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + 8) {
             UpdateChecker.shared.checkForUpdates { hasUpdate in
                 guard hasUpdate else { return }
-                self.notify("⬆ Hay actualizaciones disponibles — abre Preferencias → Modelos o Corrección LLM")
+                self.postUpdateNotification()
             }
         }
 
@@ -332,7 +334,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             setIconState(.recording)
             PillWindowController.shared.setState(.recording)
         } catch {
-            notify("Error al iniciar grabación: \(error.localizedDescription)")
+            Notifier.shared.post(AppNotification.recordingFailed(
+                permission: AVCaptureDevice.authorizationStatus(for: .audio),
+                hasInputDevice: AVCaptureDevice.default(for: .audio) != nil,
+                systemMessage: error.localizedDescription))
             removeEscMonitor()
             PillWindowController.shared.setState(.idle)
             pasteTargetApp = nil
@@ -444,7 +449,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 case .success(let processed):
                     finalText = processed
                 case .failure(let llmError):
-                    self.notify("LLM error (usando texto original): \(llmError.localizedDescription)")
+                    Notifier.shared.post(AppNotification.llmFailed(llmError.localizedDescription))
                     finalText = text
                 }
                 DispatchQueue.main.async { self.audioFeedback.stop() }
@@ -470,7 +475,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         // Ejecutar acción
                         self.setIconState(.runningAction)
                         let result = self.actionExecutor.execute(intent)
-                        self.notify(result)
+                        Notifier.shared.post(AppNotification.actionResult(result))
                         DispatchQueue.main.async {
                             self.resetIdleUI()
                             self.rebuildMenu()
@@ -486,7 +491,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             case .failure(let error):
                 DispatchQueue.main.async { self.audioFeedback.stop() }
                 guard !self.isCancelled else { return }
-                self.notify("Error: \(error.localizedDescription)")
+                if let content = AppNotification.transcriptionFailed(error) {
+                    Notifier.shared.post(content)
+                }
                 self.resetIdleUI()
             default:
                 DispatchQueue.main.async { self.audioFeedback.stop() }
@@ -529,7 +536,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             case .failure(let error):
                 DispatchQueue.main.async { self.audioFeedback.stop() }
                 guard !self.isCancelled else { return }
-                self.notify("Traducción error: \(error.localizedDescription)")
+                Notifier.shared.post(AppNotification.translationFailed(error.localizedDescription))
                 self.resetIdleUI()
             default:
                 DispatchQueue.main.async { self.audioFeedback.stop() }
@@ -628,6 +635,35 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Notificaciones
 
+    /// Conecta los botones de las notificaciones. Se llama al arrancar.
+    private func setupNotifications() {
+        Notifier.shared.start()
+        Notifier.shared.onConfigure = { [weak self] in
+            DispatchQueue.main.async { self?.openSetup() }
+        }
+        Notifier.shared.onRetryRecording = { [weak self] in
+            DispatchQueue.main.async { self?.handlePillTap() }
+        }
+        Notifier.shared.onUpdate = {
+            UpdateChecker.shared.upgradeWhisper()
+        }
+    }
+
+    /// Nombra el paquete con actualización, en vez de mandar a revisar dos
+    /// pestañas.
+    private func postUpdateNotification() {
+        let checker = UpdateChecker.shared
+        if case .available(let version) = checker.whisperState {
+            Notifier.shared.post(AppNotification.updateAvailable(package: "el motor de voz",
+                                                                version: version))
+        } else if case .available(let version) = checker.llamaState {
+            Notifier.shared.post(AppNotification.updateAvailable(package: "la corrección con IA",
+                                                                version: version))
+        }
+    }
+
+    /// Notificación informativa sin botones. Para todo lo demás hay un caso en
+    /// AppNotification con su acción.
     private func notify(_ msg: String) {
         let content = UNMutableNotificationContent()
         content.title = "Gluffi"
@@ -674,7 +710,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let body = try SnippetStore.shared.body(of: snippet)
             paste(text: body)
         } catch {
-            notify("No se pudo leer «\(snippet.name)»: \(error.localizedDescription)")
+            Notifier.shared.post(AppNotification.snippetUnreadable(name: snippet.name))
         }
     }
 

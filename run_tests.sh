@@ -21,6 +21,8 @@ swiftc \
     "$DIR/Sources/Theme.swift" \
     "$DIR/Sources/IdleWord.swift" \
     "$DIR/Sources/SetupStatus.swift" \
+    "$DIR/Sources/AppNotification.swift" \
+    "$DIR/Sources/Notifier.swift" \
     "$DIR/Sources/SetupComponent.swift" \
     "$DIR/Sources/ModelDownloader.swift" \
     "$DIR/Sources/SetupView.swift" \

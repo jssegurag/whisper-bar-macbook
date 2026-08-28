@@ -2041,6 +2041,69 @@ func testIdleWord() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - AppNotification — Ninguna manda a buscar
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testAppNotificationContent() {
+    suite("AppNotification — Título humano, causa y acción")
+
+    // La regla del rediseño: cada notificación que reporta un problema trae el
+    // botón que lo resuelve.
+    let setup = AppNotification.setupIncomplete(SetupStatus.evaluate(hasEngine: true, hasModel: false))
+    assertEqual(setup.title, "Falta el modelo de voz", "nombra qué falta en el título")
+    assert(setup.actions.contains(.configure), "y trae el botón que lleva a resolverlo")
+    assert(!setup.body.contains("abre el menú"), "ya no manda a buscar en el menú")
+
+    let update = AppNotification.updateAvailable(package: "el motor de voz", version: "1.7.4")
+    assertContains(update.title, "motor de voz", "nombra el paquete, no «hay actualizaciones»")
+    assertContains(update.body, "1.7.4", "dice qué versión")
+    assert(update.actions.contains(.update), "se actualiza desde la notificación")
+
+    // Micrófono: la causa se deduce del permiso, no se copia del sistema.
+    let denegado = AppNotification.recordingFailed(permission: .denied, hasInputDevice: true,
+                                                  systemMessage: "error 561017449")
+    assertEqual(denegado.title, "No se pudo grabar", "título en lenguaje humano")
+    assertContains(denegado.body, "permiso", "explica que falta el permiso")
+    assert(!denegado.body.contains("561017449"), "no repite el código del sistema")
+    assert(denegado.actions.contains(.configure), "lleva a arreglar el permiso")
+
+    let ocupado = AppNotification.recordingFailed(permission: .authorized, hasInputDevice: true,
+                                                 systemMessage: "")
+    assertContains(ocupado.body, "otra app", "con permiso concedido, la causa probable es otra app")
+    assert(ocupado.actions.contains(.retryRecording), "y ofrece reintentar")
+
+    let sinMicro = AppNotification.recordingFailed(permission: .authorized, hasInputDevice: false,
+                                                  systemMessage: "")
+    assertContains(sinMicro.body, "ningún micrófono", "sin dispositivo lo dice")
+    assertEqual(sinMicro.actions.count, 0, "y no ofrece reintentar, porque no serviría")
+
+    // Errores del Transcriber: cada uno tiene su causa y su salida.
+    assert(AppNotification.transcriptionFailed(Transcriber.TranscriberError.cancelled) == nil,
+        "cancelar fue voluntario: no genera notificación")
+
+    let sinConfig = AppNotification.transcriptionFailed(
+        Transcriber.TranscriberError.invalidConfig(whisperCli: "/x", model: "/y"))
+    assertContains(sinConfig?.title ?? "", "Falta configurar", "config inválida se nombra como tal")
+    assert(sinConfig?.actions.contains(.configure) ?? false, "y lleva a Configuración")
+
+    let lento = AppNotification.transcriptionFailed(Transcriber.TranscriberError.timeout(seconds: 60))
+    assertContains(lento?.body ?? "", "60", "el timeout dice cuántos segundos")
+    assertContains(lento?.body ?? "", "más pequeño", "y sugiere la salida concreta")
+
+    let fallo = AppNotification.transcriptionFailed(
+        Transcriber.TranscriberError.processFailed(status: 3, stderr: "a\nerror: failed to load model"))
+    assertContains(fallo?.body ?? "", "failed to load model",
+        "el fallo del binario muestra su última línea, no un código")
+
+    // Categoría derivada de los botones: agregar una notificación nueva no
+    // obliga a registrar nada a mano.
+    assert(setup.categoryIdentifier != update.categoryIdentifier,
+        "distintos botones, distinta categoría")
+    assertEqual(AppNotification.actionResult("hecho").actions.count, 0,
+        "el resultado de una acción por voz es informativo, sin botones")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -2108,6 +2171,7 @@ struct TestRunner {
         testMenuBarIcon()
         testSetupSummary()
         testIdleWord()
+        testAppNotificationContent()
         testModelDownloaderFormatting()
 
         // Summary
