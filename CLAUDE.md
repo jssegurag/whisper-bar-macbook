@@ -14,6 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Hotkey-driven workflow: hold ⌘⌥ to record, release to transcribe
 - Floating pill UI for quick recording toggle
 - Searchable transcription history with timestamps
+- Custom dictionary that rewrites the user's own vocabulary (brands, clients, acronyms) to its canonical form
 
 ## Architecture Overview
 
@@ -107,6 +108,27 @@ The app follows a **modular, single-responsibility** design:
 - Singleton with JSON serialization to Application Support directory
 - Limits history to maxHistoryCount (default 100)
 
+**CustomDictionary.swift** — Custom dictionary model & persistence
+- `DictionaryEntry`: canonical form, variants whisper produces, isActive, createdAt
+- The canonical form is itself a match target: registering "DocFly" already fixes "docfly" and "DOC FLY"
+- JSON persistence in ~/Library/Application Support/WhisperBar/dictionary.json
+- `storageURL` is injectable so tests never touch the user's real dictionary
+- `sanitize` drops empty/duplicate variants and variants that only differ from the canonical by case or accents (the matcher already ignores both)
+- Import/export merges by canonical form; a corrupt file throws and leaves the dictionary untouched
+
+**DictionaryProcessor.swift** — Dictionary rewriting engine (pure functions)
+- Matches windows of 1..N words, longest window first — whisper splits names ("DocFly" arrives as "doc fly"), and "Banco de Bogotá" must win over "Banco"
+- Compares lowercased and accent-folded; always writes the canonical form verbatim
+- Operates on whole tokens, so "documento fly" is never rewritten
+- Preserves edge punctuation and the original whitespace, including newlines and tabs
+- Idempotent: applying it to already-corrected text changes nothing
+
+**DictionaryView.swift & DictionaryWindowController.swift** — Dictionary UI
+- Search, add/edit/delete with confirmation, per-entry active toggle
+- Live test field: type a phrase as whisper would hear it and see the corrected result
+- Warns when another entry already claims a form, naming which one takes precedence
+- Import/export via NSOpenPanel/NSSavePanel
+
 **AudioFeedback.swift** — Sound feedback during transcription
 - Defines `AudioPreset` struct: 6 built-in presets (theta/alpha/beta binaurals, 432Hz, 528Hz, deep drone) + custom file mode
 - Presets synthesized via AVAudioEngine with PCM buffer (1s loop); custom files played via AVAudioPlayer
@@ -131,6 +153,8 @@ AudioRecorder outputs WAV → Transcriber invokes whisper-cli
 Transcriber returns text
   ↓
 [Optional] LLMProcessor corrects with llama-cli
+  ↓
+[If enabled] DictionaryProcessor rewrites custom terms to canonical form
   ↓
 [If enabled] VoiceActionDetector classifies intent via LLM
   ↓
@@ -157,6 +181,7 @@ All settings stored in `com.user.WhisperBar` UserDefaults domain:
 - `audioFeedbackVolume` — volume 0.0–1.0 (default: 1.0)
 - `audioFeedbackPreset` — preset ID: `theta` | `deep` | `528hz` | `alpha` | `beta` | `432hz` | `custom` (default: `theta`)
 - `audioFeedbackCustomPath` — path to user-supplied audio file (used when preset = `custom`)
+- `dictionaryEnabled` — apply the custom dictionary to transcriptions (default: true; inert when the dictionary is empty)
 
 ## Build & Development
 
@@ -176,7 +201,7 @@ All settings stored in `com.user.WhisperBar` UserDefaults domain:
 bash build.sh
 ```
 
-Compiles all 22 Swift source files to single binary, bundles with Info.plist and icon, ad-hoc code signs, and installs to `~/Applications/WhisperBar.app`.
+Compiles every file listed in `build.sh` to a single binary, bundles with Info.plist and icon, ad-hoc code signs, and installs to `~/Applications/WhisperBar.app`. Adding a source file means adding it to both `build.sh` and `run_tests.sh`.
 
 Architecture detection is automatic (arm64 vs x86_64).
 
@@ -266,6 +291,7 @@ Tests are organized by module/feature with colored output. No external testing f
 - **Configuration** — Validation, auto-detection, defaults, audio feedback settings
 - **State management** — ViewModel and window controller state transitions
 - **Cancel callback** — `onPillCancelTapped` assignment and invocation
+- **Custom dictionary** — normalization, index building, every H1 acceptance criterion (n-gram splits, accents, punctuation, longest-match precedence, inactive entries, idempotence), CRUD, persistence round-trip, import/export, and the streaming rule that only finalized text is rewritten
 - **whisper-cli subprocess** — stderr flood (~270 KB) must not stall the run, non-zero exit surfaces as `processFailed`, `cancel()` from another thread returns `cancelled` promptly. These suites install a fake `whisper-cli` (an `sh` script) via `Config`, so they run without whisper-cpp installed and restore the original UserDefaults afterwards
 
 Run with `bash run_tests.sh`; exit code 0 = all pass, 1 = failures. The runner prints the total on every run — don't hardcode it here, it drifts (this line claimed 122 while `main` actually had 118).
@@ -316,6 +342,20 @@ The user can cancel at any point (during recording or while whisper-cli is runni
 
 The Esc monitor is always removed when the operation ends (normally or via cancel) so it doesn't interfere with other apps.
 
+### Custom Dictionary
+
+whisper transcribes phonetically and knows nobody's vocabulary: "Oriuno" comes back as "o riuno", "DocFly" as "doc flai". The dictionary rewrites those to the form the user registered.
+
+Order in the pipeline matters and is deliberate:
+
+- **After the LLM.** The LLM is asked to fix spelling, so it "corrects" the user's own terms back to standard Spanish. Running the dictionary first would let the LLM undo it.
+- **Before VoiceActionDetector.** So "abre Oriuno" resolves to the app.
+- **Only on finalized streaming text**, never on the partial text — whisper-stream rewrites the partial on every update, so correcting it would make the floating window flicker.
+
+Insertion points: `AppDelegate.applyDictionary(_:)` called from `stopAndTranscribe()` and `stopAndTranslate()` (proper nouns are not translated), and `FloatingTranscriptionViewModel.appendFinalizedText(_:)`. The ViewModel takes its entries through an injectable `dictionaryEntries` closure so tests don't write to the user's real dictionary.
+
+The engine deliberately does **not** do fuzzy matching: in a work email, replacing a word the user actually said is worse than one misspelling. Variants are explicit. See `docs/historias/HU-001-diccionario-personalizado.md` for the full story and what v2 leaves out.
+
 ### Streaming Real-Time Transcription
 
 The floating window (FloatingTranscriptionWindowController) receives whisper-stream output chunks and renders live updates via FloatingTranscriptionViewModel. The ViewModel implements:
@@ -326,13 +366,14 @@ The floating window (FloatingTranscriptionWindowController) receives whisper-str
 
 ## File Locations
 
-- **Source code:** `/Sources/` (22 Swift files)
+- **Source code:** `/Sources/`
 - **Tests:** `/Tests/RunTests.swift`
 - **UI preview harness:** `/Tools/PreviewUI.swift` + `preview_ui.sh` (build artifacts go to `$TMPDIR/whisperbar-preview`, never the repo)
 - **Build intermediate:** `./WhisperBar_bin` (compiled binary before bundling; safe to delete)
 - **Build output:** `~/Applications/WhisperBar.app`
 - **Config (UserDefaults):** `com.user.WhisperBar` domain
 - **History (JSON):** `~/Library/Application Support/WhisperBar/history.json`
+- **Dictionary (JSON):** `~/Library/Application Support/WhisperBar/dictionary.json`
 - **Audio temporary:** `/tmp/whisperbar_recording.wav`
 - **Whisper model:** `~/.whisper-realtime/ggml-*.bin`
 - **LLM model:** `~/.whisper-realtime/*.gguf`

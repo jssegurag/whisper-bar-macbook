@@ -20,6 +20,8 @@ swiftc \
     "$DIR/Sources/Config.swift" \
     "$DIR/Sources/AudioRecorder.swift" \
     "$DIR/Sources/Transcriber.swift" \
+    "$DIR/Sources/CustomDictionary.swift" \
+    "$DIR/Sources/DictionaryProcessor.swift" \
     "$DIR/Sources/HotkeyManager.swift" \
     "$DIR/Sources/PasteTargetTracker.swift" \
     "$DIR/Sources/AudioFeedback.swift" \
@@ -38,6 +40,8 @@ swiftc \
     "$DIR/Sources/TranscriptionHistory.swift" \
     "$DIR/Sources/HistoryView.swift" \
     "$DIR/Sources/HistoryWindowController.swift" \
+    "$DIR/Sources/DictionaryView.swift" \
+    "$DIR/Sources/DictionaryWindowController.swift" \
     "$DIR/Sources/UpdateChecker.swift" \
     "$DIR/Sources/AppDelegate.swift" \
     -o "$DIR/WhisperBar_tests" \

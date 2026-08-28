@@ -22,6 +22,10 @@ class FloatingTranscriptionViewModel: ObservableObject {
     /// Texto confirmado acumulado (líneas finalizadas por whisper-stream).
     var finalizedText: String = ""
 
+    /// Entradas del diccionario personalizado a aplicar. Inyectable para que los
+    /// tests no escriban en el diccionario real del usuario.
+    var dictionaryEntries: () -> [DictionaryEntry] = { CustomDictionary.shared.activeEntries }
+
     init() {
         streamer.onFinalizedText = { [weak self] text in
             guard let self else { return }
@@ -81,10 +85,16 @@ class FloatingTranscriptionViewModel: ObservableObject {
             repeatCount = 0
         }
 
+        // Diccionario personalizado: solo sobre texto ya finalizado. Aplicarlo al
+        // parcial haría parpadear la ventana mientras whisper reescribe la frase.
+        let corrected = Config.shared.dictionaryEnabled
+            ? DictionaryProcessor.apply(to: trimmed, entries: dictionaryEntries())
+            : trimmed
+
         if finalizedText.isEmpty {
-            finalizedText = trimmed
+            finalizedText = corrected
         } else {
-            finalizedText += " " + trimmed
+            finalizedText += " " + corrected
         }
 
         // Buffer rolling: mantener solo los últimos N caracteres

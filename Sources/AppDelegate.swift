@@ -254,6 +254,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(withTitle: "Preferencias…", action: #selector(openPreferences), keyEquivalent: ",")
         menu.addItem(withTitle: "Historial…", action: #selector(openHistory), keyEquivalent: "h")
+        menu.addItem(withTitle: "Diccionario…", action: #selector(openDictionary), keyEquivalent: "d")
         menu.addItem(withTitle: "Salir", action: #selector(quit), keyEquivalent: "q")
 
         statusItem.menu = menu
@@ -359,6 +360,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         resetIdleUI()
     }
 
+    // MARK: - Diccionario personalizado
+
+    /// Reescribe los términos registrados por el usuario a su forma canónica.
+    /// Devuelve el texto intacto si el diccionario está apagado o vacío.
+    private func applyDictionary(_ text: String) -> String {
+        guard config.dictionaryEnabled else { return text }
+        return DictionaryProcessor.apply(to: text,
+                                         entries: CustomDictionary.shared.activeEntries)
+    }
+
     // MARK: - Monitor de tecla Escape
 
     private func registerEscMonitor() {
@@ -432,9 +443,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                 guard !self.isCancelled else { return }
 
+                // Diccionario personalizado: después del LLM, que "corregiría" los
+                // términos propios del usuario hacia el español estándar, y antes
+                // del detector de acciones, para que "abre Oriuno" reconozca la app.
+                let correctedText = self.applyDictionary(finalText)
+
                 // Detección de acciones por voz
                 if self.config.voiceActionsEnabled {
-                    let intent = self.actionDetector.detect(text: finalText)
+                    let intent = self.actionDetector.detect(text: correctedText)
                     switch intent {
                     case .none(let originalText):
                         // Sin acción → paste normal
@@ -455,9 +471,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 } else {
                     // Acciones desactivadas → paste normal
                     let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
-                    let entry = TranscriptionEntry(text: finalText, duration: duration, sourceApp: sourceApp)
+                    let entry = TranscriptionEntry(text: correctedText, duration: duration, sourceApp: sourceApp)
                     self.history.add(entry)
-                    self.paste(text: finalText)
+                    self.paste(text: correctedText)
                 }
             case .failure(let error):
                 DispatchQueue.main.async { self.audioFeedback.stop() }
@@ -497,10 +513,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             case .success(let text) where !text.isEmpty:
                 DispatchQueue.main.async { self.audioFeedback.stop() }
                 guard !self.isCancelled else { return }
+                let correctedText = self.applyDictionary(text)
                 let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
-                let entry = TranscriptionEntry(text: text, duration: duration, sourceApp: sourceApp)
+                let entry = TranscriptionEntry(text: correctedText, duration: duration, sourceApp: sourceApp)
                 self.history.add(entry)
-                self.paste(text: text)
+                self.paste(text: correctedText)
             case .failure(let error):
                 DispatchQueue.main.async { self.audioFeedback.stop() }
                 guard !self.isCancelled else { return }
@@ -617,6 +634,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openHistory() {
         HistoryWindowController.shared.showWindow()
+    }
+
+    @objc private func openDictionary() {
+        DictionaryWindowController.shared.showWindow()
     }
 
     @objc private func quit() { NSApp.terminate(nil) }

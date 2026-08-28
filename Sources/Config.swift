@@ -218,6 +218,15 @@ class Config {
         set { defaults.set(newValue, forKey: "audioFeedbackCustomPath") }
     }
 
+    // MARK: - Diccionario personalizado
+
+    /// Si el diccionario personalizado se aplica a las transcripciones.
+    /// Con el diccionario vacío es inerte, así que el default es true.
+    var dictionaryEnabled: Bool {
+        get { defaults.object(forKey: "dictionaryEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "dictionaryEnabled") }
+    }
+
     // MARK: - Validación
 
     var isWhisperCliValid: Bool {
