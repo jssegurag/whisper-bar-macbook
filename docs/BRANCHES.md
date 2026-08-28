@@ -101,7 +101,8 @@ Orden recomendado:
 0. `chore/github-actions-ci` — primero, para que los PRs siguientes se validen solos.
 1. `fix/transcriber-subprocess-reliability` — sección de tests nº 24.
 2. `fix/audiorecorder-start-failure` — sección de tests nº 25.
-3. `feat/custom-dictionary` — secciones nº 26 a 28. Ya trae la nº 24 porque sale de la rama del Transcriber, así que solo choca con la nº 25.
+3. `feat/custom-dictionary` — secciones nº 26 a 28.
+4. `feat/voice-snippets` — secciones nº 29 a 32. Sale del diccionario, así que solo choca con la nº 25. Ya trae la nº 24 porque sale de la rama del Transcriber, así que solo choca con la nº 25.
 
 `feat/custom-dictionary` también edita `CLAUDE.md` cerca de "Key test areas", igual que esta rama y que las dos de `fix/`. Mismo criterio: conservar todos los bullets.
 
@@ -111,6 +112,14 @@ función del lado `HEAD` (la llave de cierre queda en la línea compartida que s
 marcador `>>>>>>>`), así que hay que cerrar esa función con `}` antes de pegar el
 bloque entrante. Tras resolver, `bash run_tests.sh` debe dar **151 tests** (118 en
 `main` + 20 de la primera rama + 13 de la segunda); verificado con un merge de prueba.
+
+### `feat/voice-snippets`
+
+- **Propósito:** implementar HU-002 — snippets por voz con CRUD, importar/exportar y cifrado de los sensibles.
+- **Alcance:** `PhraseRewriter.swift`, `RewritePipeline.swift`, `SecretBox.swift`, `SnippetAuth.swift`, `SnippetStore.swift`, `SnippetsView.swift`, `SnippetsWindowController.swift` (nuevos); `DictionaryProcessor.swift` (pasa a capa delgada), `AppDelegate.swift`, `Config.swift`, `PreferencesView.swift`, `FloatingTranscriptionViewModel.swift`, `DictionaryView.swift`.
+- **Historia:** `docs/historias/HU-002-snippets-por-voz.md`, en la propia rama.
+- **Depende de:** `feat/custom-dictionary`. El primer commit generaliza el motor del diccionario sin cambiar comportamiento —los 68 tests del diccionario pasan sin tocarse, ese es su criterio de revisión— y los siguientes agregan la funcionalidad. Se revisa commit por commit.
+- **Estado:** implementada, 276 tests en verde.
 
 ---
 
@@ -149,5 +158,6 @@ Ramas acordadas pero sin código. Se mueven a "activas" al crearse.
 |------------------------------------|---------------------------------------------------------------------------|
 | `chore/swiftpm-build`              | `Package.swift` en lugar de los 23 archivos listados a mano en `build.sh`; olvidar un archivo nuevo rompe el build. |
 | `refactor/split-preferences-view`  | `PreferencesView.swift` tiene 802 líneas y viola el "un archivo = una responsabilidad" del propio proyecto. |
+| `fix/unused-paste-target`          | **`pasteTargetApp` se captura y nunca se usa.** `AppDelegate` lo asigna en `startRecording()` y `handlePillTap()`, lo limpia en `resetIdleUI()`, y `paste(text:)` nunca lo lee: postea ⌘V a lo que esté al frente. Funciona porque al soltar ⌘⌥ la app del usuario sigue enfocada, pero `CLAUDE.md` afirmaba que era «el destino real del Cmd+V», y eso era falso. `feat/voice-snippets` lo usa en el camino del menú, donde sí hace falta. Queda decidir: usarlo en todos los caminos o borrar el estado muerto. |
 | `feat/dictionary-quick-add`        | **Agregar la variante desde donde se descubre.** Validando HU-001, whisper escribió `dotfly` y hubo que abrir el diccionario y teclear la variante a mano. La app ya sabe qué oyó y qué pegó: podría ofrecer «agregar `dotfly` como variante de…» desde el historial o desde una notificación tras pegar. Requiere un cambio de modelo: `TranscriptionEntry` hoy guarda solo el texto ya corregido, así que habría que conservar también el texto crudo. |
 | `feat/preferences-navigation`      | **La navegación de Preferencias se quedó sin espacio.** Con la pestaña de Diccionario ya son 9 pestañas en un `TabView` de 580 pt: los títulos se comprimen y dejan de leerse. Es un problema de UX distinto al tamaño del archivo — se arregla cambiando el patrón de navegación (barra lateral tipo Ajustes del Sistema, o agrupar en menos pestañas), no partiendo el archivo. Pedido por Jesús al revisar la UI del diccionario el 2026-08-28. |
