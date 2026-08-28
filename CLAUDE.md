@@ -262,6 +262,34 @@ Architecture detection is automatic (arm64 vs x86_64).
 
 **After building:** macOS revokes Accessibility permission due to signature change. Re-enable in System Settings → Privacy & Security → Accessibility.
 
+### Code signing
+
+`build.sh` signs with a stable identity when one exists, and falls back to ad-hoc.
+
+Why it matters: with an ad-hoc signature the app's identity **is its binary hash**,
+so every rebuild looks like a different app to macOS, which then revokes what was
+tied to the old identity — the Accessibility permission the global hotkey needs, and
+the Keychain access that holds the encryption key for sensitive snippets.
+
+`bash signing.sh` walks through creating a self-signed code-signing certificate named
+`Gluffi Dev`. That has to happen in Keychain Access, and the reason is verified, not
+assumed: importing a certificate from the command line leaves it **untrusted for code
+signing**, and `codesign` then reports «no identity found». Certificate Assistant sets
+the trust up as part of creating it.
+
+Override with `GLUFFI_SIGN_IDENTITY="…"` if a different identity is wanted.
+
+**What this deliberately does not solve:** Gatekeeper on someone else's Mac, and
+notarization. Both need a paid Developer ID, which makes no sense while the app is
+internal. When that day comes, two things are needed beyond the certificate:
+
+- `codesign --options runtime --timestamp`, then `xcrun notarytool submit` and
+  `xcrun stapler staple`.
+- **An entitlements file with `com.apple.security.automation.apple-events`.** The
+  hardened runtime that notarization requires blocks Apple Events by default, and the
+  voice actions use them to open apps and create reminders. Without that entitlement
+  that feature dies silently.
+
 ### Preview the UI without installing
 
 ```bash
