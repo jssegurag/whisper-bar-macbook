@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UserNotifications
 
 /// Ventana de Configuración. Se hace una vez y no hace falta volver.
 ///
@@ -14,6 +15,8 @@ struct SetupView: View {
     @State private var installing: SetupComponent.Kind?
     @State private var message: String?
     @State private var keychainResult: String?
+    @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
+    @State private var notificationResult: String?
 
     var onDone: () -> Void = {}
 
@@ -30,6 +33,7 @@ struct SetupView: View {
         .onChange(of: downloader.state) { state in
             if case .finished = state { refresh() }
         }
+        .onAppear { readNotificationStatus() }
     }
 
     // MARK: - Encabezado
@@ -198,6 +202,12 @@ struct SetupView: View {
                 purpose: "Para grabar tu voz.",
                 action: ("Abrir Ajustes", { openPrivacyPane("Privacy_Microphone") }))
             permissionRow(
+                title: "Notificaciones",
+                purpose: notificationResult ?? notificationPurpose,
+                action: notificationStatus == .authorized
+                    ? ("Probar ahora", testNotification)
+                    : ("Abrir Ajustes", { openNotificationSettings() }))
+            permissionRow(
                 title: "Llavero",
                 purpose: keychainResult ?? "Solo si usas snippets sensibles. Se pide al insertar el primero.",
                 action: ("Probar ahora", testKeychain))
@@ -296,6 +306,44 @@ struct SetupView: View {
     private func openPrivacyPane(_ anchor: String) {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)")
         if let url { NSWorkspace.shared.open(url) }
+    }
+
+    /// Por qué existe esta fila: si el permiso está denegado, Gluffi avisa de los
+    /// errores en notificaciones que nadie ve. Falla en silencio, y el usuario
+    /// concluye que la app no avisa de nada.
+    private var notificationPurpose: String {
+        switch notificationStatus {
+        case .authorized, .provisional:
+            return "Para avisarte cuando algo falla, con el botón que lo arregla."
+        case .denied:
+            return "Están desactivadas. Sin ellas Gluffi no puede avisarte de un error: falla en silencio."
+        default:
+            return "Sin conceder todavía. Sin ellas Gluffi no puede avisarte de un error."
+        }
+    }
+
+    private func readNotificationStatus() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async { notificationStatus = settings.authorizationStatus }
+        }
+    }
+
+    /// Lanza una notificación de prueba real, con su botón. Es la única forma de
+    /// comprobar de punta a punta que llegan.
+    private func testNotification() {
+        Notifier.shared.post(AppNotification.Content(
+            title: "Las notificaciones funcionan",
+            body: "Así se verán los avisos de Gluffi. Este trae un botón, como los de verdad.",
+            actions: [.dismiss],
+            identifier: "test"))
+        notificationResult = "Enviada. Si no la ves, revísalas en Ajustes del Sistema."
+    }
+
+    private func openNotificationSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
+            NSWorkspace.shared.open(url)
+        }
+        readNotificationStatus()
     }
 
     /// Intenta tocar el Llavero. Sirve para reintentar tras un rebuild, que es
