@@ -243,7 +243,7 @@ Tests are organized by module/feature with colored output. No external testing f
 - **State management** — ViewModel and window controller state transitions
 - **Cancel callback** — `onPillCancelTapped` assignment and invocation
 
-Run with `bash run_tests.sh`; exit code 0 = all pass, 1 = failures. Currently: 122 tests.
+Run with `bash run_tests.sh`; exit code 0 = all pass, 1 = failures. The runner prints the total on every run — don't hardcode it here, it drifts (this line claimed 122 while `main` actually had 118).
 
 ## Important Details
 
