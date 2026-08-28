@@ -227,7 +227,9 @@ Archivos existentes que se tocan: `AppDelegate.swift` (3 puntos de inserción y 
 
 ## Fuera de alcance (v2)
 
-- **Sesgo de reconocimiento vía `--prompt` de whisper-cli.** Pasarle los términos al binario mejora la materia prima en vez de corregir después. No sustituye a la v1: su resultado no está garantizado. Requiere verificar el flag exacto contra el binario instalado.
+- **Sesgo de reconocimiento vía `--prompt` de whisper-cli.** Pasarle los términos al binario mejora la materia prima en vez de corregir después. No sustituye a la v1: su resultado no está garantizado.
+
+  Flags verificados contra `whisper-cpp` de Homebrew (28-08-2026): `--prompt PROMPT` acepta un prompt inicial de hasta `n_text_ctx/2` tokens — ese tope obliga a decidir qué términos entran cuando el diccionario crece — y `--carry-initial-prompt` lo reinyecta en cada ventana, necesario para que el sesgo no se pierda en audios largos.
 - **Corrección difusa** (distancia de edición o fonética) para atrapar errores que el usuario no anticipó. Debe llegar apagada por defecto y con umbral configurable.
 - **Flexiones automáticas** (plurales, conjugaciones).
 - **Diccionarios por idioma o por app destino.**
