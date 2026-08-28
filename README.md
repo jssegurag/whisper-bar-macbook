@@ -24,6 +24,7 @@ Suelta     →  ⏳ transcribe  →  📋 pega donde está el cursor
 - **Corrección con LLM local** — post-procesamiento opcional con llama.cpp para corregir ortografía y puntuación
 - **Panel de preferencias nativo** — configura todo desde una ventana SwiftUI (sin tocar terminal)
 - **Diccionario personalizado** — registra tus términos propios (marcas, clientes, siglas) y se escriben siempre con la forma correcta, aunque whisper los oiga mal
+- **Snippets por voz** — di «agrega mi correo» y se inserta el texto que definiste; los datos sensibles se guardan cifrados y piden Touch ID para verse
 - **Historial de transcripciones** — busca y reutiliza transcripciones anteriores
 - **Preserva el clipboard** — restaura lo que tenías copiado tras pegar
 - **Feedback sonoro personalizable** — elige entre 6 presets por categoría (relajante, concentración, energético, neutro) o sube tu propio archivo de audio; control de volumen y previsualización integrada
@@ -190,6 +191,7 @@ El menú muestra el estado de la configuración en tiempo real (✅/❌) y da ac
 - **Preferencias** (`⌘,`) — configuración visual completa
 - **Historial** (`⌘H`) — transcripciones anteriores con búsqueda
 - **Diccionario** (`⌘D`) — tus términos propios y cómo se escriben
+- **Snippets** (`⌘S`) — textos preconfigurados, más un submenú para insertarlos con un clic
 
 ---
 
@@ -229,6 +231,50 @@ El archivo vive en `~/Library/Application Support/WhisperBar/dictionary.json`.
 
 ---
 
+## Snippets por voz
+
+Datos que dictas a diario —correo, teléfono, dirección, firma, número de
+contrato— invocados con una frase corta en lugar de deletrearlos.
+
+Menú → **Snippets…** (`⌘S`), o Preferencias → pestaña **Snippets**.
+
+1. **Agregar** un snippet: un nombre, las frases que lo invocan y el texto a
+   insertar (puede ser multilínea, como una firma).
+2. Dictar. `«agrega mi correo»` → `jesus@ejemplo.com`. Si la frase dictada es solo
+   el comando, el resultado es solo el texto.
+3. Si no recuerdas la frase, el menú de la barra trae **Insertar snippet** y lo
+   pega con un clic, sin dictar.
+
+Funciona embebido en una frase más larga: «escríbele a Juan, agrega mi correo y
+quedo atento» inserta el correo y deja el resto intacto.
+
+### Datos sensibles
+
+Marca un snippet como **sensible** con el candado de su fila. Entonces:
+
+- Su contenido se guarda **cifrado** (AES-GCM 256; la llave vive en el Keychain).
+- La lista lo muestra como `••••••••`, y **ver o editar** el valor pide Touch ID o
+  tu contraseña, una sola vez por sesión.
+- **No se exporta.** El archivo exportado indica cuántos omitió, para que no creas
+  que respaldaste todo.
+- **No se inserta en la ventana de transcripción en vivo**, que puede estar sobre
+  una pantalla compartida.
+
+Lo que la protección **no** cubre, y conviene tener claro: al dictar el comando el
+valor se pega **sin pedir autenticación**, igual que desde el menú. Exigirla en
+cada dictado haría la funcionalidad inútil. Lo que protege es *mirar* el valor,
+no usarlo. Si un dato no debe salir nunca sin autenticación, no lo pongas en un
+snippet.
+
+> **Nota sobre el Keychain:** tras cada `bash build.sh` cambia la firma del
+> binario, así que macOS volverá a pedir permiso la primera vez que la app lea un
+> snippet sensible. Es el mismo peaje que el permiso de Accesibilidad y por la
+> misma causa: firma ad-hoc.
+
+El archivo vive en `~/Library/Application Support/WhisperBar/snippets.json`.
+
+---
+
 ## Configuración
 
 ### Panel de preferencias (recomendado)
@@ -241,6 +287,7 @@ Desde el menú de WhisperBar → **Preferencias…** (`⌘,`):
 | Modelos  | Rutas de whisper-cli y modelo, activar/configurar LLM |
 | Audio    | Activar/desactivar · Volumen · Selector de preset por categoría · Archivo personalizado · Previsualización |
 | Diccionario | Activar/desactivar · acceso al administrador de términos |
+| Snippets | Activar/desactivar · acceso al administrador de snippets |
 | Atajos   | Atajo de grabación actual |
 
 ### Terminal (alternativa)
@@ -269,6 +316,9 @@ defaults write com.user.WhisperBar audioFeedbackVolume 0.5
 
 # Desactivar el diccionario personalizado
 defaults write com.user.WhisperBar dictionaryEnabled -bool false
+
+# Desactivar los snippets por voz
+defaults write com.user.WhisperBar snippetsEnabled -bool false
 
 # Preset de sonido: theta | deep | 528hz | alpha | beta | 432hz | custom
 defaults write com.user.WhisperBar audioFeedbackPreset "alpha"
