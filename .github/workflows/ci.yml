@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Un push nuevo cancela la corrida anterior de la misma rama.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests y build
+    # macOS con Apple Silicon, igual que las máquinas del equipo. Fijo la versión
+    # en lugar de macos-latest para que una actualización del runner no rompa
+    # corridas sin que nadie haya tocado el código.
+    runs-on: macos-14
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versión del toolchain
+        run: swiftc --version
+
+      # El runner no tiene whisper-cpp ni el modelo, y no se instalan a propósito:
+      # son ~3 GB de descarga y las suites que ejercitan el subproceso usan un
+      # whisper-cli falso (un script sh) precisamente para no depender de eso.
+      # Los tests con asserts condicionales sobre binarios detectados simplemente
+      # los omiten, así que el total impreso es menor que en una máquina de
+      # desarrollo. Lo que importa es el código de salida, no el conteo.
+      - name: Tests
+        run: bash run_tests.sh
+
+      # Corre el build real, no una compilación aparte: así se detecta que alguien
+      # agregó un archivo a Sources/ y olvidó registrarlo en build.sh, que es el
+      # modo de fallo más fácil de introducir en este proyecto.
+      - name: Build
+        run: bash build.sh
