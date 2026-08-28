@@ -47,6 +47,24 @@ Suelta     →  ⏳ transcribe  →  📋 pega donde está el cursor
 
 ## Instalación
 
+### El camino corto
+
+Si ya tienes Homebrew y las herramientas de línea de comandos de Xcode, son tres
+comandos y un clic:
+
+```bash
+brew install whisper-cpp
+git clone git@github.com:jssegurag/whisper-bar-macbook.git && cd whisper-bar-macbook
+bash signing.sh    # una vez por máquina, ver paso 7
+bash build.sh
+```
+
+Abre `~/Applications/Gluffi.app`. **El modelo de voz lo descarga la propia app**:
+menú de Gluffi → Configuración → Descargar. No hace falta crear carpetas ni elegir
+rutas a mano.
+
+Lo que sigue es el detalle de cada paso, para cuando algo no salga.
+
 ### 1. Homebrew
 
 ```bash
@@ -100,13 +118,17 @@ which whisper-cli   # debe imprimir la ruta del binario
 
 ### 5. Modelo de transcripción
 
-Crea la carpeta de modelos:
+**Lo más fácil: que lo haga la app.** Abre Gluffi → menú → Configuración → fila
+«Modelo de voz» → **Descargar**. Baja `large-v3` con barra de progreso, lo deja en su
+sitio y configura la ruta solo. Puedes cancelar a mitad sin dejar basura.
+
+Si prefieres bajarlo tú, o quieres uno más liviano, crea la carpeta:
 
 ```bash
 mkdir -p ~/.whisper-realtime
 ```
 
-Elige el modelo según tu necesidad:
+y elige según tu necesidad:
 
 | Modelo   | Tamaño | Velocidad | Precisión | Descarga |
 |----------|--------|-----------|-----------|----------|
@@ -125,7 +147,10 @@ curl -L "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3
 
 > Gluffi detecta automáticamente el modelo disponible en `~/.whisper-realtime/`, priorizando los más precisos.
 
-### 6. LLM para corrección (opcional)
+### 6. Corrección con IA y transcripción en vivo (opcional)
+
+Las dos se instalan desde **Configuración**, con un botón, sin tocar la terminal. Lo
+que sigue es el detalle por si prefieres hacerlo a mano.
 
 Gluffi puede pasar la transcripción por un LLM local para corregir ortografía y puntuación automáticamente.
 
@@ -148,7 +173,24 @@ defaults write com.user.WhisperBar llmEnabled -bool true
 
 > Gluffi auto-detecta `llama-cli` y modelos `.gguf` en `~/.whisper-realtime/`.
 
-### 7. Clonar y compilar
+### 7. Firma de código (una vez por máquina)
+
+```bash
+bash signing.sh
+```
+
+Sin esto la app se firma **ad-hoc**, y entonces su identidad para macOS es el hash de
+su binario: cada vez que recompiles, el sistema la ve como una app distinta y **revoca
+el permiso de Accesibilidad y el acceso al Llavero**. Tendrías que volver a
+concederlos en cada build.
+
+El guion te lleva por los cinco pasos para crear un certificado autofirmado en Acceso
+a Llaveros. Es gratis y se hace una sola vez.
+
+Si prefieres saltártelo, la app funciona igual — solo pagarás ese peaje cada vez que
+compiles.
+
+### 8. Clonar y compilar
 
 ```bash
 git clone git@github.com:jssegurag/whisper-bar-macbook.git
@@ -158,16 +200,22 @@ bash build.sh
 
 El script detecta la arquitectura (Apple Silicon / Intel) y crea la app en `~/Applications/Gluffi.app`.
 
-### 8. Permisos (primera vez)
+### 9. Permisos (primera vez)
 
-Al abrir Gluffi el sistema pedirá dos permisos:
+Gluffi usa cuatro permisos del sistema. **Configuración → Permisos del sistema**
+explica para qué sirve cada uno y deja probarlos:
 
-**Accesibilidad** — necesario para detectar el atajo de teclado global:
+| Permiso | Para qué | Cuándo se pide |
+|---|---|---|
+| **Accesibilidad** | Pegar el texto en la app donde estás escribiendo | Al abrir la app |
+| **Micrófono** | Grabar tu voz | La primera vez que grabes |
+| **Notificaciones** | Avisarte cuando algo falla, con el botón que lo arregla | Al abrir la app |
+| **Llavero** | Solo si usas snippets sensibles | Al ver el primero |
+
+Si Accesibilidad no aparece o quedó desactivada:
 > Configuración del Sistema → Privacidad y Seguridad → Accesibilidad → activar Gluffi
 
-**Micrófono** — aparece automáticamente la primera vez que grabes.
-
-### 9. Gatekeeper
+### 10. Gatekeeper
 
 Si aparece "la app no puede abrirse porque es de un desarrollador no identificado":
 
