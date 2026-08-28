@@ -21,6 +21,7 @@ swiftc \
     "$DIR/Sources/AudioRecorder.swift" \
     "$DIR/Sources/Transcriber.swift" \
     "$DIR/Sources/HotkeyManager.swift" \
+    "$DIR/Sources/PasteTargetTracker.swift" \
     "$DIR/Sources/AudioFeedback.swift" \
     "$DIR/Sources/LLMProcessor.swift" \
     "$DIR/Sources/TranslationProcessor.swift" \
