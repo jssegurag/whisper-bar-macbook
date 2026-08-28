@@ -38,8 +38,9 @@ The app follows a **modular, single-responsibility** design:
 - Handles both transcription and translation workflows
 
 **AudioRecorder.swift** — Audio capture from microphone
-- Records in PCM 16kHz mono (Whisper's required format)
-- Tracks recording duration for minimum threshold validation
+- Records in PCM 16kHz mono (Whisper's required format), exposed as `AudioRecorder.recordSettings`
+- `start()` throws `AudioRecorderError.couldNotStart` when `AVAudioRecorder.record()` returns false (mic permission denied or device busy). Ignoring that Bool used to leave the app "recording" against an empty WAV, so the user got a blank transcription with no error
+- Tracks recording duration for minimum threshold validation; `stop()` releases the recorder and returns 0 when nothing was recording
 - Stores temporary WAV file in NSTemporaryDirectory
 
 **Transcriber.swift** — whisper-cli integration
@@ -227,6 +228,7 @@ Tests are organized by module/feature with colored output. No external testing f
 - **Configuration** — Validation, auto-detection, defaults, audio feedback settings
 - **State management** — ViewModel and window controller state transitions
 - **Cancel callback** — `onPillCancelTapped` assignment and invocation
+- **Recording format & start failure** — `recordSettings` is PCM 16 kHz mono 16-bit, and `AudioRecorderError.couldNotStart` carries a message pointing at the Microphone permission (the tests do not open the mic, so they run unattended)
 
 Run with `bash run_tests.sh`; exit code 0 = all pass, 1 = failures. Currently: 122 tests.
 
