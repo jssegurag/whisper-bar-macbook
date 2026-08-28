@@ -283,22 +283,15 @@ struct DictionaryHelpPopover: View {
             Text("Cómo funciona")
                 .font(.headline)
 
-            Text("whisper transcribe fonéticamente y no conoce tu vocabulario. Registra las palabras de tu día a día — marcas, clientes, siglas, apellidos — y se escribirán siempre con la forma que tú definas.")
+            Text("whisper no conoce tu vocabulario. Registra tus términos y se escribirán como los definas.")
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Divider()
-
-            Text("Ejemplos")
-                .font(.caption.weight(.semibold))
-                .foregroundColor(.secondary)
             DictionaryExampleRow(heard: "doc fly",         written: "DocFly")
             DictionaryExampleRow(heard: "o riuno",         written: "Oriuno")
             DictionaryExampleRow(heard: "banco de bogota", written: "Banco de Bogotá")
 
-            Divider()
-
-            Text("No distingue mayúsculas ni acentos al reconocer, pero escribe siempre tu forma exacta. Reconoce frases completas, no solo palabras, y nunca cambia una palabra distinta que las contenga: «documento fly» se queda igual.")
+            Text("Ignora mayúsculas y acentos al reconocer. Reconoce frases, no solo palabras.")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -437,8 +430,11 @@ struct DictionaryEntryForm: View {
             if !conflicts.isEmpty {
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
-                    Text("Ya reclamada por: \(conflicts.map { $0.canonical }.joined(separator: ", ")). Gana la entrada de más palabras; a igualdad, la registrada primero.")
+                    // Decir qué va a pasar y cómo arreglarlo. Las formas en conflicto
+                    // son idénticas, así que gana la registrada antes: la que ya existe.
+                    Text("Esa forma ya la usa \(conflicts.map { "«\($0.canonical)»" }.joined(separator: ", ")), registrada antes. Si guardas así, gana esa y esta entrada no se aplicará. Cambia la variante, o edita la otra entrada.")
                         .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
