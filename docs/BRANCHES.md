@@ -60,6 +60,13 @@ imperativo, ≤ 72 caracteres. El cuerpo explica el *por qué*, no el *qué*.
 - **Depende de:** —
 - **Estado:** listo para PR.
 
+### `docs/ux-audit`
+
+- **Propósito:** inventario y problemas medidos de la interfaz, como insumo de la fase de diseño. No es un diseño.
+- **Alcance:** `docs/AUDITORIA-UX.md`. Sin código.
+- **Depende de:** — (sale de `main`).
+- **Estado:** listo para PR.
+
 ### `chore/github-actions-ci`
 
 - **Propósito:** que los tests se corran solos en cada PR. Hoy solo se ejecutan cuando alguien se acuerda.
@@ -175,6 +182,7 @@ Ramas acordadas pero sin código. Se mueven a "activas" al crearse.
 | Rama propuesta                     | Propósito                                                                 |
 |------------------------------------|---------------------------------------------------------------------------|
 | `chore/swiftpm-build`              | `Package.swift` en lugar de los 23 archivos listados a mano en `build.sh`; olvidar un archivo nuevo rompe el build. |
-| `refactor/split-preferences-view`  | `PreferencesView.swift` tiene 802 líneas y viola el "un archivo = una responsabilidad" del propio proyecto. |
+| `refactor/split-preferences-view`  | `PreferencesView.swift` tiene 806 líneas y diez pantallas, y viola el "un archivo = una responsabilidad" del propio proyecto. Va **primero** en la secuencia de la fase de diseño: rediseñar la navegación encima de este archivo mezcla rediseño y refactor en un diff irrevisable. |
+| `refactor/shared-list-window`      | Historial, Diccionario y Snippets repiten 1.014 líneas de la misma estructura (búsqueda, estado vacío, lista, pie con importar/exportar) con **tres** modelos de interacción distintos. Cada mejora de usabilidad hay que aplicarla tres veces; ya pasó en esta ronda. Ver `docs/AUDITORIA-UX.md`, P2 y P3. |
 | `feat/dictionary-quick-add`        | **Agregar la variante desde donde se descubre.** Validando HU-001, whisper escribió `dotfly` y hubo que abrir el diccionario y teclear la variante a mano. La app ya sabe qué oyó y qué pegó: podría ofrecer «agregar `dotfly` como variante de…» desde el historial o desde una notificación tras pegar. Requiere un cambio de modelo: `TranscriptionEntry` hoy guarda solo el texto ya corregido, así que habría que conservar también el texto crudo. |
-| `feat/preferences-navigation`      | **La navegación de Preferencias se quedó sin espacio.** Con la pestaña de Diccionario ya son 9 pestañas en un `TabView` de 580 pt: los títulos se comprimen y dejan de leerse. Es un problema de UX distinto al tamaño del archivo — se arregla cambiando el patrón de navegación (barra lateral tipo Ajustes del Sistema, o agrupar en menos pestañas), no partiendo el archivo. Pedido por Jesús al revisar la UI del diccionario el 2026-08-28. |
+| `feat/preferences-navigation`      | **La navegación de Preferencias se quedó sin espacio.** Con Diccionario y Snippets ya son 10 pestañas en un `TabView` de 580 pt, y hacen falta ~875: desborda un 51% (medido en `docs/AUDITORIA-UX.md`, P1). Es un problema de UX distinto al tamaño del archivo — se arregla cambiando el patrón de navegación (barra lateral tipo Ajustes del Sistema, o agrupar en menos pestañas), no partiendo el archivo. Pedido por Jesús al revisar la UI del diccionario el 2026-08-28. |
