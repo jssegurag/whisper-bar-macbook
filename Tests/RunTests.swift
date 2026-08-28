@@ -1885,6 +1885,453 @@ func testRewritePipelineOrder() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - SetupStatus — Qué falta, nombrado
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testSetupStatus() {
+    suite("SetupStatus — Nombra qué falta, no «configuración incompleta»")
+
+    let listo = SetupStatus.evaluate(hasEngine: true, hasModel: true)
+    assertEqual(listo.title, "Todo listo", "con todo instalado dice Todo listo")
+    assert(!listo.needsAttention, "y no pide atención")
+
+    let sinModelo = SetupStatus.evaluate(hasEngine: true, hasModel: false)
+    assertEqual(sinModelo.title, "Falta el modelo de voz",
+        "nombra el modelo, no «configuración incompleta»")
+    assert(sinModelo.needsAttention, "pide atención")
+
+    let sinMotor = SetupStatus.evaluate(hasEngine: false, hasModel: true)
+    assertEqual(sinMotor.title, "Falta el motor de voz", "nombra el motor")
+
+    // Solo se reporta UNA cosa: la que hay que resolver ahora. Sin motor da igual
+    // el modelo, así que el motor gana.
+    let sinNada = SetupStatus.evaluate(hasEngine: false, hasModel: false)
+    assertEqual(sinNada.title, "Falta el motor de voz",
+        "sin motor ni modelo se nombra primero el motor, no los dos")
+
+    // El título de la fila del menú no es el del estado: con todo listo la fila
+    // se llama por su destino, porque «Todo listo» no dice a dónde lleva.
+    assertEqual(listo.menuRowTitle, "Configuración",
+        "sin nada pendiente la fila se llama Configuración")
+    assertEqual(sinModelo.menuRowTitle, "Falta el modelo de voz",
+        "con algo pendiente la fila se llama por el problema, no por el destino")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - MenuBarIcon — Seis estados, tres tratamientos
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testMenuBarIcon() {
+    suite("MenuBarIcon — Tratamientos y badge")
+
+    assertEqual(MenuBarIcon.treatment(for: .idle), .idle, "reposo → logo")
+    assertEqual(MenuBarIcon.treatment(for: .recording), .recording, "grabando → onda")
+    for state in [MenuBarIcon.AppState.transcribing, .correcting, .translating, .runningAction] {
+        assertEqual(MenuBarIcon.treatment(for: state), .working,
+            "\(state) → anillo girando (los cuatro comparten tratamiento)")
+    }
+
+    assert(!MenuBarIcon.isAnimated(.idle), "el reposo no necesita temporizador")
+    assert(MenuBarIcon.isAnimated(.recording), "grabando sí")
+    assert(MenuBarIcon.isAnimated(.working), "trabajando sí")
+
+    // Marco único de 16×16 en los tres tratamientos: el icono no debe saltar de
+    // tamaño al cambiar de estado.
+    for treatment in [MenuBarIcon.Treatment.idle, .recording, .working] {
+        let image = MenuBarIcon.image(treatment: treatment, phase: 0.5)
+        assertEqual(image.size.width, 16, "\(treatment): ancho 16")
+        assertEqual(image.size.height, 16, "\(treatment): alto 16")
+    }
+
+    // El reposo sin badge es plantilla: es el único caso en que macOS puede
+    // invertir el icono cuando el menú está abierto. Con badge ámbar deja de
+    // poder serlo, y es un compromiso conocido.
+    assert(MenuBarIcon.image(treatment: .idle, needsSetup: false).isTemplate,
+        "reposo sin badge es imagen de plantilla")
+    assert(!MenuBarIcon.image(treatment: .idle, needsSetup: true).isTemplate,
+        "con badge ámbar deja de ser plantilla: el punto tiene color propio")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - SetupSummary — Los cuatro componentes
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testSetupSummary() {
+    suite("SetupSummary — Encabezado de la ventana de Configuración")
+
+    let todo = SetupSummary.evaluate(engine: true, model: true, llmEnabled: true, llm: true, streaming: true)
+    assertEqual(todo.headline, "Gluffi está listo", "con todo puesto")
+    assertEqual(todo.subhead, "Los 4 componentes están en su sitio.", "resumen de todo listo")
+    assert(todo.canTranscribe, "puede transcribir")
+
+    // El caso del handoff: falta el modelo y los otros tres están.
+    let faltaModelo = SetupSummary.evaluate(engine: true, model: false, llmEnabled: true, llm: true, streaming: true)
+    assertEqual(faltaModelo.headline, "Gluffi está casi listo", "casi listo si falta algo obligatorio")
+    assertEqual(faltaModelo.subhead, "Falta 1 de 4. Los otros 3 ya están listos.",
+        "cuenta cuánto falta y cuánto hay, en vez de decir «configuración incompleta»")
+    assert(!faltaModelo.canTranscribe, "sin modelo no puede transcribir")
+    assertEqual(faltaModelo.missingRequired, 1, "un obligatorio ausente")
+
+    // Solo faltan opcionales: la app funciona, y el texto no debe alarmar.
+    let soloOpcionales = SetupSummary.evaluate(engine: true, model: true, llmEnabled: false, llm: false, streaming: false)
+    assertEqual(soloOpcionales.headline, "Gluffi está listo", "los opcionales no impiden transcribir")
+    assertContains(soloOpcionales.subhead, "2 mejoras opcionales", "los nombra como mejoras, no como fallos")
+    assert(soloOpcionales.canTranscribe, "puede transcribir igual")
+
+    // Etiquetas por fila
+    let componentes = faltaModelo.components
+    assertEqual(componentes.count, 4, "siempre cuatro componentes")
+    assertEqual(componentes.first { $0.kind == .model }?.label, "falta esto",
+        "el que falta se etiqueta «falta esto»")
+    assertEqual(componentes.first { $0.kind == .engine }?.label, "obligatorio",
+        "el motor presente se etiqueta obligatorio")
+    assertEqual(soloOpcionales.components.first { $0.kind == .streaming }?.label, "opcional",
+        "un opcional ausente se etiqueta opcional, no error")
+}
+
+func testModelDownloaderFormatting() {
+    suite("ModelDownloader — Tamaño legible en el botón")
+
+    let texto = ModelDownloader.humanSize(ModelDownloader.defaultModel.bytes)
+    assert(texto.contains("GB"), "el botón dice GB, no bytes: «Descargar (\(texto))»")
+    assertEqual(ModelDownloader.State.idle.progress, nil, "sin descarga no hay progreso")
+    assertEqual(ModelDownloader.State.downloading(received: 50, total: 200).progress, 0.25,
+        "el progreso es recibido/total")
+    assert(ModelDownloader.State.downloading(received: 0, total: 1).isBusy, "descargando está ocupado")
+    assert(!ModelDownloader.State.idle.isBusy, "en reposo no")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - IdleWord — La palabra que no se mueve
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testIdleWord() {
+    suite("IdleWord — Regla anti-distracción")
+
+    assert(IdleWord.words.count >= 4, "hay varias palabras entre las que rotar")
+    assertEqual(IdleWord.word(at: 0), IdleWord.words[0], "word(at:) devuelve la palabra")
+    assertEqual(IdleWord.word(at: IdleWord.words.count), IdleWord.words[0],
+        "el índice da la vuelta sin salirse del arreglo")
+    assertEqual(IdleWord.word(at: -1), IdleWord.words[IdleWord.words.count - 1],
+        "un índice negativo tampoco revienta")
+
+    // Primera vez: se fija el reloj sin cambiar la palabra, para que el usuario
+    // no vea un cambio antes de tener referencia.
+    let primera = IdleWord.rotate(current: 3, lastChange: nil)
+    assertEqual(primera.index, 3, "la primera vez no cambia la palabra")
+    assert(primera.changed, "pero sí registra el momento")
+
+    // La regla que importa: menos de 15 minutos, no se toca.
+    let ahora = Date()
+    let reciente = IdleWord.rotate(current: 2, lastChange: ahora.addingTimeInterval(-60), now: ahora)
+    assertEqual(reciente.index, 2, "a un minuto del último cambio, la palabra se queda")
+    assert(!reciente.changed, "y no se registra cambio")
+
+    let justoAntes = IdleWord.rotate(current: 2, lastChange: ahora.addingTimeInterval(-899), now: ahora)
+    assert(!justoAntes.changed, "a 14:59 todavía no rota")
+
+    let cumplido = IdleWord.rotate(current: 2, lastChange: ahora.addingTimeInterval(-900), now: ahora)
+    assertEqual(cumplido.index, 3, "a los 15 minutos exactos rota a la siguiente")
+    assert(cumplido.changed, "y lo registra")
+
+    // Da la vuelta al llegar al final
+    let ultima = IdleWord.rotate(current: IdleWord.words.count - 1,
+                                 lastChange: ahora.addingTimeInterval(-1000), now: ahora)
+    assertEqual(ultima.index, 0, "desde la última vuelve a la primera")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - AppNotification — Ninguna manda a buscar
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testAppNotificationContent() {
+    suite("AppNotification — Título humano, causa y acción")
+
+    // La regla del rediseño: cada notificación que reporta un problema trae el
+    // botón que lo resuelve.
+    let setup = AppNotification.setupIncomplete(SetupStatus.evaluate(hasEngine: true, hasModel: false))
+    assertEqual(setup.title, "Falta el modelo de voz", "nombra qué falta en el título")
+    assert(setup.actions.contains(.configure), "y trae el botón que lleva a resolverlo")
+    assert(!setup.body.contains("abre el menú"), "ya no manda a buscar en el menú")
+
+    let update = AppNotification.updateAvailable(package: "el motor de voz", version: "1.7.4")
+    assertContains(update.title, "motor de voz", "nombra el paquete, no «hay actualizaciones»")
+    assertContains(update.body, "1.7.4", "dice qué versión")
+    assert(update.actions.contains(.update), "se actualiza desde la notificación")
+
+    // Micrófono: la causa se deduce del permiso, no se copia del sistema.
+    let denegado = AppNotification.recordingFailed(permission: .denied, hasInputDevice: true,
+                                                  systemMessage: "error 561017449")
+    assertEqual(denegado.title, "No se pudo grabar", "título en lenguaje humano")
+    assertContains(denegado.body, "permiso", "explica que falta el permiso")
+    assert(!denegado.body.contains("561017449"), "no repite el código del sistema")
+    assert(denegado.actions.contains(.configure), "lleva a arreglar el permiso")
+
+    let ocupado = AppNotification.recordingFailed(permission: .authorized, hasInputDevice: true,
+                                                 systemMessage: "")
+    assertContains(ocupado.body, "otra app", "con permiso concedido, la causa probable es otra app")
+    assert(ocupado.actions.contains(.retryRecording), "y ofrece reintentar")
+
+    let sinMicro = AppNotification.recordingFailed(permission: .authorized, hasInputDevice: false,
+                                                  systemMessage: "")
+    assertContains(sinMicro.body, "ningún micrófono", "sin dispositivo lo dice")
+    assertEqual(sinMicro.actions.count, 0, "y no ofrece reintentar, porque no serviría")
+
+    // Errores del Transcriber: cada uno tiene su causa y su salida.
+    assert(AppNotification.transcriptionFailed(Transcriber.TranscriberError.cancelled) == nil,
+        "cancelar fue voluntario: no genera notificación")
+
+    let sinConfig = AppNotification.transcriptionFailed(
+        Transcriber.TranscriberError.invalidConfig(whisperCli: "/x", model: "/y"))
+    assertContains(sinConfig?.title ?? "", "Falta configurar", "config inválida se nombra como tal")
+    assert(sinConfig?.actions.contains(.configure) ?? false, "y lleva a Configuración")
+
+    let lento = AppNotification.transcriptionFailed(Transcriber.TranscriberError.timeout(seconds: 60))
+    assertContains(lento?.body ?? "", "60", "el timeout dice cuántos segundos")
+    assertContains(lento?.body ?? "", "más pequeño", "y sugiere la salida concreta")
+
+    let fallo = AppNotification.transcriptionFailed(
+        Transcriber.TranscriberError.processFailed(status: 3, stderr: "a\nerror: failed to load model"))
+    assertContains(fallo?.body ?? "", "failed to load model",
+        "el fallo del binario muestra su última línea, no un código")
+
+    // Categoría derivada de los botones: agregar una notificación nueva no
+    // obliga a registrar nada a mano.
+    assert(setup.categoryIdentifier != update.categoryIdentifier,
+        "distintos botones, distinta categoría")
+    assertEqual(AppNotification.actionResult("hecho").actions.count, 0,
+        "el resultado de una acción por voz es informativo, sin botones")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - StreamingPriority — Tres números detrás de un nombre
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testStreamingPriority() {
+    suite("StreamingPriority — Prioridad en vez de milisegundos")
+
+    assertEqual(StreamingPriority.allCases.count, 3, "tres prioridades")
+    for priority in StreamingPriority.allCases {
+        assert(!priority.title.isEmpty, "\(priority.rawValue) tiene nombre en español")
+        assert(priority.explanation.count > 30,
+            "\(priority.rawValue) explica qué se gana y qué se pierde")
+    }
+
+    // Más preciso = escucha tramos más largos y revisa menos seguido.
+    let rapido = StreamingPriority.fast.parameters
+    let preciso = StreamingPriority.accurate.parameters
+    assert(rapido.step < preciso.step, "rápido revisa más seguido")
+    assert(rapido.length < preciso.length, "preciso escucha tramos más largos")
+    assert(rapido.keep < preciso.keep, "preciso recuerda más del tramo anterior")
+
+    // Ida y vuelta: la UI tiene que poder mostrar la prioridad correcta al abrir.
+    for priority in StreamingPriority.allCases {
+        let p = priority.parameters
+        assertEqual(StreamingPriority.matching(step: p.step, length: p.length, keep: p.keep),
+                    priority, "\(priority.title) se reconoce desde sus valores")
+    }
+
+    // Valores propios: no se debe fingir que corresponden a una prioridad, o la
+    // UI los sobrescribiría sin avisar.
+    assert(StreamingPriority.matching(step: 777, length: 4321, keep: 111) == nil,
+        "unos valores ajustados a mano no coinciden con ninguna prioridad")
+
+    // Los nombres de los parámetros dejan de ser jerga.
+    let labels = StreamingPriority.parameterLabels
+    assertEqual(labels.step.0, "Cada cuánto revisa", "Step tiene nombre en español")
+    assertEqual(labels.length.0, "Cuánto audio escucha a la vez", "Length también")
+    assertEqual(labels.keep.0, "Cuánto recuerda del tramo anterior", "y Keep")
+    for label in [labels.step, labels.length, labels.keep] {
+        assert(!label.1.isEmpty, "cada parámetro explica su efecto")
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - HotkeyBinding — Atajos editables
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testHotkeyBinding() {
+    suite("HotkeyBinding — Símbolos, modos y validación")
+
+    // Orden de macOS: ⌃⌥⇧⌘, no el orden en que se pulsaron.
+    assertEqual(HotkeyBinding.glyphs(for: [.command, .option]), "⌥⌘",
+        "los símbolos salen en el orden de macOS")
+    assertEqual(HotkeyBinding.glyphs(for: [.command, .option, .shift]), "⌥⇧⌘", "con shift")
+    assertEqual(HotkeyBinding.glyphs(for: [.control, .command, .shift, .option]), "⌃⌥⇧⌘",
+        "los cuatro en orden")
+    assertEqual(HotkeyBinding.glyphs(for: []), "", "sin modificadores no hay símbolos")
+
+    // Un solo modificador se dispararía constantemente: ⌘ se usa a cada rato.
+    let unaSola = HotkeyBinding.validate([.command], for: .transcribe, others: [])
+    assertEqual(unaSola, .tooFew, "una sola tecla se rechaza")
+    assert(unaSola.message?.contains("dos teclas") ?? false, "y explica por qué")
+
+    let dos = HotkeyBinding.validate([.command, .option], for: .transcribe, others: [])
+    assertEqual(dos, .ok, "dos teclas valen")
+
+    // Choque entre atajos: hay que nombrar cuál lo tiene.
+    let otros = [HotkeyBinding(action: .translate, modifiers: [.command, .shift], mode: .hold)]
+    let choque = HotkeyBinding.validate([.command, .shift], for: .transcribe, others: otros)
+    assertEqual(choque, .conflict(with: .translate), "detecta el choque")
+    assertContains(choque.message ?? "", "Dictar y traducir", "y nombra la acción que ya la usa")
+
+    // Editar el propio atajo sin cambiarlo no es un choque consigo mismo.
+    let mismo = [HotkeyBinding(action: .transcribe, modifiers: [.command, .option], mode: .hold)]
+    assertEqual(HotkeyBinding.validate([.command, .option], for: .transcribe, others: mismo), .ok,
+        "una acción no choca consigo misma")
+
+    // Los modificadores irrelevantes no cuentan como teclas.
+    assertEqual(HotkeyBinding.validate([.command, .capsLock], for: .transcribe, others: []), .tooFew,
+        "capsLock no cuenta para el mínimo de dos")
+
+    // Modos: la ventana en vivo se abre y se cierra, no se mantiene pulsada.
+    assert(HotkeyBinding.Action.transcribe.supportsModes, "dictar admite los dos modos")
+    assert(HotkeyBinding.Action.translate.supportsModes, "traducir también")
+    assert(!HotkeyBinding.Action.floating.supportsModes,
+        "la transcripción en vivo no admite «mantener pulsado»")
+
+    for mode in HotkeyBinding.Mode.allCases {
+        assert(!mode.title.isEmpty, "\(mode.rawValue) tiene nombre")
+        assert(mode.explanation.count > 20, "\(mode.rawValue) explica cómo se usa")
+    }
+
+    // Los de fábrica son los tres originales, y no chocan entre ellos.
+    let defaults = HotkeyBinding.Action.allCases.map {
+        HotkeyBinding(action: $0, modifiers: $0.defaultModifiers, mode: .hold)
+    }
+    for binding in defaults {
+        assertEqual(HotkeyBinding.validate(binding.modifiers, for: binding.action, others: defaults),
+                    .ok, "el atajo de fábrica de \(binding.action.title) es válido")
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - Historial y ventana en vivo — Textos y formatos
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testHistoryPresentation() {
+    suite("HistoryPresentation — Tres estados vacíos, no dos frases genéricas")
+
+    assertEqual(HistoryPresentation.emptyMessage(total: 0, query: ""),
+        "Aún no has dictado nada. Lo que dictes aparecerá aquí.",
+        "sin nada dictado dice qué va a pasar")
+    assertEqual(HistoryPresentation.emptyMessage(total: 12, query: "factura"),
+        "Nada coincide con «factura».",
+        "buscando sin resultados repite lo buscado")
+    assertEqual(HistoryPresentation.emptyMessage(total: 12, query: "  factura  "),
+        "Nada coincide con «factura».",
+        "y recorta los espacios de la búsqueda")
+    assertEqual(HistoryPresentation.emptyMessage(total: 0, query: "  "),
+        "Aún no has dictado nada. Lo que dictes aparecerá aquí.",
+        "una búsqueda de solo espacios no cuenta como búsqueda")
+
+    assertEqual(HistoryPresentation.resultsLabel(count: 1), "1 resultado", "singular")
+    assertEqual(HistoryPresentation.resultsLabel(count: 4), "4 resultados", "plural")
+
+    assertEqual(HistoryPresentation.duration(3.44), "3.4 s", "segundos con un decimal")
+    assertEqual(HistoryPresentation.duration(75), "1:15", "más de un minuto pasa a reloj")
+
+    // La fecha se omite dentro del mismo día: repetir «hoy» en cada fila es ruido.
+    let ahora = Date()
+    let hoy = HistoryPresentation.time(ahora, now: ahora, locale: Locale(identifier: "es_ES"))
+    let ayer = HistoryPresentation.time(ahora.addingTimeInterval(-86400 * 2), now: ahora,
+                                       locale: Locale(identifier: "es_ES"))
+    assert(!hoy.contains("/"), "hoy se muestra solo la hora: \(hoy)")
+    assert(ayer.contains("/"), "de otro día se muestra también la fecha: \(ayer)")
+}
+
+func testLiveMeta() {
+    suite("LiveMeta — Cabecera de la ventana en vivo")
+
+    assertEqual(LiveMeta.words(in: ""), 0, "texto vacío no tiene palabras")
+    assertEqual(LiveMeta.words(in: "  hola   mundo\n bonito "), 3,
+        "cuenta palabras ignorando espacios y saltos de sobra")
+
+    assertEqual(LiveMeta.clock(0), "0:00", "cero")
+    assertEqual(LiveMeta.clock(138), "2:18", "el ejemplo del handoff")
+    assertEqual(LiveMeta.clock(3723), "1:02:03", "con horas aparece la hora")
+    assertEqual(LiveMeta.clock(-5), "0:00", "un negativo no imprime basura")
+
+    // Nada que informar todavía: «0 palabras · 0:00» es ruido en la cabecera.
+    assertEqual(LiveMeta.summary(words: 0, seconds: 0), "", "sin datos no se muestra nada")
+    assertEqual(LiveMeta.summary(words: 1, seconds: 0), "· 1 palabra", "singular, sin reloj aún")
+    assertEqual(LiveMeta.summary(words: 142, seconds: 138), "· 142 palabras · 2:18",
+        "el formato exacto del handoff")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - Contador de usos del diccionario
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testDictionaryUsageCount() {
+    suite("Diccionario — Contador de usos")
+
+    // El motor dice qué reemplazos aplicó: sin eso no hay contador posible.
+    let entries = [
+        DictionaryEntry(canonical: "DocFly", variants: ["doc fly"]),
+        DictionaryEntry(canonical: "Oriuno", variants: ["oriundo"]),
+    ]
+    let index = DictionaryProcessor.buildIndex(from: entries)
+
+    let uno = PhraseRewriter.applyReporting(to: "subilo a doc fly", index: index)
+    assertEqual(uno.text, "subilo a DocFly", "el texto sale corregido igual que antes")
+    assertEqual(uno.used, ["DocFly"], "reporta solo la entrada que aplicó")
+
+    let dos = PhraseRewriter.applyReporting(to: "doc fly y oriundo", index: index)
+    assertEqual(dos.used, ["DocFly", "Oriuno"], "reporta las dos cuando aplican las dos")
+
+    let ninguna = PhraseRewriter.applyReporting(to: "texto sin términos", index: index)
+    assert(ninguna.used.isEmpty, "sin coincidencias no reporta nada")
+
+    // Repetir el mismo término en una frase cuenta como un uso de esa entrada,
+    // no como dos: lo que interesa es si el término sirve, no cuántas palabras.
+    let repetida = PhraseRewriter.applyReporting(to: "doc fly y doc fly", index: index)
+    assertEqual(repetida.used.count, 1, "el mismo término repetido se reporta una vez")
+
+    // El pipeline completo lo propaga
+    let pipeline = RewritePipeline.applyReporting(
+        to: "subilo a doc fly",
+        dictionary: entries,
+        snippetRules: [PhraseRewriter.Rule(phrases: ["mi correo"], replacement: "yo@ejemplo.com")])
+    assertEqual(pipeline.dictionaryUsed, ["DocFly"], "el pipeline propaga qué términos aplicaron")
+
+    // Y el store los suma y persiste
+    withTempDictionary { dict, file in
+        _ = try? dict.add(canonical: "DocFly", variants: ["doc fly"])
+        _ = try? dict.add(canonical: "Oriuno", variants: [])
+        assertEqual(dict.entries.first?.usageCount, 0, "una entrada nueva empieza en cero")
+
+        dict.recordUsage(of: ["DocFly"])
+        dict.recordUsage(of: ["DocFly"])
+        assertEqual(dict.entries.first { $0.canonical == "DocFly" }?.usageCount, 2,
+            "dos usos suman dos")
+        assertEqual(dict.entries.first { $0.canonical == "Oriuno" }?.usageCount, 0,
+            "y no toca a las demás")
+
+        dict.recordUsage(of: [])
+        assertEqual(dict.entries.first { $0.canonical == "DocFly" }?.usageCount, 2,
+            "un reporte vacío no cambia nada")
+
+        // Sobrevive al archivo
+        let reloaded = CustomDictionary(storageURL: file)
+        assertEqual(reloaded.entries.first { $0.canonical == "DocFly" }?.usageCount, 2,
+            "el contador persiste")
+    }
+
+    // Los archivos guardados antes de que existiera el contador no lo traen y
+    // deben seguir abriéndose.
+    let viejo = "[{\"id\":\"7A1E6C10-0001-4000-A000-000000000001\",\"canonical\":\"DocFly\","
+        + "\"variants\":[\"doc fly\"],\"isActive\":true,\"createdAt\":\"2026-08-20T14:10:00Z\"}]"
+    let url = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("dict_legacy_\(UUID().uuidString).json")
+    try? Data(viejo.utf8).write(to: url)
+    let legacy = CustomDictionary(storageURL: url)
+    assertEqual(legacy.entries.count, 1, "un archivo sin usageCount todavía se lee")
+    assertEqual(legacy.entries.first?.usageCount, 0, "y el contador arranca en cero")
+    try? FileManager.default.removeItem(at: url)
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -1948,6 +2395,17 @@ struct TestRunner {
         testSnippetStoreImportExport()
         testRewritePipelineOrder()
         testPasteTargetTracker()
+        testSetupStatus()
+        testMenuBarIcon()
+        testSetupSummary()
+        testIdleWord()
+        testAppNotificationContent()
+        testStreamingPriority()
+        testHotkeyBinding()
+        testHistoryPresentation()
+        testLiveMeta()
+        testDictionaryUsageCount()
+        testModelDownloaderFormatting()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")

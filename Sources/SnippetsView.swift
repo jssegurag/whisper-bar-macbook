@@ -71,10 +71,12 @@ struct SnippetsView: View {
 
             Divider()
             testBench
+            sensitiveNotice
             Divider()
             footer
         }
-        .frame(minWidth: 560, minHeight: 460)
+        .frame(minWidth: 620, minHeight: 570)
+        .tint(Theme.brand)
         .sheet(isPresented: $isCreating) {
             SnippetForm(snippet: nil, plainBody: "") { name, triggers, body, sensitive, active in
                 do {
@@ -125,6 +127,7 @@ struct SnippetsView: View {
                 .buttonStyle(.plain)
             }
             Button { isCreating = true } label: { Label("Agregar", systemImage: "plus") }
+                .buttonStyle(.borderedProminent)
         }
         .padding(8)
         .background(Color(nsColor: .controlBackgroundColor))
@@ -150,30 +153,55 @@ struct SnippetsView: View {
 
     private var testBench: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Probar")
-                .font(.caption.weight(.semibold))
-                .foregroundColor(.secondary)
+            Text("PROBARLO")
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(.tertiary)
             TextField("Escribe una frase con tu comando…", text: $testInput)
                 .textFieldStyle(.roundedBorder)
+                .frame(height: 28)
             if !testInput.isEmpty {
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: testOutput == testInput ? "equal.circle" : "arrow.turn.down.right")
-                        .foregroundColor(testOutput == testInput ? .secondary : .accentColor)
-                    Text(testOutput == testInput ? "Sin cambios: ningún comando aplica." : testOutput)
-                        .foregroundColor(testOutput == testInput ? .secondary : .primary)
-                        .textSelection(.enabled)
-                }
-                .font(.callout)
+                let applied = testOutput != testInput
+                Text(applied ? "Quedaría \(testOutput)" : "Igual: ningún comando aplica.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(applied ? Theme.brandHigh : .secondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(8)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+    }
+
+    /// Aviso sobre los sensibles.
+    ///
+    /// El handoff proponía «se guardan en el Llavero. Al insertarlos, macOS te
+    /// pedirá autorización», y las dos mitades son falsas en esta
+    /// implementación: en el Llavero vive la llave, no el contenido, e insertar
+    /// no pide autorización a propósito —si lo pidiera en cada dictado, la
+    /// funcionalidad no serviría—. El texto se corrigió para no mentir en la UI.
+    @ViewBuilder
+    private var sensitiveNotice: some View {
+        if snippets.contains(where: \.isSensitive) {
+            HStack(alignment: .top, spacing: 7) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.warn)
+                Text("Los sensibles se guardan cifrados y su llave vive en el Llavero. Insertarlos al dictar no pide autorización; ver su contenido aquí, sí.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 11)
+            .padding(.bottom, 7)
+        }
     }
 
     private var footer: some View {
         HStack {
-            Text("\(snippets.count) snippet\(snippets.count == 1 ? "" : "s")")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            Text(countsLabel)
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
             if let statusMessage {
                 Text("· \(statusMessage)")
                     .font(.caption)
@@ -186,6 +214,15 @@ struct SnippetsView: View {
                 .disabled(snippets.isEmpty)
         }
         .padding(8)
+    }
+
+    private var countsLabel: String {
+        let active = snippets.filter(\.isActive).count
+        let sensitive = snippets.filter(\.isSensitive).count
+        var parts = [snippets.count == 1 ? "1 snippet" : "\(snippets.count) snippets",
+                     "\(active) activo\(active == 1 ? "" : "s")"]
+        if sensitive > 0 { parts.append("\(sensitive) sensible\(sensitive == 1 ? "" : "s")") }
+        return parts.joined(separator: " · ")
     }
 
     // MARK: - Acciones
@@ -297,57 +334,76 @@ struct SnippetRow: View {
     let onEdit: () -> Void
     let onDelete: () -> Void
 
+    @State private var hoveringDelete = false
+
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Toggle("", isOn: Binding(get: { snippet.isActive }, set: { onToggle($0) }))
+                .toggleStyle(.switch)
+                .controlSize(.mini)
                 .labelsHidden()
-                .help(snippet.isActive ? "Activo" : "Inactivo — se ignora al dictar")
+                .help(snippet.isActive ? "Activo" : "Inactivo — no se inserta al dictar")
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(snippet.name)
-                        .fontWeight(.medium)
-                        .foregroundColor(snippet.isActive ? .primary : .secondary)
-                    // Cambiar «sensible» desde la lista: abrir el formulario solo
-                    // para eso serían clics de sobra.
-                    Button { onToggleSensitive(!snippet.isSensitive) } label: {
-                        Image(systemName: snippet.isSensitive ? "lock.fill" : "lock.open")
-                            .font(.caption)
-                            .foregroundColor(snippet.isSensitive ? .accentColor : .secondary)
-                    }
-                    .buttonStyle(.borderless)
-                    .help(snippet.isSensitive
-                          ? "Sensible: cifrado y con autenticación para verse. Clic para quitar la protección."
-                          : "Sin protección. Clic para cifrarlo y exigir autenticación para verlo.")
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 7) {
+                    Text(snippet.name).font(.system(size: 13, weight: .semibold))
+                    sensitiveChip
                 }
-                // El disparador es lo que hay que recordar, así que va visible.
                 Text(snippet.triggers.map { "«\($0)»" }.joined(separator: " · "))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
                     .lineLimit(2)
-                HStack(spacing: 6) {
+                HStack(spacing: 7) {
                     Text(bodyPreview)
-                        .font(.caption)
-                        .foregroundColor(isMasked ? .secondary : .primary)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(.primary.opacity(isMasked ? 0.45 : 0.7))
                         .lineLimit(2)
-                    if isMasked {
-                        Button("Mostrar") { onReveal() }
+                    if snippet.isSensitive {
+                        Button(isMasked ? "Mostrar" : "Ocultar") { onReveal() }
                             .buttonStyle(.link)
-                            .font(.caption)
+                            .font(.system(size: 11))
                     }
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            Button { onEdit() } label: { Image(systemName: "pencil") }
-                .buttonStyle(.borderless)
-                .help("Editar")
-            Button { onDelete() } label: { Image(systemName: "trash") }
-                .buttonStyle(.borderless)
-                .help("Eliminar")
+            Button("Editar") { onEdit() }
+                .controlSize(.small)
+            Button { onDelete() } label: {
+                Image(systemName: "trash")
+                    .foregroundStyle(hoveringDelete ? Theme.danger : .secondary)
+            }
+            .buttonStyle(.borderless)
+            .onHover { hoveringDelete = $0 }
+            .help("Eliminar")
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 5)
+        .opacity(snippet.isActive ? 1 : 0.4)
+    }
+
+    /// Chip pulsable: dice el estado y lo cambia. Un candado decorativo dejaría al
+    /// usuario buscando dónde se marca.
+    private var sensitiveChip: some View {
+        Button { onToggleSensitive(!snippet.isSensitive) } label: {
+            HStack(spacing: 3) {
+                Image(systemName: snippet.isSensitive ? "lock.fill" : "lock.open")
+                    .font(.system(size: 8))
+                Text(snippet.isSensitive ? "Sensible" : "Normal")
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(snippet.isSensitive
+                                       ? Theme.warn.opacity(0.16)
+                                       : Color.white.opacity(0.08)))
+            .foregroundStyle(snippet.isSensitive ? Theme.warn : .secondary)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(snippet.isSensitive
+              ? "Cifrado, y hace falta autenticarse para ver su contenido. Clic para quitar la protección."
+              : "Sin protección. Clic para cifrarlo.")
     }
 }
 

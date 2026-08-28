@@ -23,11 +23,18 @@ final class PillWindowController: NSObject, NSWindowDelegate {
     private let viewModel = PillViewModel()
     private let config = Config.shared
 
-    /// Tamaño del NSPanel que hospeda el pill. El capsule visible es ~180×44 pero
-    /// el panel necesita un margen extra para que el glow (shadow) no se recorte
-    /// en las esquinas rectangulares del panel. La PillView centra el capsule
-    /// dentro del frame disponible.
-    private let pillSize = CGSize(width: 260, height: 120)
+    /// Margen alrededor del contenido para que la sombra no se recorte en las
+    /// esquinas rectangulares del panel.
+    private let shadowMargin: CGFloat = 14
+
+    /// Tamaño del panel. Arranca con una estimación y se ajusta al contenido real
+    /// en cuanto la vista informa su tamaño: el handoff pide que la píldora sea
+    /// del ancho de su contenido, con el mismo margen a los dos lados en los tres
+    /// estados.
+    private var pillSize = CGSize(width: 200, height: 74)
+
+    /// Origen antes de empezar a arrastrar, para aplicar el desplazamiento.
+    private var dragAnchor: NSPoint?
 
     /// Callback disparado cuando el usuario hace click izquierdo en el pill.
     var onPillTapped: (() -> Void)?
@@ -66,7 +73,10 @@ final class PillWindowController: NSObject, NSWindowDelegate {
             rootView: PillView(
                 model: viewModel,
                 onTap: { [weak self] in self?.onPillTapped?() },
-                onCancel: { [weak self] in self?.onPillCancelTapped?() }
+                onCancel: { [weak self] in self?.onPillCancelTapped?() },
+                onDrag: { [weak self] translation in self?.drag(by: translation) },
+                onDragEnded: { [weak self] in self?.endDrag() },
+                onSizeChange: { [weak self] size in self?.resize(to: size) }
             )
         )
         // Fondo transparente del hosting para que solo el círculo sea visible
@@ -87,7 +97,10 @@ final class PillWindowController: NSObject, NSWindowDelegate {
         // hasShadow = false: el NSPanel rectangular dibujaría una sombra cuadrada
         // que asoma por las esquinas del Capsule. El glow lo gestiona PillView.
         p.hasShadow = false
-        p.isMovableByWindowBackground = true
+        // El arrastre lo gestiona PillView con un umbral de 4 px: con
+        // isMovableByWindowBackground, un clic con un temblor de un píxel movía la
+        // píldora en lugar de grabar.
+        p.isMovableByWindowBackground = false
         p.hidesOnDeactivate = false
         p.ignoresMouseEvents = false
         p.isReleasedWhenClosed = false
@@ -118,6 +131,80 @@ final class PillWindowController: NSObject, NSWindowDelegate {
         DispatchQueue.main.async { [weak self] in
             self?.viewModel.state = state
         }
+    }
+
+    /// «Transcribiendo» o «Corrigiendo».
+    func setProcessingLabel(_ label: String) {
+        DispatchQueue.main.async { [weak self] in
+            self?.viewModel.processingLabel = label
+        }
+    }
+
+    /// Nivel de voz para la onda. Lo empuja AppDelegate mientras graba.
+    func setMicLevel(_ level: CGFloat) {
+        viewModel.micLevel = level
+    }
+
+    /// Rota la palabra en reposo, si toca. Se llama al volver a reposo **después**
+    /// de un dictado: la palabra no se mueve mientras está a la vista.
+    func rotateIdleWordAfterDictation() {
+        let result = IdleWord.rotate(current: config.idleWordIndex,
+                                    lastChange: config.idleWordChangedAt)
+        guard result.changed else { return }
+        config.idleWordIndex = result.index
+        config.idleWordChangedAt = Date()
+        DispatchQueue.main.async { [weak self] in
+            self?.viewModel.idleWord = IdleWord.word(at: result.index)
+        }
+    }
+
+    // MARK: - Tamaño y arrastre
+
+    /// Ajusta el panel al contenido, conservando la esquina superior izquierda
+    /// para que la píldora no salte al cambiar de estado.
+    private func resize(to contentSize: CGSize) {
+        let target = CGSize(width: ceil(contentSize.width) + shadowMargin * 2,
+                            height: ceil(contentSize.height) + shadowMargin * 2)
+        guard let panel, abs(target.width - pillSize.width) > 0.5
+                      || abs(target.height - pillSize.height) > 0.5 else {
+            pillSize = target
+            return
+        }
+        let topLeft = NSPoint(x: panel.frame.minX, y: panel.frame.maxY)
+        pillSize = target
+        let origin = clamp(NSPoint(x: topLeft.x, y: topLeft.y - target.height))
+        panel.setFrame(NSRect(origin: origin, size: target), display: true)
+    }
+
+    private func drag(by translation: CGSize) {
+        guard let panel else { return }
+        if dragAnchor == nil { dragAnchor = panel.frame.origin }
+        guard let anchor = dragAnchor else { return }
+        // El eje vertical se invierte: SwiftUI crece hacia abajo, AppKit hacia arriba.
+        let moved = NSPoint(x: anchor.x + translation.width,
+                            y: anchor.y - translation.height)
+        panel.setFrameOrigin(clamp(moved))
+    }
+
+    private func endDrag() {
+        dragAnchor = nil
+        if let panel { persistOrigin(panel.frame.origin) }
+    }
+
+    /// Mantiene la píldora dentro del área visible: 8 px de margen y 34 px arriba,
+    /// para que no quede debajo de la barra de menú.
+    private func clamp(_ origin: NSPoint) -> NSPoint {
+        guard let screen = NSScreen.screens.first(where: {
+            $0.frame.contains(NSPoint(x: origin.x + pillSize.width / 2,
+                                      y: origin.y + pillSize.height / 2))
+        }) ?? NSScreen.main else { return origin }
+        let area = screen.visibleFrame
+        let minX = area.minX + 8
+        let maxX = area.maxX - pillSize.width - 8
+        let minY = area.minY + 8
+        let maxY = area.maxY - pillSize.height - 34
+        return NSPoint(x: min(max(origin.x, minX), max(minX, maxX)),
+                       y: min(max(origin.y, minY), max(minY, maxY)))
     }
 
     // MARK: - Posición

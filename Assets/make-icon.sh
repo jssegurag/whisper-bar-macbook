@@ -14,8 +14,14 @@ rm -rf "$WORK"; mkdir -p "$SET"
 
 # qlmanage es el único rasterizador de SVG que trae macOS de fábrica
 qlmanage -t -s 1024 -o "$WORK" "$DIR/gluffi-icon.svg" >/dev/null 2>&1
-SRC="$WORK/gluffi-icon.svg.png"
-[ -f "$SRC" ] || { echo "✗ qlmanage no pudo rasterizar el SVG"; exit 1; }
+FLAT="$WORK/gluffi-icon.svg.png"
+[ -f "$FLAT" ] || { echo "✗ qlmanage no pudo rasterizar el SVG"; exit 1; }
+
+# qlmanage compone sobre blanco opaco: sin este paso el icono es un cuadro
+# blanco con el logo dentro, y como imagen de plantilla sale un rectángulo
+# sólido. restore-alpha reconstruye la transparencia a partir del color plano.
+SRC="$WORK/gluffi-icon-alpha.png"
+python3 "$DIR/restore-alpha.py" "$FLAT" "$SRC" 7ee800
 
 sips -z 16 16   "$SRC" --out "$SET/icon_16x16.png"      >/dev/null
 sips -z 32 32   "$SRC" --out "$SET/icon_16x16@2x.png"   >/dev/null
@@ -30,3 +36,14 @@ cp "$SRC" "$SET/icon_512x512@2x.png"
 
 iconutil -c icns "$SET" -o "$DIR/../AppIcon.icns"
 echo "✓ AppIcon.icns regenerado"
+
+# Mark para la barra de menú. Va en negro puro: como imagen de plantilla macOS
+# solo usa el canal alfa, y lo recolorea según el tema y el estado destacado.
+qlmanage -t -s 512 -o "$WORK" "$DIR/gluffi-mark.svg" >/dev/null 2>&1
+MARK_FLAT="$WORK/gluffi-mark.svg.png"
+[ -f "$MARK_FLAT" ] || { echo "✗ qlmanage no pudo rasterizar el mark"; exit 1; }
+MARK="$WORK/gluffi-mark-alpha.png"
+python3 "$DIR/restore-alpha.py" "$MARK_FLAT" "$MARK" 000000
+sips -z 16 16 "$MARK" --out "$DIR/GluffiMark.png"    >/dev/null
+sips -z 32 32 "$MARK" --out "$DIR/GluffiMark@2x.png" >/dev/null
+echo "✓ GluffiMark.png y @2x regenerados"

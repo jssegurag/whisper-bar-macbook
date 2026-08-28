@@ -18,6 +18,17 @@ echo "→ Compilando fuentes..."
 swiftc \
     "$DIR/Sources/main.swift" \
     "$DIR/Sources/Config.swift" \
+    "$DIR/Sources/Theme.swift" \
+    "$DIR/Sources/IdleWord.swift" \
+    "$DIR/Sources/SetupStatus.swift" \
+    "$DIR/Sources/AppNotification.swift" \
+    "$DIR/Sources/Notifier.swift" \
+    "$DIR/Sources/SetupComponent.swift" \
+    "$DIR/Sources/ModelDownloader.swift" \
+    "$DIR/Sources/SetupView.swift" \
+    "$DIR/Sources/SetupWindowController.swift" \
+    "$DIR/Sources/MenuBarIcon.swift" \
+    "$DIR/Sources/MenuViews.swift" \
     "$DIR/Sources/AudioRecorder.swift" \
     "$DIR/Sources/Transcriber.swift" \
     "$DIR/Sources/PhraseRewriter.swift" \
@@ -29,6 +40,7 @@ swiftc \
     "$DIR/Sources/SnippetsWindowController.swift" \
     "$DIR/Sources/CustomDictionary.swift" \
     "$DIR/Sources/DictionaryProcessor.swift" \
+    "$DIR/Sources/HotkeyBinding.swift" \
     "$DIR/Sources/HotkeyManager.swift" \
     "$DIR/Sources/PasteTargetTracker.swift" \
     "$DIR/Sources/AudioFeedback.swift" \
@@ -43,9 +55,11 @@ swiftc \
     "$DIR/Sources/PillView.swift" \
     "$DIR/Sources/PillWindowController.swift" \
     "$DIR/Sources/PreferencesView.swift" \
+    "$DIR/Sources/StreamingPriority.swift" \
+    "$DIR/Sources/LaunchAtLogin.swift" \
+    "$DIR/Sources/PreferencesTextSection.swift" \
+    "$DIR/Sources/PreferencesLiveSection.swift" \
     "$DIR/Sources/PreferencesGeneralTab.swift" \
-    "$DIR/Sources/PreferencesModelsTab.swift" \
-    "$DIR/Sources/PreferencesLLMTab.swift" \
     "$DIR/Sources/PreferencesTranslationTab.swift" \
     "$DIR/Sources/PreferencesVoiceActionsTab.swift" \
     "$DIR/Sources/PreferencesAudioTab.swift" \
@@ -54,6 +68,7 @@ swiftc \
     "$DIR/Sources/PreferencesComponents.swift" \
     "$DIR/Sources/PreferencesWindowController.swift" \
     "$DIR/Sources/TranscriptionHistory.swift" \
+    "$DIR/Sources/HistoryPresentation.swift" \
     "$DIR/Sources/HistoryView.swift" \
     "$DIR/Sources/HistoryWindowController.swift" \
     "$DIR/Sources/DictionaryView.swift" \
@@ -76,6 +91,10 @@ mkdir -p "$APP/Contents/Resources"
 cp "$DIR/Gluffi_bin" "$APP/Contents/MacOS/Gluffi"
 cp "$DIR/Info.plist"     "$APP/Contents/Info.plist"
 cp "$DIR/AppIcon.icns"   "$APP/Contents/Resources/AppIcon.icns"
+# Mark de la barra de menú. Se copian los dos tamaños con el sufijo @2x para que
+# NSImage(named:) elija la variante correcta según la pantalla.
+cp "$DIR/Assets/GluffiMark.png"     "$APP/Contents/Resources/GluffiMark.png"
+cp "$DIR/Assets/GluffiMark@2x.png"  "$APP/Contents/Resources/GluffiMark@2x.png"
 
 echo "→ Firmando (ad-hoc)..."
 codesign --force --deep --sign - "$APP"

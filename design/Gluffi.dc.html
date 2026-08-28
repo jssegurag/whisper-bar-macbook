@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin:0; padding:0; background:#0c0e0c; }
+  * { box-sizing:border-box; }
+  a { color:#7ee800; text-decoration:none; }
+  a:hover { color:#a4f53c; text-decoration:underline; }
+  input[type=range] { -webkit-appearance:none; appearance:none; height:4px; border-radius:2px; background:rgba(255,255,255,.16); outline:none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:15px; height:15px; border-radius:50%; background:#f5f5f3; box-shadow:0 1px 3px rgba(0,0,0,.5); cursor:pointer; }
+  input, textarea, select, button { font-family:inherit; }
+  ::selection { background:rgba(126,232,0,.3); }
+  @keyframes gwave { 0%,100% { height:5px } 50% { height:16px } }
+  @keyframes gbreathe { 0%,100% { box-shadow:0 0 0 0 rgba(126,232,0,.35), 0 8px 24px rgba(0,0,0,.5) } 50% { box-shadow:0 0 0 6px rgba(126,232,0,0), 0 8px 24px rgba(0,0,0,.5) } }
+  @keyframes gpulse { 0%,100% { opacity:1; transform:scale(1) } 50% { opacity:.45; transform:scale(.82) } }
+  @keyframes gspin { to { transform:rotate(360deg) } }
+  @keyframes gslide { from { opacity:0; transform:translateX(14px) } to { opacity:1; transform:translateX(0) } }
+  @keyframes gpop { from { opacity:0; transform:scale(.97) translateY(-4px) } to { opacity:1; transform:scale(1) translateY(0) } }
+  @keyframes gsy { 0%,100% { transform:scaleY(.38) } 50% { transform:scaleY(1) } }
+  @keyframes gfadeA { from { opacity:0; transform:translateY(3px) } to { opacity:1; transform:translateY(0) } }
+  @keyframes gfadeB { from { opacity:0; transform:translateY(3px) } to { opacity:1; transform:translateY(0) } }
+</style>
+</helmet>
+
+<div data-screen-label="Escritorio" style="position:relative;width:100%;min-height:100vh;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,sans-serif;color:rgba(255,255,255,.92);background:#0c0e0c">
+
+  <div style="position:absolute;inset:0;background:radial-gradient(120% 90% at 18% 0%,#22281f 0%,#131614 45%,#0b0d0b 100%)"></div>
+  <div style="position:absolute;inset:0;opacity:.5;background:radial-gradient(60% 50% at 80% 85%,rgba(126,232,0,.10) 0%,rgba(126,232,0,0) 70%)"></div>
+
+  <div data-screen-label="Barra de menú" style="position:absolute;top:0;left:0;right:0;height:26px;z-index:60;display:flex;align-items:center;padding:0 12px 0 14px;gap:18px;background:rgba(24,26,24,.62);backdrop-filter:saturate(180%) blur(24px);-webkit-backdrop-filter:saturate(180%) blur(24px);border-bottom:0.5px solid rgba(255,255,255,.07);font-size:13px">
+    <div style="width:15px;height:15px;opacity:.85;background:rgba(255,255,255,.9);-webkit-mask:url(gluffi-mark.svg) center/contain no-repeat;mask:url(gluffi-mark.svg) center/contain no-repeat"></div>
+    <div style="display:flex;gap:16px;opacity:.75;font-weight:600">
+      <span>Finder</span><span style="font-weight:400">Archivo</span><span style="font-weight:400">Edición</span><span style="font-weight:400">Ver</span><span style="font-weight:400">Ir</span><span style="font-weight:400">Ventana</span><span style="font-weight:400">Ayuda</span>
+    </div>
+    <div style="flex:1"></div>
+
+    <div onClick="{{ toggleMenu }}" style="display:flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:5px;cursor:default;background:{{ iconBg }}" style-hover="background:rgba(255,255,255,.12)">
+      <sc-if value="{{ isRecording }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;gap:2.5px;height:16px">
+          <div style="width:3px;height:8px;border-radius:2px;background:#7ee800;animation:gsy 1.05s ease-in-out infinite"></div>
+          <div style="width:3px;height:13px;border-radius:2px;background:#7ee800;animation:gsy 1.05s ease-in-out .14s infinite"></div>
+          <div style="width:3px;height:16px;border-radius:2px;background:#7ee800;animation:gsy 1.05s ease-in-out .28s infinite"></div>
+          <div style="width:3px;height:13px;border-radius:2px;background:#7ee800;animation:gsy 1.05s ease-in-out .14s infinite"></div>
+          <div style="width:3px;height:8px;border-radius:2px;background:#7ee800;animation:gsy 1.05s ease-in-out infinite"></div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ isProcessing }}" hint-placeholder-val="{{ false }}">
+        <div style="position:relative;width:16px;height:16px">
+          <div style="position:absolute;inset:0;background:rgba(255,255,255,.55);-webkit-mask:url(gluffi-mark.svg) center/contain no-repeat;mask:url(gluffi-mark.svg) center/contain no-repeat"></div>
+          <div style="position:absolute;inset:-3px;border-radius:50%;border:1.5px solid rgba(126,232,0,.25);border-top-color:#7ee800;animation:gspin .8s linear infinite"></div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ isIdle }}" hint-placeholder-val="{{ true }}">
+        <div style="width:16px;height:16px;background:rgba(255,255,255,.9);-webkit-mask:url(gluffi-mark.svg) center/contain no-repeat;mask:url(gluffi-mark.svg) center/contain no-repeat"></div>
+      </sc-if>
+      <sc-if value="{{ needsSetup }}" hint-placeholder-val="{{ true }}">
+        <div style="width:6px;height:6px;border-radius:50%;background:#ffd60a;box-shadow:0 0 0 1.5px rgba(24,26,24,.9)"></div>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:12px;opacity:.8">
+      <div style="display:flex;align-items:center;gap:1.5px">
+        <div style="width:22px;height:11px;border:1px solid rgba(255,255,255,.6);border-radius:3px;padding:1.5px"><div style="width:70%;height:100%;background:rgba(255,255,255,.85);border-radius:1px"></div></div>
+        <div style="width:1.5px;height:4px;background:rgba(255,255,255,.6);border-radius:0 1px 1px 0"></div>
+      </div>
+      <span style="font-variant-numeric:tabular-nums">vie 28 ago 9:41</span>
+    </div>
+  </div>
+
+  <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeMenu }}" style="position:absolute;inset:0;z-index:70"></div>
+  </sc-if>
+
+  <sc-if value="{{ menuOpenA }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Menú barra — variante A" style="position:absolute;top:30px;right:120px;width:286px;z-index:80;padding:5px;border-radius:9px;background:rgba(48,49,47,.82);backdrop-filter:saturate(180%) blur(30px);-webkit-backdrop-filter:saturate(180%) blur(30px);border:0.5px solid rgba(255,255,255,.12);box-shadow:0 16px 44px rgba(0,0,0,.5);font-size:13.5px;animation:gpop .12s ease-out">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;padding:3px 4px 5px">
+        <div onClick="{{ pillTap }}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:56px;border-radius:7px;cursor:default;background:{{ tileRecBg }};border:0.5px solid {{ tileRecBorder }}" style-hover="filter:brightness(1.35)">
+          <sc-if value="{{ isRecording }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:2.5px;height:19px">
+              <div style="width:3px;height:9px;border-radius:2px;background:#7ee800;animation:gsy 1.05s ease-in-out infinite"></div>
+              <div style="width:3px;height:15px;border-radius:2px;background:#7ee800;animation:gsy 1.05s ease-in-out .14s infinite"></div>
+              <div style="width:3px;height:19px;border-radius:2px;background:#7ee800;animation:gsy 1.05s ease-in-out .28s infinite"></div>
+              <div style="width:3px;height:15px;border-radius:2px;background:#7ee800;animation:gsy 1.05s ease-in-out .14s infinite"></div>
+              <div style="width:3px;height:9px;border-radius:2px;background:#7ee800;animation:gsy 1.05s ease-in-out infinite"></div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ notRecording }}" hint-placeholder-val="{{ true }}">
+            <div style="width:19px;height:19px;background:{{ tileRecIcon }};-webkit-mask:url(gluffi-mark.svg) center/contain no-repeat;mask:url(gluffi-mark.svg) center/contain no-repeat"></div>
+          </sc-if>
+          <span style="font-size:11px;opacity:.8">{{ tileRecLabel }}</span>
+        </div>
+        <div onClick="{{ toggleLive }}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:56px;border-radius:7px;cursor:default;background:{{ liveTileBg }};border:0.5px solid {{ liveTileBorder }}" style-hover="filter:brightness(1.35)">
+          <div style="display:flex;align-items:center;gap:2.5px;height:19px;color:{{ liveTileDot }}">
+            <div style="width:3px;height:8px;border-radius:2px;background:currentColor"></div>
+            <div style="width:3px;height:14px;border-radius:2px;background:currentColor"></div>
+            <div style="width:3px;height:19px;border-radius:2px;background:currentColor"></div>
+            <div style="width:3px;height:11px;border-radius:2px;background:currentColor"></div>
+          </div>
+          <span style="font-size:11px;opacity:.8">En vivo</span>
+        </div>
+        <div onClick="{{ togglePill }}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:56px;border-radius:7px;cursor:default;background:{{ pillTileBg }};border:0.5px solid {{ pillTileBorder }}" style-hover="filter:brightness(1.35)">
+          <div style="width:23px;height:12px;border-radius:6px;border:1.6px solid {{ pillTileDot }};display:flex;align-items:center;padding:0 2px"><div style="width:5px;height:5px;border-radius:50%;background:{{ pillTileDot }}"></div></div>
+          <span style="font-size:11px;opacity:.8">Píldora</span>
+        </div>
+      </div>
+
+      <div onClick="{{ openSetup }}" style="display:flex;align-items:center;gap:9px;height:26px;padding:0 9px;border-radius:5px;cursor:default" style-hover="background:#7ee800;color:#14200a">
+        <div style="width:16px;display:flex;justify-content:center;flex:none"><div style="width:7px;height:7px;border-radius:50%;background:{{ statusDot }}"></div></div>
+        <span style="flex:1">{{ statusLabel }}</span>
+        <span style="opacity:.45;font-size:11px">›</span>
+      </div>
+
+      <div style="height:1px;margin:5px 9px;background:rgba(255,255,255,.13)"></div>
+
+      <div onClick="{{ toggleSubmenu }}" style="position:relative;display:flex;align-items:center;gap:9px;height:26px;padding:0 9px;border-radius:5px;cursor:default;background:{{ submenuBg }}">
+        <div style="width:16px;flex:none;display:flex;flex-direction:column;align-items:center;gap:2.5px;opacity:.6"><div style="width:11px;height:1.5px;border-radius:1px;background:currentColor"></div><div style="width:8px;height:1.5px;border-radius:1px;background:currentColor"></div><div style="width:11px;height:1.5px;border-radius:1px;background:currentColor"></div></div>
+        <span style="flex:1">Insertar snippet</span>
+        <span style="opacity:.55;font-size:11px">▸</span>
+        <sc-if value="{{ submenuOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;top:-6px;left:100%;width:210px;padding:5px;border-radius:9px;background:rgba(56,57,55,.94);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);border:0.5px solid rgba(255,255,255,.12);box-shadow:0 16px 44px rgba(0,0,0,.5)">
+            <sc-for list="{{ snippetMenu }}" as="s" hint-placeholder-count="3">
+              <div onClick="{{ s.onClick }}" style="display:flex;align-items:center;gap:8px;height:24px;padding:0 9px;border-radius:5px" style-hover="background:#7ee800;color:#14200a">
+                <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.name }}</span>
+                <sc-if value="{{ s.locked }}" hint-placeholder-val="{{ false }}">
+                  <div style="width:8px;height:7px;border-radius:1.5px;background:currentColor;opacity:.55;position:relative;flex:none"><div style="position:absolute;left:1.5px;top:-3px;width:5px;height:4px;border:1.2px solid currentColor;border-bottom:none;border-radius:2px 2px 0 0"></div></div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="height:1px;margin:5px 9px;background:rgba(255,255,255,.13)"></div>
+
+      <div onClick="{{ openHistory }}" style="display:flex;align-items:center;gap:9px;height:26px;padding:0 9px;border-radius:5px;cursor:default" style-hover="background:#7ee800;color:#14200a">
+        <div style="width:16px;flex:none;display:flex;justify-content:center;opacity:.6"><div style="width:12px;height:12px;border:1.3px solid currentColor;border-radius:50%;position:relative"><div style="position:absolute;left:4.3px;top:2px;width:1.2px;height:4px;background:currentColor"></div><div style="position:absolute;left:4.6px;top:5.2px;width:3.5px;height:1.2px;background:currentColor"></div></div></div>
+        <span style="flex:1">Historial…</span><span style="opacity:.5">⌘H</span>
+      </div>
+      <div onClick="{{ openDict }}" style="display:flex;align-items:center;gap:9px;height:26px;padding:0 9px;border-radius:5px;cursor:default" style-hover="background:#7ee800;color:#14200a">
+        <div style="width:16px;flex:none;display:flex;justify-content:center;opacity:.6"><div style="width:12px;height:12px;border:1.3px solid currentColor;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;line-height:1">A</div></div>
+        <span style="flex:1">Diccionario…</span><span style="opacity:.5">⌘D</span>
+      </div>
+      <div onClick="{{ openSnippets }}" style="display:flex;align-items:center;gap:9px;height:26px;padding:0 9px;border-radius:5px;cursor:default" style-hover="background:#7ee800;color:#14200a">
+        <div style="width:16px;flex:none;display:flex;justify-content:center;opacity:.6"><div style="width:12px;height:12px;border:1.3px solid currentColor;border-radius:3px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px"><div style="width:6px;height:1.2px;background:currentColor"></div><div style="width:6px;height:1.2px;background:currentColor"></div></div></div>
+        <span style="flex:1">Snippets…</span><span style="opacity:.5">⌘S</span>
+      </div>
+      <div onClick="{{ openPrefs }}" style="display:flex;align-items:center;gap:9px;height:26px;padding:0 9px;border-radius:5px;cursor:default" style-hover="background:#7ee800;color:#14200a">
+        <div style="width:16px;flex:none;display:flex;flex-direction:column;align-items:center;gap:4px;opacity:.6"><div style="position:relative;width:12px;height:1.5px;background:currentColor;border-radius:1px"><div style="position:absolute;left:7px;top:-1.8px;width:5px;height:5px;border-radius:50%;background:currentColor"></div></div><div style="position:relative;width:12px;height:1.5px;background:currentColor;border-radius:1px"><div style="position:absolute;left:1px;top:-1.8px;width:5px;height:5px;border-radius:50%;background:currentColor"></div></div></div>
+        <span style="flex:1">Preferencias…</span><span style="opacity:.5">⌘,</span>
+      </div>
+
+      <div style="height:1px;margin:5px 9px;background:rgba(255,255,255,.13)"></div>
+
+      <div onClick="{{ closeMenu }}" style="display:flex;align-items:center;gap:8px;height:26px;padding:0 9px;border-radius:5px;cursor:default" style-hover="background:#7ee800;color:#14200a">
+        <span style="width:16px;flex:none"></span><span style="flex:1">Salir de Gluffi</span><span style="opacity:.5">⌘Q</span>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ menuOpenB }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Menú barra — variante B" style="position:absolute;top:32px;right:110px;width:322px;z-index:80;padding:14px;border-radius:14px;background:rgba(34,36,33,.9);backdrop-filter:saturate(180%) blur(30px);-webkit-backdrop-filter:saturate(180%) blur(30px);border:0.5px solid rgba(255,255,255,.12);box-shadow:0 22px 60px rgba(0,0,0,.55);animation:gpop .14s ease-out">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+        <div style="width:17px;height:17px;background:#7ee800;-webkit-mask:url(gluffi-mark.svg) center/contain no-repeat;mask:url(gluffi-mark.svg) center/contain no-repeat"></div>
+        <span style="font-size:13.5px;font-weight:600;letter-spacing:.2px">Gluffi</span>
+        <div style="flex:1"></div>
+        <div onClick="{{ openSetup }}" style="display:flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:11px;background:rgba(255,255,255,.07);font-size:11.5px;cursor:default" style-hover="background:rgba(255,255,255,.14)">
+          <div style="width:6px;height:6px;border-radius:50%;background:{{ statusDot }}"></div>
+          <span style="opacity:.8">{{ statusLabel }}</span>
+        </div>
+      </div>
+
+      <div onClick="{{ pillTap }}" style="display:flex;align-items:center;gap:13px;padding:13px;border-radius:11px;background:{{ recordCardBg }};border:0.5px solid rgba(255,255,255,.09);cursor:default">
+        <div style="position:relative;width:46px;height:46px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;background:{{ recordBtnBg }};animation:{{ recordBtnAnim }}">
+          <sc-if value="{{ isRecording }}" hint-placeholder-val="{{ false }}">
+            <div style="width:15px;height:15px;border-radius:3px;background:#fff"></div>
+          </sc-if>
+          <sc-if value="{{ notRecording }}" hint-placeholder-val="{{ true }}">
+            <div style="width:24px;height:24px;background:#16210b;-webkit-mask:url(gluffi-mark.svg) center/contain no-repeat;mask:url(gluffi-mark.svg) center/contain no-repeat"></div>
+          </sc-if>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600;margin-bottom:3px">{{ recordLabel }}</div>
+          <div style="font-size:11.5px;opacity:.55;line-height:1.35">{{ recordHint }}</div>
+        </div>
+        <sc-if value="{{ showTimer }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.3px;opacity:.9">{{ timer }}</div>
+        </sc-if>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+        <div onClick="{{ toggleLive }}" style="display:flex;align-items:center;gap:8px;padding:10px 11px;border-radius:9px;background:{{ liveTileBg }};border:0.5px solid {{ liveTileBorder }};cursor:default">
+          <div style="width:7px;height:7px;border-radius:50%;background:{{ liveTileDot }}"></div>
+          <span style="flex:1;font-size:12.5px">En vivo</span>
+          <span style="font-size:11px;opacity:.45">⌘T</span>
+        </div>
+        <div onClick="{{ togglePill }}" style="display:flex;align-items:center;gap:8px;padding:10px 11px;border-radius:9px;background:{{ pillTileBg }};border:0.5px solid {{ pillTileBorder }};cursor:default">
+          <div style="width:7px;height:7px;border-radius:50%;background:{{ pillTileDot }}"></div>
+          <span style="flex:1;font-size:12.5px">Píldora</span>
+          <span style="font-size:11px;opacity:.45">⌘⌥P</span>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
+        <div onClick="{{ openHistory }}" style="padding:11px 10px;border-radius:9px;background:rgba(255,255,255,.05);cursor:default" style-hover="background:rgba(255,255,255,.11)">
+          <div style="font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.3px">{{ historyCount }}</div>
+          <div style="font-size:11px;opacity:.55;margin-top:2px">Historial</div>
+        </div>
+        <div onClick="{{ openDict }}" style="padding:11px 10px;border-radius:9px;background:rgba(255,255,255,.05);cursor:default" style-hover="background:rgba(255,255,255,.11)">
+          <div style="font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.3px">{{ dictCount }}</div>
+          <div style="font-size:11px;opacity:.55;margin-top:2px">Diccionario</div>
+        </div>
+        <div onClick="{{ openSnippets }}" style="padding:11px 10px;border-radius:9px;background:rgba(255,255,255,.05);cursor:default" style-hover="background:rgba(255,255,255,.11)">
+          <div style="font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.3px">{{ snipCount }}</div>
+          <div style="font-size:11px;opacity:.55;margin-top:2px">Snippets</div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;padding-top:11px;border-top:0.5px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;opacity:.4;flex:1">{{ footerSummary }}</span>
+        <div onClick="{{ openPrefs }}" style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:6px;font-size:12px;background:rgba(255,255,255,.08);cursor:default" style-hover="background:rgba(255,255,255,.16)">Preferencias</div>
+        <div onClick="{{ closeMenu }}" style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:6px;font-size:12px;opacity:.6;cursor:default" style-hover="background:rgba(255,255,255,.1);opacity:1">Salir</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ winSetup }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Configuración inicial" style="position:absolute;left:50%;top:calc(50% + 13px);transform:translate(-50%,-50%);max-height:calc(100vh - 86px);width:580px;z-index:40;display:flex;flex-direction:column;border-radius:11px;overflow:hidden;background:#252725;border:0.5px solid rgba(255,255,255,.09);box-shadow:0 0 0 0.5px rgba(0,0,0,.8),0 30px 70px rgba(0,0,0,.6)">
+      <div style="flex:none;height:40px;display:flex;align-items:center;gap:8px;padding:0 13px;background:rgba(62,64,61,.92);border-bottom:0.5px solid rgba(0,0,0,.45)">
+        <div onClick="{{ closeWin }}" style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div>
+        <div style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.16)"></div>
+        <div style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.16)"></div>
+        <div style="flex:1;text-align:center;font-size:13px;font-weight:600;margin-left:-56px">Configuración</div>
+      </div>
+
+      <div style="flex:1;overflow:auto;padding:22px 24px 20px">
+        <div style="display:flex;align-items:center;gap:13px;margin-bottom:6px">
+          <div style="width:34px;height:34px;background:#7ee800;-webkit-mask:url(gluffi-mark.svg) center/contain no-repeat;mask:url(gluffi-mark.svg) center/contain no-repeat"></div>
+          <div>
+            <div style="font-size:17px;font-weight:600;letter-spacing:-.2px">Gluffi está casi listo</div>
+            <div style="font-size:12.5px;opacity:.55;margin-top:2px">{{ setupSummary }}</div>
+          </div>
+        </div>
+        <p style="font-size:12.5px;line-height:1.5;opacity:.5;margin:14px 0 16px;max-width:46ch;text-wrap:pretty">Esto se configura una vez. Después no hace falta volver aquí: si algo se rompe, Gluffi te avisa y te trae directo a esta ventana.</p>
+
+        <div style="border-radius:9px;overflow:hidden;background:rgba(255,255,255,.045);border:0.5px solid rgba(255,255,255,.07)">
+          <sc-for list="{{ setupItems }}" as="it" hint-placeholder-count="4">
+            <div style="display:flex;align-items:flex-start;gap:12px;padding:14px 15px;border-top:0.5px solid rgba(255,255,255,.07)">
+              <div style="width:18px;height:18px;flex:none;margin-top:1px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:{{ it.badgeBg }};color:{{ it.badgeFg }}">{{ it.badge }}</div>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:baseline;gap:7px">
+                  <span style="font-size:13.5px;font-weight:600">{{ it.title }}</span>
+                  <span style="font-size:11px;opacity:.4">{{ it.tag }}</span>
+                </div>
+                <div style="font-size:12px;opacity:.5;margin-top:3px;line-height:1.45;text-wrap:pretty">{{ it.desc }}</div>
+                <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;opacity:.42;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ it.path }}</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;flex:none;align-items:stretch">
+                <div onClick="{{ it.onPrimary }}" style="height:24px;padding:0 11px;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:12px;font-weight:600;white-space:nowrap;background:{{ it.primaryBg }};color:{{ it.primaryFg }};cursor:default" style-hover="filter:brightness(1.12)">{{ it.primary }}</div>
+                <sc-if value="{{ it.secondary }}" hint-placeholder-val="{{ false }}">
+                  <div style="height:24px;padding:0 11px;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:12px;background:rgba(255,255,255,.09);cursor:default" style-hover="background:rgba(255,255,255,.17)">{{ it.secondary }}</div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;opacity:.4;margin:22px 0 9px">Permisos del sistema</div>
+        <div style="border-radius:9px;overflow:hidden;background:rgba(255,255,255,.045);border:0.5px solid rgba(255,255,255,.07)">
+          <sc-for list="{{ permItems }}" as="p" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:12px;padding:11px 15px;border-top:0.5px solid rgba(255,255,255,.07)">
+              <div style="width:18px;height:18px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:{{ p.badgeBg }};color:{{ p.badgeFg }}">{{ p.badge }}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:600">{{ p.title }}</div>
+                <div style="font-size:11.5px;opacity:.5;margin-top:2px">{{ p.desc }}</div>
+              </div>
+              <sc-if value="{{ p.action }}" hint-placeholder-val="{{ false }}">
+                <div style="height:24px;padding:0 11px;display:flex;align-items:center;border-radius:6px;font-size:12px;background:rgba(255,255,255,.09);cursor:default" style-hover="background:rgba(255,255,255,.17)">{{ p.action }}</div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="flex:none;display:flex;align-items:center;gap:9px;padding:12px 16px;background:rgba(255,255,255,.03);border-top:0.5px solid rgba(255,255,255,.08)">
+        <span style="flex:1;font-size:11.5px;opacity:.42">Comprobado hace un momento</span>
+        <div onClick="{{ recheck }}" style="height:26px;padding:0 12px;display:flex;align-items:center;border-radius:6px;font-size:12.5px;background:rgba(255,255,255,.09);cursor:default" style-hover="background:rgba(255,255,255,.17)">Comprobar de nuevo</div>
+        <div onClick="{{ finishSetup }}" style="height:26px;padding:0 15px;display:flex;align-items:center;border-radius:6px;font-size:12.5px;font-weight:600;background:#7ee800;color:#14200a;cursor:default" style-hover="filter:brightness(1.1)">Listo</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ winPrefsA }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Preferencias — variante A" style="position:absolute;left:50%;top:calc(50% + 13px);transform:translate(-50%,-50%);max-height:calc(100vh - 86px);width:760px;height:552px;z-index:40;display:flex;flex-direction:column;border-radius:11px;overflow:hidden;background:#252725;border:0.5px solid rgba(255,255,255,.09);box-shadow:0 0 0 0.5px rgba(0,0,0,.8),0 30px 70px rgba(0,0,0,.6)">
+      <div style="flex:none;height:40px;display:flex;align-items:center;gap:8px;padding:0 13px;background:rgba(62,64,61,.92);border-bottom:0.5px solid rgba(0,0,0,.45)">
+        <div onClick="{{ closeWin }}" style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div>
+        <div style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.16)"></div>
+        <div style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.16)"></div>
+        <div style="flex:1;text-align:center;font-size:13px;font-weight:600;margin-left:-56px">{{ prefsTabTitle }}</div>
+      </div>
+      <div style="flex:1;display:flex;min-height:0">
+        <div style="width:206px;flex:none;padding:10px 9px;background:rgba(255,255,255,.03);border-right:0.5px solid rgba(255,255,255,.08);display:flex;flex-direction:column;gap:2px">
+          <sc-for list="{{ prefTabs }}" as="t" hint-placeholder-count="7">
+            <div onClick="{{ t.onClick }}" style="display:flex;align-items:center;gap:10px;height:29px;padding:0 9px;border-radius:6px;cursor:default;background:{{ t.bg }}" style-hover="background:rgba(255,255,255,.07)">
+              <div style="width:6px;height:6px;border-radius:2px;flex:none;background:{{ t.dot }}"></div>
+              <span style="flex:1;font-size:13px">{{ t.label }}</span>
+              <span style="font-size:11px;opacity:.4">{{ t.hint }}</span>
+            </div>
+          </sc-for>
+          <div style="flex:1"></div>
+          <div onClick="{{ openSetup }}" style="display:flex;align-items:center;gap:9px;height:29px;padding:0 9px;border-radius:6px;cursor:default;opacity:.7" style-hover="background:rgba(255,255,255,.07);opacity:1">
+            <div style="width:7px;height:7px;border-radius:50%;flex:none;background:{{ statusDot }}"></div>
+            <span style="flex:1;font-size:12.5px">Configuración…</span>
+          </div>
+        </div>
+
+        <div style="flex:1;overflow:auto;padding:20px 24px 26px">
+
+          <sc-if value="{{ tabGeneral }}" hint-placeholder-val="{{ true }}">
+            <div style="border-radius:9px;background:rgba(255,255,255,.045);border:0.5px solid rgba(255,255,255,.07);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:14px;padding:13px 15px">
+                <div style="flex:1"><div style="font-size:13px">Idioma de lo que hablas</div></div>
+                <select value="{{ lang }}" onChange="{{ onLang }}" style="height:24px;min-width:150px;padding:0 8px;border-radius:6px;font-size:12.5px;color:inherit;background:rgba(255,255,255,.1);border:0.5px solid rgba(255,255,255,.14)">
+                  <sc-for list="{{ langs }}" as="l" hint-placeholder-count="7"><option value="{{ l.code }}">{{ l.name }}</option></sc-for>
+                </select>
+              </div>
+              <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+              <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 15px">
+                <div style="flex:1">
+                  <div style="font-size:13px">Ignorar grabaciones muy cortas</div>
+                  <div style="font-size:11.5px;opacity:.48;margin-top:3px;max-width:38ch;text-wrap:pretty">Evita que un roce del atajo dispare una transcripción vacía.</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;padding-top:2px">
+                  <input type="range" min="0.2" max="1.5" step="0.1" value="{{ minDur }}" onChange="{{ onMinDur }}" style="width:130px" />
+                  <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;opacity:.7;width:42px;text-align:right">{{ minDurLabel }}</span>
+                </div>
+              </div>
+              <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+              <div style="display:flex;align-items:center;gap:14px;padding:13px 15px">
+                <div style="flex:1">
+                  <div style="font-size:13px">Mostrar la píldora flotante</div>
+                  <div style="font-size:11.5px;opacity:.48;margin-top:3px">Un botón siempre visible para grabar sin atajo.</div>
+                </div>
+                <div onClick="{{ togglePill }}" style="width:38px;height:22px;flex:none;border-radius:11px;padding:2px;background:{{ swPill }};transition:background .15s;cursor:default"><div style="width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ swPillX }};transition:transform .15s"></div></div>
+              </div>
+              <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+              <div style="display:flex;align-items:center;gap:14px;padding:13px 15px">
+                <div style="flex:1"><div style="font-size:13px">Abrir Gluffi al iniciar sesión</div></div>
+                <div onClick="{{ toggleLogin }}" style="width:38px;height:22px;flex:none;border-radius:11px;padding:2px;background:{{ swLogin }};transition:background .15s;cursor:default"><div style="width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ swLoginX }};transition:transform .15s"></div></div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ tabTexto }}" hint-placeholder-val="{{ false }}">
+            <p style="font-size:12.5px;line-height:1.5;opacity:.5;margin:0 0 14px;max-width:52ch;text-wrap:pretty">Tres capas que arreglan el texto antes de pegarlo. Se aplican en este orden.</p>
+            <div style="border-radius:9px;background:rgba(255,255,255,.045);border:0.5px solid rgba(255,255,255,.07);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:14px;padding:13px 15px">
+                <div style="flex:1">
+                  <div style="font-size:13px">1 · Corregir con IA</div>
+                  <div style="font-size:11.5px;opacity:.48;margin-top:3px;max-width:42ch;text-wrap:pretty">Puntuación, mayúsculas y muletillas. Se ejecuta en tu Mac, sin internet.</div>
+                </div>
+                <div onClick="{{ toggleLlm }}" style="width:38px;height:22px;flex:none;border-radius:11px;padding:2px;background:{{ swLlm }};transition:background .15s;cursor:default"><div style="width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ swLlmX }};transition:transform .15s"></div></div>
+              </div>
+              <sc-if value="{{ llmOn }}" hint-placeholder-val="{{ true }}">
+                <div style="padding:0 15px 14px">
+                  <div style="font-size:11.5px;opacity:.5;margin-bottom:6px">Instrucción al modelo</div>
+                  <textarea value="{{ prompt }}" onChange="{{ onPrompt }}" style="width:100%;height:64px;resize:none;padding:9px 10px;border-radius:7px;font-size:12px;line-height:1.45;color:inherit;background:rgba(0,0,0,.28);border:0.5px solid rgba(255,255,255,.12);font-family:ui-monospace,'SF Mono',Menlo,monospace"></textarea>
+                </div>
+              </sc-if>
+              <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+              <div style="display:flex;align-items:center;gap:14px;padding:13px 15px">
+                <div style="flex:1">
+                  <div style="font-size:13px">2 · Diccionario</div>
+                  <div style="font-size:11.5px;opacity:.48;margin-top:3px">{{ dictSummary }}</div>
+                </div>
+                <div onClick="{{ openDict }}" style="height:24px;padding:0 11px;display:flex;align-items:center;border-radius:6px;font-size:12px;background:rgba(255,255,255,.09);cursor:default" style-hover="background:rgba(255,255,255,.17)">Administrar…</div>
+                <div onClick="{{ toggleDict }}" style="width:38px;height:22px;flex:none;border-radius:11px;padding:2px;background:{{ swDict }};transition:background .15s;cursor:default"><div style="width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ swDictX }};transition:transform .15s"></div></div>
+              </div>
+              <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+              <div style="display:flex;align-items:center;gap:14px;padding:13px 15px">
+                <div style="flex:1">
+                  <div style="font-size:13px">3 · Snippets</div>
+                  <div style="font-size:11.5px;opacity:.48;margin-top:3px">{{ snipSummary }}</div>
+                </div>
+                <div onClick="{{ openSnippets }}" style="height:24px;padding:0 11px;display:flex;align-items:center;border-radius:6px;font-size:12px;background:rgba(255,255,255,.09);cursor:default" style-hover="background:rgba(255,255,255,.17)">Administrar…</div>
+                <div onClick="{{ toggleSnip }}" style="width:38px;height:22px;flex:none;border-radius:11px;padding:2px;background:{{ swSnip }};transition:background .15s;cursor:default"><div style="width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ swSnipX }};transition:transform .15s"></div></div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ tabIdiomas }}" hint-placeholder-val="{{ false }}">
+            <div style="border-radius:9px;background:rgba(255,255,255,.045);border:0.5px solid rgba(255,255,255,.07);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:14px;padding:13px 15px">
+                <div style="flex:1">
+                  <div style="font-size:13px">Traducir mientras hablo</div>
+                  <div style="font-size:11.5px;opacity:.48;margin-top:3px;max-width:44ch;text-wrap:pretty">Hablas en {{ langName }} y Gluffi pega el texto ya traducido.</div>
+                </div>
+                <div onClick="{{ toggleTrans }}" style="width:38px;height:22px;flex:none;border-radius:11px;padding:2px;background:{{ swTrans }};transition:background .15s;cursor:default"><div style="width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ swTransX }};transition:transform .15s"></div></div>
+              </div>
+              <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+              <div style="display:flex;align-items:center;gap:14px;padding:13px 15px;opacity:{{ transOpacity }}">
+                <div style="flex:1"><div style="font-size:13px">Traducir a</div></div>
+                <select style="height:24px;min-width:150px;padding:0 8px;border-radius:6px;font-size:12.5px;color:inherit;background:rgba(255,255,255,.1);border:0.5px solid rgba(255,255,255,.14)"><option>Inglés</option><option>Portugués</option><option>Francés</option><option>Alemán</option></select>
+              </div>
+              <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+              <div style="display:flex;align-items:center;gap:14px;padding:13px 15px;opacity:{{ transOpacity }}">
+                <div style="flex:1"><div style="font-size:13px">Atajo para traducir</div><div style="font-size:11.5px;opacity:.48;margin-top:3px">Mantener pulsado, igual que para transcribir.</div></div>
+                <div style="display:flex;gap:4px">
+                  <div style="min-width:26px;height:24px;padding:0 7px;display:flex;align-items:center;justify-content:center;border-radius:5px;font-size:13px;background:rgba(255,255,255,.1);border:0.5px solid rgba(255,255,255,.14)">⌘</div>
+                  <div style="min-width:26px;height:24px;padding:0 7px;display:flex;align-items:center;justify-content:center;border-radius:5px;font-size:13px;background:rgba(255,255,255,.1);border:0.5px solid rgba(255,255,255,.14)">⌥</div>
+                  <div style="min-width:26px;height:24px;padding:0 7px;display:flex;align-items:center;justify-content:center;border-radius:5px;font-size:13px;background:rgba(255,255,255,.1);border:0.5px solid rgba(255,255,255,.14)">⇧</div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ tabComandos }}" hint-placeholder-val="{{ false }}">
+            <div style="border-radius:9px;background:rgba(255,255,255,.045);border:0.5px solid rgba(255,255,255,.07);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:14px;padding:13px 15px">
+                <div style="flex:1">
+                  <div style="font-size:13px">Obedecer comandos por voz</div>
+                  <div style="font-size:11.5px;opacity:.48;margin-top:3px;max-width:44ch;text-wrap:pretty">Si lo que dices es una orden, Gluffi la ejecuta en vez de escribirla.</div>
+                </div>
+                <div onClick="{{ toggleActions }}" style="width:38px;height:22px;flex:none;border-radius:11px;padding:2px;background:{{ swActions }};transition:background .15s;cursor:default"><div style="width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ swActionsX }};transition:transform .15s"></div></div>
+              </div>
+              <sc-if value="{{ actionsNeedLlm }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:10px;margin:0 15px 14px;padding:10px 12px;border-radius:7px;background:rgba(255,214,10,.1);border:0.5px solid rgba(255,214,10,.25)">
+                  <div style="width:16px;height:16px;flex:none;border-radius:50%;background:#ffd60a;color:#2a2200;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">!</div>
+                  <span style="flex:1;font-size:12px;opacity:.85">Necesita la corrección con IA para entender la orden.</span>
+                  <div onClick="{{ enableLlm }}" style="height:23px;padding:0 10px;display:flex;align-items:center;border-radius:6px;font-size:11.5px;font-weight:600;background:#ffd60a;color:#2a2200;cursor:default">Activarla</div>
+                </div>
+              </sc-if>
+            </div>
+            <div style="font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;opacity:.4;margin:20px 0 9px">Lo que puedes pedirle</div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <sc-for list="{{ commands }}" as="c" hint-placeholder-count="5">
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 13px;border-radius:8px;background:rgba(255,255,255,.045);border:0.5px solid rgba(255,255,255,.07)">
+                  <span style="font-size:12.5px;font-style:italic;opacity:.9;flex:none;min-width:200px">«{{ c.say }}»</span>
+                  <span style="font-size:11.5px;opacity:.45">{{ c.does }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ tabEnVivo }}" hint-placeholder-val="{{ false }}">
+            <p style="font-size:12.5px;line-height:1.5;opacity:.5;margin:0 0 14px;max-width:52ch;text-wrap:pretty">La ventana en vivo escribe mientras hablas, sin pegar nada. Útil para reuniones.</p>
+            <div style="border-radius:9px;background:rgba(255,255,255,.045);border:0.5px solid rgba(255,255,255,.07);overflow:hidden">
+              <div style="padding:13px 15px">
+                <div style="font-size:13px;margin-bottom:9px">Prioridad</div>
+                <div style="display:flex;gap:0;padding:2px;border-radius:7px;background:rgba(0,0,0,.28);border:0.5px solid rgba(255,255,255,.1)">
+                  <sc-for list="{{ streamPresets }}" as="p" hint-placeholder-count="3">
+                    <div onClick="{{ p.onClick }}" style="flex:1;height:26px;display:flex;align-items:center;justify-content:center;border-radius:5px;font-size:12.5px;cursor:default;background:{{ p.bg }};color:{{ p.fg }}">{{ p.label }}</div>
+                  </sc-for>
+                </div>
+                <div style="font-size:11.5px;opacity:.48;margin-top:9px;text-wrap:pretty">{{ streamPresetDesc }}</div>
+              </div>
+              <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+              <div onClick="{{ toggleAdv }}" style="display:flex;align-items:center;gap:8px;padding:12px 15px;cursor:default">
+                <span style="font-size:11px;opacity:.5;transform:{{ advArrow }};transition:transform .15s">▶</span>
+                <span style="font-size:12.5px;opacity:.75">Ajustar a mano</span>
+              </div>
+              <sc-if value="{{ advOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:0 15px 15px;display:flex;flex-direction:column;gap:14px">
+                  <sc-for list="{{ streamSliders }}" as="s" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:flex-start;gap:14px">
+                      <div style="flex:1">
+                        <div style="font-size:12.5px">{{ s.label }}</div>
+                        <div style="font-size:11.5px;opacity:.45;margin-top:2px;text-wrap:pretty">{{ s.desc }}</div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:10px;padding-top:2px">
+                        <input type="range" min="{{ s.min }}" max="{{ s.max }}" step="{{ s.step }}" value="{{ s.value }}" onChange="{{ s.onChange }}" style="width:120px" />
+                        <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;opacity:.7;width:56px;text-align:right">{{ s.display }}</span>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ tabAudio }}" hint-placeholder-val="{{ false }}">
+            <div style="border-radius:9px;background:rgba(255,255,255,.045);border:0.5px solid rgba(255,255,255,.07);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:14px;padding:13px 15px">
+                <div style="flex:1">
+                  <div style="font-size:13px">Sonar mientras procesa</div>
+                  <div style="font-size:11.5px;opacity:.48;margin-top:3px">Así sabes que sigue trabajando sin mirar la barra.</div>
+                </div>
+                <div onClick="{{ toggleSound }}" style="width:38px;height:22px;flex:none;border-radius:11px;padding:2px;background:{{ swSound }};transition:background .15s;cursor:default"><div style="width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ swSoundX }};transition:transform .15s"></div></div>
+              </div>
+              <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+              <div style="display:flex;align-items:center;gap:14px;padding:13px 15px;opacity:{{ soundOpacity }}">
+                <div style="flex:1"><div style="font-size:13px">Volumen</div></div>
+                <input type="range" min="0" max="100" step="5" value="{{ vol }}" onChange="{{ onVol }}" style="width:130px" />
+                <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;opacity:.7;width:38px;text-align:right">{{ volLabel }}</span>
+              </div>
+              <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+              <div style="padding:13px 15px;opacity:{{ soundOpacity }}">
+                <div style="font-size:13px;margin-bottom:10px">Sonido</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                  <sc-for list="{{ sounds }}" as="s" hint-placeholder-count="6">
+                    <div onClick="{{ s.onClick }}" style="display:flex;align-items:center;gap:9px;height:32px;padding:0 11px;border-radius:7px;cursor:default;background:{{ s.bg }};border:0.5px solid {{ s.border }}">
+                      <div style="width:0;height:0;flex:none;border-left:7px solid currentColor;border-top:4.5px solid transparent;border-bottom:4.5px solid transparent;opacity:.6"></div>
+                      <span style="flex:1;font-size:12.5px">{{ s.name }}</span>
+                      <span style="font-size:14px;opacity:.9">{{ s.check }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ tabAtajos }}" hint-placeholder-val="{{ false }}">
+            <p style="font-size:12.5px;line-height:1.5;opacity:.5;margin:0 0 14px;max-width:52ch;text-wrap:pretty">Los dos primeros se mantienen pulsados: sueltas y Gluffi transcribe. Haz clic en un atajo para cambiarlo.</p>
+            <div style="border-radius:9px;background:rgba(255,255,255,.045);border:0.5px solid rgba(255,255,255,.07);overflow:hidden">
+              <sc-for list="{{ shortcuts }}" as="k" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:14px;padding:13px 15px;border-top:0.5px solid rgba(255,255,255,.07)">
+                  <div style="flex:1">
+                    <div style="font-size:13px">{{ k.label }}</div>
+                    <div style="font-size:11.5px;opacity:.45;margin-top:3px">{{ k.mode }}</div>
+                  </div>
+                  <div style="display:flex;gap:4px;padding:3px;border-radius:7px" style-hover="background:rgba(255,255,255,.07)">
+                    <sc-for list="{{ k.keys }}" as="key" hint-placeholder-count="2">
+                      <div style="min-width:26px;height:24px;padding:0 7px;display:flex;align-items:center;justify-content:center;border-radius:5px;font-size:13px;background:rgba(255,255,255,.1);border:0.5px solid rgba(255,255,255,.14)">{{ key.k }}</div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ winPrefsB }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Preferencias — variante B" style="position:absolute;left:50%;top:calc(50% + 13px);transform:translate(-50%,-50%);max-height:calc(100vh - 86px);width:600px;height:600px;z-index:40;display:flex;flex-direction:column;border-radius:11px;overflow:hidden;background:#252725;border:0.5px solid rgba(255,255,255,.09);box-shadow:0 0 0 0.5px rgba(0,0,0,.8),0 30px 70px rgba(0,0,0,.6)">
+      <div style="flex:none;height:40px;display:flex;align-items:center;gap:8px;padding:0 13px;background:rgba(62,64,61,.92);border-bottom:0.5px solid rgba(0,0,0,.45)">
+        <div onClick="{{ closeWin }}" style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div>
+        <div style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.16)"></div>
+        <div style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.16)"></div>
+        <div style="flex:1;text-align:center;font-size:13px;font-weight:600;margin-left:-56px">Preferencias</div>
+      </div>
+      <div style="flex:1;overflow:auto;padding:20px 24px 26px">
+        <div style="display:flex;align-items:center;gap:11px;padding:12px 14px;border-radius:9px;background:rgba(255,255,255,.045);border:0.5px solid rgba(255,255,255,.07);margin-bottom:20px">
+          <div style="width:8px;height:8px;border-radius:50%;flex:none;background:{{ statusDot }}"></div>
+          <div style="flex:1">
+            <div style="font-size:12.5px">{{ statusLabel }}</div>
+            <div style="font-size:11px;opacity:.45;margin-top:2px">{{ footerSummary }}</div>
+          </div>
+          <div onClick="{{ openSetup }}" style="height:24px;padding:0 11px;display:flex;align-items:center;border-radius:6px;font-size:12px;background:rgba(255,255,255,.09);cursor:default" style-hover="background:rgba(255,255,255,.17)">Configuración…</div>
+        </div>
+
+        <div style="font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;opacity:.4;margin:0 0 9px">Al grabar</div>
+        <div style="border-radius:9px;background:rgba(255,255,255,.045);border:0.5px solid rgba(255,255,255,.07);overflow:hidden;margin-bottom:20px">
+          <div style="display:flex;align-items:center;gap:14px;padding:12px 15px">
+            <div style="flex:1;font-size:13px">Idioma de lo que hablas</div>
+            <select value="{{ lang }}" onChange="{{ onLang }}" style="height:24px;min-width:140px;padding:0 8px;border-radius:6px;font-size:12.5px;color:inherit;background:rgba(255,255,255,.1);border:0.5px solid rgba(255,255,255,.14)">
+              <sc-for list="{{ langs }}" as="l" hint-placeholder-count="7"><option value="{{ l.code }}">{{ l.name }}</option></sc-for>
+            </select>
+          </div>
+          <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+          <div style="display:flex;align-items:center;gap:14px;padding:12px 15px">
+            <div style="flex:1;font-size:13px">Ignorar grabaciones muy cortas</div>
+            <input type="range" min="0.2" max="1.5" step="0.1" value="{{ minDur }}" onChange="{{ onMinDur }}" style="width:110px" />
+            <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;opacity:.7;width:42px;text-align:right">{{ minDurLabel }}</span>
+          </div>
+          <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+          <div style="display:flex;align-items:center;gap:14px;padding:12px 15px">
+            <div style="flex:1;font-size:13px">Mostrar la píldora flotante</div>
+            <div onClick="{{ togglePill }}" style="width:38px;height:22px;flex:none;border-radius:11px;padding:2px;background:{{ swPill }};cursor:default"><div style="width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ swPillX }};transition:transform .15s"></div></div>
+          </div>
+          <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+          <div style="display:flex;align-items:center;gap:14px;padding:12px 15px">
+            <div style="flex:1;font-size:13px">Sonar mientras procesa</div>
+            <input type="range" min="0" max="100" step="5" value="{{ vol }}" onChange="{{ onVol }}" style="width:110px" />
+            <div onClick="{{ toggleSound }}" style="width:38px;height:22px;flex:none;border-radius:11px;padding:2px;background:{{ swSound }};cursor:default"><div style="width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ swSoundX }};transition:transform .15s"></div></div>
+          </div>
+        </div>
+
+        <div style="font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;opacity:.4;margin:0 0 9px">Antes de pegar el texto</div>
+        <div style="border-radius:9px;background:rgba(255,255,255,.045);border:0.5px solid rgba(255,255,255,.07);overflow:hidden;margin-bottom:20px">
+          <div style="display:flex;align-items:center;gap:14px;padding:12px 15px">
+            <div style="flex:1"><div style="font-size:13px">Corregir con IA</div><div style="font-size:11.5px;opacity:.48;margin-top:2px">Puntuación y mayúsculas, en tu Mac.</div></div>
+            <div onClick="{{ toggleLlm }}" style="width:38px;height:22px;flex:none;border-radius:11px;padding:2px;background:{{ swLlm }};cursor:default"><div style="width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ swLlmX }};transition:transform .15s"></div></div>
+          </div>
+          <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+          <div style="display:flex;align-items:center;gap:14px;padding:12px 15px">
+            <div style="flex:1"><div style="font-size:13px">Diccionario</div><div style="font-size:11.5px;opacity:.48;margin-top:2px">{{ dictSummary }}</div></div>
+            <div onClick="{{ openDict }}" style="height:24px;padding:0 11px;display:flex;align-items:center;border-radius:6px;font-size:12px;background:rgba(255,255,255,.09);cursor:default" style-hover="background:rgba(255,255,255,.17)">Administrar…</div>
+            <div onClick="{{ toggleDict }}" style="width:38px;height:22px;flex:none;border-radius:11px;padding:2px;background:{{ swDict }};cursor:default"><div style="width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ swDictX }};transition:transform .15s"></div></div>
+          </div>
+          <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+          <div style="display:flex;align-items:center;gap:14px;padding:12px 15px">
+            <div style="flex:1"><div style="font-size:13px">Snippets</div><div style="font-size:11.5px;opacity:.48;margin-top:2px">{{ snipSummary }}</div></div>
+            <div onClick="{{ openSnippets }}" style="height:24px;padding:0 11px;display:flex;align-items:center;border-radius:6px;font-size:12px;background:rgba(255,255,255,.09);cursor:default" style-hover="background:rgba(255,255,255,.17)">Administrar…</div>
+            <div onClick="{{ toggleSnip }}" style="width:38px;height:22px;flex:none;border-radius:11px;padding:2px;background:{{ swSnip }};cursor:default"><div style="width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ swSnipX }};transition:transform .15s"></div></div>
+          </div>
+          <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+          <div style="display:flex;align-items:center;gap:14px;padding:12px 15px">
+            <div style="flex:1"><div style="font-size:13px">Obedecer comandos por voz</div><div style="font-size:11.5px;opacity:.48;margin-top:2px">«abre Safari», «sube el volumen»…</div></div>
+            <div onClick="{{ toggleActions }}" style="width:38px;height:22px;flex:none;border-radius:11px;padding:2px;background:{{ swActions }};cursor:default"><div style="width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ swActionsX }};transition:transform .15s"></div></div>
+          </div>
+        </div>
+
+        <div style="font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;opacity:.4;margin:0 0 9px">Otros idiomas y en vivo</div>
+        <div style="border-radius:9px;background:rgba(255,255,255,.045);border:0.5px solid rgba(255,255,255,.07);overflow:hidden;margin-bottom:20px">
+          <div style="display:flex;align-items:center;gap:14px;padding:12px 15px">
+            <div style="flex:1"><div style="font-size:13px">Traducir mientras hablo</div><div style="font-size:11.5px;opacity:.48;margin-top:2px">Con ⌘⌥⇧, hacia Inglés.</div></div>
+            <div onClick="{{ toggleTrans }}" style="width:38px;height:22px;flex:none;border-radius:11px;padding:2px;background:{{ swTrans }};cursor:default"><div style="width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ swTransX }};transition:transform .15s"></div></div>
+          </div>
+          <div style="height:0.5px;background:rgba(255,255,255,.07);margin-left:15px"></div>
+          <div style="padding:12px 15px">
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:9px"><div style="flex:1;font-size:13px">Transcripción en vivo</div><span style="font-size:11px;opacity:.45">⌘⌥⌃</span></div>
+            <div style="display:flex;gap:0;padding:2px;border-radius:7px;background:rgba(0,0,0,.28);border:0.5px solid rgba(255,255,255,.1)">
+              <sc-for list="{{ streamPresets }}" as="p" hint-placeholder-count="3">
+                <div onClick="{{ p.onClick }}" style="flex:1;height:26px;display:flex;align-items:center;justify-content:center;border-radius:5px;font-size:12.5px;cursor:default;background:{{ p.bg }};color:{{ p.fg }}">{{ p.label }}</div>
+              </sc-for>
+            </div>
+            <div style="font-size:11.5px;opacity:.48;margin-top:9px;text-wrap:pretty">{{ streamPresetDesc }}</div>
+          </div>
+        </div>
+
+        <div onClick="{{ toggleAdv }}" style="display:flex;align-items:center;gap:8px;padding:11px 15px;border-radius:9px;background:rgba(255,255,255,.03);cursor:default" style-hover="background:rgba(255,255,255,.07)">
+          <span style="font-size:11px;opacity:.5;transform:{{ advArrow }};transition:transform .15s">▶</span>
+          <span style="flex:1;font-size:12.5px;opacity:.75">Avanzado</span>
+          <span style="font-size:11px;opacity:.4">Instrucción del modelo, parámetros de streaming</span>
+        </div>
+        <sc-if value="{{ advOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:8px;padding:15px;border-radius:9px;background:rgba(255,255,255,.045);border:0.5px solid rgba(255,255,255,.07);display:flex;flex-direction:column;gap:14px">
+            <div>
+              <div style="font-size:11.5px;opacity:.5;margin-bottom:6px">Instrucción al modelo de corrección</div>
+              <textarea value="{{ prompt }}" onChange="{{ onPrompt }}" style="width:100%;height:58px;resize:none;padding:9px 10px;border-radius:7px;font-size:12px;line-height:1.45;color:inherit;background:rgba(0,0,0,.28);border:0.5px solid rgba(255,255,255,.12);font-family:ui-monospace,'SF Mono',Menlo,monospace"></textarea>
+            </div>
+            <sc-for list="{{ streamSliders }}" as="s" hint-placeholder-count="3">
+              <div style="display:flex;align-items:flex-start;gap:14px">
+                <div style="flex:1"><div style="font-size:12.5px">{{ s.label }}</div><div style="font-size:11.5px;opacity:.45;margin-top:2px;text-wrap:pretty">{{ s.desc }}</div></div>
+                <div style="display:flex;align-items:center;gap:10px;padding-top:2px">
+                  <input type="range" min="{{ s.min }}" max="{{ s.max }}" step="{{ s.step }}" value="{{ s.value }}" onChange="{{ s.onChange }}" style="width:110px" />
+                  <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;opacity:.7;width:56px;text-align:right">{{ s.display }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ winHistory }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Historial" style="position:absolute;left:50%;top:calc(50% + 13px);transform:translate(-50%,-50%);max-height:calc(100vh - 86px);width:520px;height:600px;z-index:40;display:flex;flex-direction:column;border-radius:11px;overflow:hidden;background:#252725;border:0.5px solid rgba(255,255,255,.09);box-shadow:0 0 0 0.5px rgba(0,0,0,.8),0 30px 70px rgba(0,0,0,.6)">
+      <div style="flex:none;height:40px;display:flex;align-items:center;gap:8px;padding:0 13px;background:rgba(62,64,61,.92);border-bottom:0.5px solid rgba(0,0,0,.45)">
+        <div onClick="{{ closeWin }}" style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div>
+        <div style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.16)"></div>
+        <div style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.16)"></div>
+        <div style="flex:1;text-align:center;font-size:13px;font-weight:600;margin-left:-56px">Historial</div>
+      </div>
+      <div style="flex:none;padding:9px 12px;border-bottom:0.5px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:9px">
+        <div style="flex:1;display:flex;align-items:center;gap:7px;height:26px;padding:0 9px;border-radius:6px;background:rgba(0,0,0,.28);border:0.5px solid rgba(255,255,255,.11)">
+          <div style="width:11px;height:11px;border:1.4px solid rgba(255,255,255,.45);border-radius:50%;flex:none;position:relative"><div style="position:absolute;right:-4px;bottom:-3px;width:5px;height:1.4px;background:rgba(255,255,255,.45);transform:rotate(45deg)"></div></div>
+          <input value="{{ query }}" onChange="{{ onQuery }}" placeholder="Buscar en tus transcripciones" style="flex:1;border:none;outline:none;background:transparent;color:inherit;font-size:12.5px" />
+        </div>
+        <span style="font-size:11.5px;opacity:.4;font-variant-numeric:tabular-nums">{{ historyLabel }}</span>
+      </div>
+      <div style="flex:1;overflow:auto;padding:6px">
+        <sc-if value="{{ historyEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:40px">
+            <div style="width:38px;height:38px;opacity:.18;background:#fff;-webkit-mask:url(gluffi-mark.svg) center/contain no-repeat;mask:url(gluffi-mark.svg) center/contain no-repeat"></div>
+            <div style="font-size:13px;opacity:.5;text-align:center;text-wrap:pretty">{{ historyEmptyText }}</div>
+          </div>
+        </sc-if>
+        <sc-for list="{{ historyRows }}" as="h" hint-placeholder-count="5">
+          <div onClick="{{ h.onClick }}" style="padding:10px 11px;border-radius:8px;cursor:default;background:{{ h.bg }}" style-hover="background:rgba(255,255,255,.06)">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+              <span style="font-size:11px;opacity:.45;font-variant-numeric:tabular-nums">{{ h.time }}</span>
+              <span style="font-size:11px;opacity:.35">·</span>
+              <span style="font-size:11px;opacity:.45">{{ h.app }}</span>
+              <div style="flex:1"></div>
+              <sc-if value="{{ h.copied }}" hint-placeholder-val="{{ false }}">
+                <span style="font-size:11px;font-weight:600;color:#7ee800">✓ Copiado</span>
+              </sc-if>
+              <span style="font-size:11px;opacity:.35;font-variant-numeric:tabular-nums">{{ h.dur }}</span>
+            </div>
+            <div style="font-size:12.5px;line-height:1.45;opacity:.88;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-wrap:pretty">{{ h.text }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="flex:none;display:flex;align-items:center;gap:9px;padding:10px 13px;background:rgba(255,255,255,.03);border-top:0.5px solid rgba(255,255,255,.08)">
+        <span style="flex:1;font-size:11.5px;opacity:.42">Haz clic en una fila para copiarla</span>
+        <div onClick="{{ clearHistory }}" style="height:25px;padding:0 11px;display:flex;align-items:center;border-radius:6px;font-size:12px;background:rgba(255,255,255,.08);cursor:default" style-hover="background:rgba(255,69,58,.22);color:#ff8078">Borrar todo…</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ winDict }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Diccionario" style="position:absolute;left:50%;top:calc(50% + 13px);transform:translate(-50%,-50%);max-height:calc(100vh - 86px);width:580px;height:540px;z-index:40;display:flex;flex-direction:column;border-radius:11px;overflow:hidden;background:#252725;border:0.5px solid rgba(255,255,255,.09);box-shadow:0 0 0 0.5px rgba(0,0,0,.8),0 30px 70px rgba(0,0,0,.6)">
+      <div style="flex:none;height:40px;display:flex;align-items:center;gap:8px;padding:0 13px;background:rgba(62,64,61,.92);border-bottom:0.5px solid rgba(0,0,0,.45)">
+        <div onClick="{{ closeWin }}" style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div>
+        <div style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.16)"></div>
+        <div style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.16)"></div>
+        <div style="flex:1;text-align:center;font-size:13px;font-weight:600;margin-left:-56px">Diccionario</div>
+      </div>
+      <div style="flex:none;padding:9px 12px;border-bottom:0.5px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:9px">
+        <div style="flex:1;display:flex;align-items:center;gap:7px;height:26px;padding:0 9px;border-radius:6px;background:rgba(0,0,0,.28);border:0.5px solid rgba(255,255,255,.11)">
+          <div style="width:11px;height:11px;border:1.4px solid rgba(255,255,255,.45);border-radius:50%;flex:none;position:relative"><div style="position:absolute;right:-4px;bottom:-3px;width:5px;height:1.4px;background:rgba(255,255,255,.45);transform:rotate(45deg)"></div></div>
+          <input value="{{ dictQuery }}" onChange="{{ onDictQuery }}" placeholder="Buscar término" style="flex:1;border:none;outline:none;background:transparent;color:inherit;font-size:12.5px" />
+        </div>
+        <div style="height:26px;padding:0 11px;display:flex;align-items:center;border-radius:6px;font-size:12px;font-weight:600;background:#7ee800;color:#14200a;cursor:default" style-hover="filter:brightness(1.1)">+ Agregar</div>
+      </div>
+      <div style="flex:1;overflow:auto;padding:4px 6px">
+        <sc-for list="{{ dictRows }}" as="d" hint-placeholder-count="5">
+          <div style="display:flex;align-items:center;gap:11px;padding:10px 10px;border-radius:8px" style-hover="background:rgba(255,255,255,.05)">
+            <div onClick="{{ d.onToggle }}" style="width:32px;height:19px;flex:none;border-radius:10px;padding:2px;background:{{ d.sw }};cursor:default"><div style="width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ d.swX }};transition:transform .15s"></div></div>
+            <div style="flex:1;min-width:0;opacity:{{ d.opacity }}">
+              <div style="font-size:13px;font-weight:600">{{ d.canon }}</div>
+              <div style="font-size:11.5px;opacity:.45;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ d.variants }}</div>
+            </div>
+            <span style="font-size:11px;opacity:.3;font-variant-numeric:tabular-nums">{{ d.uses }}</span>
+            <div style="display:flex;gap:3px">
+              <div style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:11.5px;opacity:.55;cursor:default" style-hover="background:rgba(255,255,255,.12);opacity:1">Editar</div>
+              <div style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:default" style-hover="background:rgba(255,69,58,.25)">
+                <div style="width:9px;height:10px;border-radius:1px 1px 2px 2px;border:1.2px solid rgba(255,255,255,.55);border-top:none;position:relative"><div style="position:absolute;top:-3px;left:-2.4px;width:12px;height:1.2px;background:rgba(255,255,255,.55)"></div></div>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="flex:none;padding:13px;border-top:0.5px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;opacity:.4;margin-bottom:8px">Probarlo</div>
+        <input value="{{ dictTest }}" onChange="{{ onDictTest }}" placeholder="Escribe una frase como la dirías…" style="width:100%;height:28px;padding:0 10px;border-radius:7px;background:rgba(0,0,0,.28);border:0.5px solid rgba(255,255,255,.12);color:inherit;font-size:12.5px;outline:none" />
+        <div style="display:flex;align-items:flex-start;gap:8px;margin-top:9px;min-height:20px">
+          <span style="font-size:11.5px;opacity:.35;flex:none;padding-top:1px">Quedaría</span>
+          <span style="font-size:12.5px;line-height:1.45;color:{{ dictResultColor }};text-wrap:pretty">{{ dictResult }}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:12px">
+          <span style="flex:1;font-size:11.5px;opacity:.42">{{ dictSummary }}</span>
+          <div style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:6px;font-size:12px;background:rgba(255,255,255,.08);cursor:default" style-hover="background:rgba(255,255,255,.16)">Importar…</div>
+          <div style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:6px;font-size:12px;background:rgba(255,255,255,.08);cursor:default" style-hover="background:rgba(255,255,255,.16)">Exportar…</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ winSnip }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Snippets" style="position:absolute;left:50%;top:calc(50% + 13px);transform:translate(-50%,-50%);max-height:calc(100vh - 86px);width:620px;height:570px;z-index:40;display:flex;flex-direction:column;border-radius:11px;overflow:hidden;background:#252725;border:0.5px solid rgba(255,255,255,.09);box-shadow:0 0 0 0.5px rgba(0,0,0,.8),0 30px 70px rgba(0,0,0,.6)">
+      <div style="flex:none;height:40px;display:flex;align-items:center;gap:8px;padding:0 13px;background:rgba(62,64,61,.92);border-bottom:0.5px solid rgba(0,0,0,.45)">
+        <div onClick="{{ closeWin }}" style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div>
+        <div style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.16)"></div>
+        <div style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.16)"></div>
+        <div style="flex:1;text-align:center;font-size:13px;font-weight:600;margin-left:-56px">Snippets</div>
+      </div>
+      <div style="flex:none;padding:9px 12px;border-bottom:0.5px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:9px">
+        <div style="flex:1;display:flex;align-items:center;gap:7px;height:26px;padding:0 9px;border-radius:6px;background:rgba(0,0,0,.28);border:0.5px solid rgba(255,255,255,.11)">
+          <div style="width:11px;height:11px;border:1.4px solid rgba(255,255,255,.45);border-radius:50%;flex:none;position:relative"><div style="position:absolute;right:-4px;bottom:-3px;width:5px;height:1.4px;background:rgba(255,255,255,.45);transform:rotate(45deg)"></div></div>
+          <input value="{{ snipQuery }}" onChange="{{ onSnipQuery }}" placeholder="Buscar snippet" style="flex:1;border:none;outline:none;background:transparent;color:inherit;font-size:12.5px" />
+        </div>
+        <div style="height:26px;padding:0 11px;display:flex;align-items:center;border-radius:6px;font-size:12px;font-weight:600;background:#7ee800;color:#14200a;cursor:default" style-hover="filter:brightness(1.1)">+ Agregar</div>
+      </div>
+      <div style="flex:1;overflow:auto;padding:4px 6px">
+        <sc-for list="{{ snipRows }}" as="s" hint-placeholder-count="4">
+          <div style="display:flex;align-items:flex-start;gap:11px;padding:11px 10px;border-radius:8px" style-hover="background:rgba(255,255,255,.05)">
+            <div onClick="{{ s.onToggle }}" style="width:32px;height:19px;flex:none;margin-top:2px;border-radius:10px;padding:2px;background:{{ s.sw }};cursor:default"><div style="width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:{{ s.swX }};transition:transform .15s"></div></div>
+            <div style="flex:1;min-width:0;opacity:{{ s.opacity }}">
+              <div style="display:flex;align-items:center;gap:7px">
+                <span style="font-size:13px;font-weight:600">{{ s.name }}</span>
+                <div onClick="{{ s.onLock }}" style="display:flex;align-items:center;gap:5px;height:19px;padding:0 7px;border-radius:10px;cursor:default;background:{{ s.lockBg }};color:{{ s.lockFg }}">
+                  <div style="width:8px;height:7px;border-radius:1.5px;background:currentColor;position:relative;flex:none"><div style="position:absolute;left:1.5px;top:-3.4px;width:5px;height:4px;border:1.2px solid currentColor;border-bottom:none;border-radius:2px 2px 0 0"></div></div>
+                  <span style="font-size:10.5px;font-weight:600">{{ s.lockLabel }}</span>
+                </div>
+              </div>
+              <div style="font-size:11.5px;opacity:.45;margin-top:3px">{{ s.phrases }}</div>
+              <div style="font-size:12px;opacity:.7;margin-top:5px;font-family:ui-monospace,'SF Mono',Menlo,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.body }}</div>
+            </div>
+            <div style="display:flex;gap:3px;flex:none">
+              <sc-if value="{{ s.showReveal }}" hint-placeholder-val="{{ false }}">
+                <div onClick="{{ s.onReveal }}" style="height:24px;padding:0 9px;display:flex;align-items:center;border-radius:6px;font-size:11.5px;opacity:.6;cursor:default" style-hover="background:rgba(255,255,255,.12);opacity:1">{{ s.revealLabel }}</div>
+              </sc-if>
+              <div style="height:24px;padding:0 9px;display:flex;align-items:center;border-radius:6px;font-size:11.5px;opacity:.55;cursor:default" style-hover="background:rgba(255,255,255,.12);opacity:1">Editar</div>
+              <div style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:default" style-hover="background:rgba(255,69,58,.25)">
+                <div style="width:9px;height:10px;border-radius:1px 1px 2px 2px;border:1.2px solid rgba(255,255,255,.55);border-top:none;position:relative"><div style="position:absolute;top:-3px;left:-2.4px;width:12px;height:1.2px;background:rgba(255,255,255,.55)"></div></div>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="flex:none;padding:13px;border-top:0.5px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)">
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:7px;background:rgba(255,214,10,.09);border:0.5px solid rgba(255,214,10,.22);margin-bottom:12px">
+          <div style="width:8px;height:7px;border-radius:1.5px;background:#ffd60a;position:relative;flex:none"><div style="position:absolute;left:1.5px;top:-3.4px;width:5px;height:4px;border:1.2px solid #ffd60a;border-bottom:none;border-radius:2px 2px 0 0"></div></div>
+          <span style="flex:1;font-size:11.5px;opacity:.8">Los snippets sensibles se guardan en el Llavero. Al insertarlos, macOS te pedirá autorización.</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px">
+          <span style="flex:1;font-size:11.5px;opacity:.42">{{ snipSummary }}</span>
+          <div style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:6px;font-size:12px;background:rgba(255,255,255,.08);cursor:default" style-hover="background:rgba(255,255,255,.16)">Importar…</div>
+          <div style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:6px;font-size:12px;background:rgba(255,255,255,.08);cursor:default" style-hover="background:rgba(255,255,255,.16)">Exportar…</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ liveOpen }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Transcripción en vivo" style="position:absolute;right:34px;bottom:118px;width:420px;z-index:50;border-radius:13px;overflow:hidden;background:rgba(18,20,17,.82);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:0.5px solid rgba(255,255,255,.12);box-shadow:0 18px 50px rgba(0,0,0,.55);animation:gslide .18s ease-out">
+      <div style="display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:0.5px solid rgba(255,255,255,.09)">
+        <div style="width:7px;height:7px;border-radius:50%;flex:none;background:{{ liveDot }};animation:{{ liveDotAnim }}"></div>
+        <span style="font-size:11.5px;font-weight:600;opacity:.85">{{ liveTitle }}</span>
+        <span style="font-size:11px;opacity:.35;font-variant-numeric:tabular-nums">{{ liveMeta }}</span>
+        <div style="flex:1"></div>
+        <div onClick="{{ clearLive }}" title="Limpiar" style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:5px;cursor:default;opacity:.55" style-hover="background:rgba(255,255,255,.12);opacity:1">
+          <div style="width:9px;height:10px;border-radius:1px 1px 2px 2px;border:1.2px solid currentColor;border-top:none;position:relative"><div style="position:absolute;top:-3px;left:-2.4px;width:12px;height:1.2px;background:currentColor"></div></div>
+        </div>
+        <div onClick="{{ copyLive }}" title="Copiar" style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:5px;cursor:default;opacity:.55;color:{{ copyLiveColor }}" style-hover="background:rgba(255,255,255,.12);opacity:1">
+          <div style="position:relative;width:12px;height:12px"><div style="position:absolute;left:0;top:0;width:8px;height:9px;border:1.2px solid currentColor;border-radius:2px"></div><div style="position:absolute;right:0;bottom:0;width:8px;height:9px;border:1.2px solid currentColor;border-radius:2px;background:rgba(18,20,17,.9)"></div></div>
+        </div>
+        <div onClick="{{ toggleLivePause }}" title="Pausar" style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:5px;cursor:default;opacity:.75" style-hover="background:rgba(255,255,255,.12);opacity:1">
+          <sc-if value="{{ livePaused }}" hint-placeholder-val="{{ false }}">
+            <div style="width:0;height:0;border-left:8px solid currentColor;border-top:5px solid transparent;border-bottom:5px solid transparent"></div>
+          </sc-if>
+          <sc-if value="{{ liveRunning }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;gap:2.5px"><div style="width:2.5px;height:10px;background:currentColor;border-radius:1px"></div><div style="width:2.5px;height:10px;background:currentColor;border-radius:1px"></div></div>
+          </sc-if>
+        </div>
+        <div onClick="{{ closeLive }}" title="Cerrar" style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:5px;cursor:default;opacity:.55" style-hover="background:rgba(255,69,58,.3);opacity:1">
+          <div style="position:relative;width:11px;height:11px"><div style="position:absolute;top:5px;left:0;width:11px;height:1.4px;background:currentColor;transform:rotate(45deg)"></div><div style="position:absolute;top:5px;left:0;width:11px;height:1.4px;background:currentColor;transform:rotate(-45deg)"></div></div>
+        </div>
+      </div>
+      <div style="padding:11px 13px 13px;max-height:150px;overflow:auto">
+        <div style="font-size:13.5px;line-height:1.55;opacity:{{ liveTextOpacity }};text-wrap:pretty">{{ liveText }}<sc-if value="{{ liveRunning }}" hint-placeholder-val="{{ true }}"><span style="display:inline-block;width:2px;height:15px;margin-left:2px;vertical-align:-2px;background:#7ee800;animation:gpulse 1s steps(2) infinite"></span></sc-if></div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ pillOn }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Píldora flotante" style="position:absolute;left:{{ pillX }}px;top:{{ pillY }}px;z-index:50;width:max-content;user-select:none;-webkit-user-select:none">
+      <div onMouseDown="{{ pillDown }}" style="display:inline-flex;align-items:center;gap:11px;height:46px;padding:0 16px;border-radius:23px;cursor:{{ pillCursor }};background:{{ pillBg }};border:1px solid {{ pillBorder }};box-shadow:{{ pillShadow }};animation:{{ pillAnim }};transition:background .2s,border-color .2s">
+        <sc-if value="{{ pillIdle }}" hint-placeholder-val="{{ true }}">
+          <div style="width:20px;height:20px;flex:none;background:#7ee800;-webkit-mask:url(gluffi-mark.svg) center/contain no-repeat;mask:url(gluffi-mark.svg) center/contain no-repeat"></div>
+          <span style="font-size:13.5px;font-weight:600;letter-spacing:.1px;opacity:.94;animation:{{ wordAnim }}">{{ idleWord }}</span>
+          <span style="font-size:11.5px;opacity:.38">⌘⌥</span>
+        </sc-if>
+        <sc-if value="{{ isRecording }}" hint-placeholder-val="{{ false }}">
+          <div style="width:20px;height:20px;flex:none;background:#7ee800;-webkit-mask:url(gluffi-mark.svg) center/contain no-repeat;mask:url(gluffi-mark.svg) center/contain no-repeat"></div>
+          <div style="width:6px;height:6px;flex:none;border-radius:50%;background:#ff453a;animation:gpulse 1.2s ease-in-out infinite"></div>
+          <div style="display:flex;align-items:center;gap:4px;height:30px">
+            <div style="width:5px;height:14px;border-radius:3px;background:rgba(126,232,0,.28);display:flex;align-items:center;justify-content:center;animation:gsy 1.25s ease-in-out infinite"><div style="width:5px;height:6px;border-radius:3px;background:#7ee800"></div></div>
+            <div style="width:5px;height:20px;border-radius:3px;background:rgba(126,232,0,.28);display:flex;align-items:center;justify-content:center;animation:gsy 1.25s ease-in-out .14s infinite"><div style="width:5px;height:9px;border-radius:3px;background:#7ee800"></div></div>
+            <div style="width:5px;height:26px;border-radius:3px;background:rgba(126,232,0,.28);display:flex;align-items:center;justify-content:center;animation:gsy 1.25s ease-in-out .28s infinite"><div style="width:5px;height:11px;border-radius:3px;background:#7ee800"></div></div>
+            <div style="width:5px;height:30px;border-radius:3px;background:rgba(126,232,0,.28);display:flex;align-items:center;justify-content:center;animation:gsy 1.25s ease-in-out .42s infinite"><div style="width:5px;height:13px;border-radius:3px;background:#7ee800"></div></div>
+            <div style="width:5px;height:26px;border-radius:3px;background:rgba(126,232,0,.28);display:flex;align-items:center;justify-content:center;animation:gsy 1.25s ease-in-out .28s infinite"><div style="width:5px;height:11px;border-radius:3px;background:#7ee800"></div></div>
+            <div style="width:5px;height:20px;border-radius:3px;background:rgba(126,232,0,.28);display:flex;align-items:center;justify-content:center;animation:gsy 1.25s ease-in-out .14s infinite"><div style="width:5px;height:9px;border-radius:3px;background:#7ee800"></div></div>
+            <div style="width:5px;height:14px;border-radius:3px;background:rgba(126,232,0,.28);display:flex;align-items:center;justify-content:center;animation:gsy 1.25s ease-in-out infinite"><div style="width:5px;height:6px;border-radius:3px;background:#7ee800"></div></div>
+          </div>
+          <div onClick="{{ pillCancel }}" onMouseDown="{{ stopDrag }}" title="Cancelar (Esc)" style="width:20px;height:20px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(255,255,255,.1);cursor:default" style-hover="background:rgba(255,69,58,.55)">
+            <div style="position:relative;width:9px;height:9px"><div style="position:absolute;top:4px;left:0;width:9px;height:1.4px;background:#fff;transform:rotate(45deg)"></div><div style="position:absolute;top:4px;left:0;width:9px;height:1.4px;background:#fff;transform:rotate(-45deg)"></div></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ isProcessing }}" hint-placeholder-val="{{ false }}">
+          <div style="position:relative;width:20px;height:20px;flex:none">
+            <div style="position:absolute;inset:2px;background:rgba(126,232,0,.55);-webkit-mask:url(gluffi-mark.svg) center/contain no-repeat;mask:url(gluffi-mark.svg) center/contain no-repeat"></div>
+            <div style="position:absolute;inset:-3px;border-radius:50%;border:1.8px solid rgba(126,232,0,.2);border-top-color:#7ee800;animation:gspin .9s linear infinite"></div>
+          </div>
+          <span style="font-size:13.5px;font-weight:600;opacity:.92">{{ processLabel }}</span>
+          <div onClick="{{ pillCancel }}" onMouseDown="{{ stopDrag }}" title="Cancelar (Esc)" style="width:20px;height:20px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(255,255,255,.1);cursor:default" style-hover="background:rgba(255,255,255,.24)">
+            <div style="position:relative;width:9px;height:9px"><div style="position:absolute;top:4px;left:0;width:9px;height:1.4px;background:#fff;transform:rotate(45deg)"></div><div style="position:absolute;top:4px;left:0;width:9px;height:1.4px;background:#fff;transform:rotate(-45deg)"></div></div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <div data-screen-label="Notificaciones" style="position:absolute;top:38px;right:16px;z-index:55;display:flex;flex-direction:column;gap:9px;width:346px">
+    <sc-for list="{{ toasts }}" as="t" hint-placeholder-count="2">
+      <div style="padding:13px 14px;border-radius:13px;background:rgba(44,46,43,.88);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:0.5px solid rgba(255,255,255,.12);box-shadow:0 14px 38px rgba(0,0,0,.45);animation:gslide .2s ease-out">
+        <div style="display:flex;align-items:flex-start;gap:11px">
+          <div style="width:26px;height:26px;flex:none;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ t.iconBg }}">
+            <div style="width:16px;height:16px;background:{{ t.iconFg }};-webkit-mask:url(gluffi-mark.svg) center/contain no-repeat;mask:url(gluffi-mark.svg) center/contain no-repeat"></div>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12.5px;font-weight:600">{{ t.title }}</div>
+            <div style="font-size:12px;opacity:.6;margin-top:3px;line-height:1.45;text-wrap:pretty">{{ t.body }}</div>
+          </div>
+          <div onClick="{{ t.onDismiss }}" style="width:18px;height:18px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:50%;opacity:.4;cursor:default" style-hover="background:rgba(255,255,255,.14);opacity:.9">
+            <div style="position:relative;width:9px;height:9px"><div style="position:absolute;top:4px;left:0;width:9px;height:1.3px;background:currentColor;transform:rotate(45deg)"></div><div style="position:absolute;top:4px;left:0;width:9px;height:1.3px;background:currentColor;transform:rotate(-45deg)"></div></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:7px;margin-top:11px;padding-left:37px">
+          <div onClick="{{ t.onPrimary }}" style="height:25px;padding:0 12px;display:flex;align-items:center;border-radius:6px;font-size:12px;font-weight:600;background:{{ t.primaryBg }};color:{{ t.primaryFg }};cursor:default" style-hover="filter:brightness(1.12)">{{ t.primary }}</div>
+          <div onClick="{{ t.onDismiss }}" style="height:25px;padding:0 12px;display:flex;align-items:center;border-radius:6px;font-size:12px;background:rgba(255,255,255,.09);cursor:default" style-hover="background:rgba(255,255,255,.17)">{{ t.secondary }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="position:absolute;left:26px;bottom:22px;z-index:30;max-width:330px;font-size:11px;line-height:1.6;opacity:.34;text-wrap:pretty">
+    <div style="font-weight:600;letter-spacing:.5px;text-transform:uppercase;font-size:10px;margin-bottom:5px">Prototipo · Gluffi</div>
+    Haz clic en el icono de la barra para abrir el menú. La píldora se arrastra a donde quieras y recuerda su sitio; al pulsarla cambia de estado. Las variantes A/B del menú y de Preferencias se cambian en Tweaks.
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;menuVariant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;A · Menú de acciones&quot;,&quot;B · Panel propio&quot;],&quot;default&quot;:&quot;A · Menú de acciones&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Variantes&quot;},&quot;prefsVariant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;A · Barra lateral&quot;,&quot;B · Una sola página&quot;],&quot;default&quot;:&quot;A · Barra lateral&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Variantes&quot;},&quot;setupComplete&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Estado de la app&quot;}}">
+class Component extends DCLogic {
+  state = {
+    menuOpen: false, submenuOpen: false, win: null, prefsTab: 'general',
+    pill: 'idle', secs: 0, procStep: 0, pillPos: null, dragging: false, wordIdx: 0, wordFlip: false,
+    liveOpen: false, livePaused: false, liveCopied: false,
+    copied: null, query: '', dictQuery: '', snipQuery: '', dictTest: 'manda el pdf a mariana por gmail',
+    lang: 'es', minDur: 0.4, pillOn: true, loginOn: true,
+    llmOn: true, dictOn: true, snipOn: true, transOn: true, actionsOn: false,
+    soundOn: true, vol: 55, sound: 'Gota',
+    preset: 'Equilibrado', advOpen: false, step: 500, len: 5000, keep: 200,
+    prompt: 'Corrige puntuación, mayúsculas y muletillas. No cambies el sentido ni añadas nada.',
+    reveal: null, readyOverride: null, dismissed: [], cleared: false,
+    dictOff: {}, snipOff: {}, locks: {},
+    history: [
+      { id: 1, time: '9:38', app: 'Notas', dur: '3.4 s', text: 'Recordar que el informe de agosto tiene que salir el lunes antes del mediodía, con la comparativa de los tres canales.' },
+      { id: 2, time: '9:21', app: 'Mail', dur: '11.2 s', text: 'Hola Mariana, te confirmo la reunión del jueves a las diez. Llevo el desglose de horas y la propuesta de alcance para la segunda fase.' },
+      { id: 3, time: '9:04', app: 'Terminal', dur: '1.8 s', text: 'git commit -m arreglado el cálculo de duración mínima' },
+      { id: 4, time: 'ayer 18:47', app: 'Linear', dun: '', dur: '6.9 s', text: 'El menú de la barra tiene demasiadas filas que no hacen nada. Separar diagnóstico de acciones.' },
+      { id: 5, time: 'ayer 16:12', app: 'Slack', dur: '2.6 s', text: 'Voy en camino, llego en veinte minutos.' },
+      { id: 6, time: 'ayer 11:30', app: 'Notas', dur: '14.1 s', text: 'Idea para el onboarding: en vez de pedir permisos al arrancar, pedirlos la primera vez que hacen falta de verdad.' }
+    ],
+    dict: [
+      { id: 1, canon: 'Gluffi', variants: 'gluffy · glufi · glufy', uses: '41' },
+      { id: 2, canon: 'Trycore', variants: 'traicor · tricor · try core', uses: '28' },
+      { id: 3, canon: 'Mariana Restrepo', variants: 'mariana restrepo · marianarestrepo', uses: '17' },
+      { id: 4, canon: 'PDF', variants: 'pdf · pe de efe', uses: '12' },
+      { id: 5, canon: 'whisper-cli', variants: 'whisper cli · wisper cli', uses: '9' },
+      { id: 6, canon: 'ORIUNO', variants: 'oriuno · ori uno', uses: '6' }
+    ],
+    snips: [
+      { id: 1, name: 'Firma de correo', phrases: '«mi firma» · «firma larga»', body: 'Jesús Segura — Trycore · +57 300 000 0000', sensitive: false },
+      { id: 2, name: 'Dirección de la oficina', phrases: '«dirección oficina»', body: 'Cra 43A #1-50, Torre 2, piso 8, Medellín', sensitive: false },
+      { id: 3, name: 'Clave del servidor de pruebas', phrases: '«clave staging»', body: 'Xq7-staging-9f2!aK', sensitive: true },
+      { id: 4, name: 'NIT de facturación', phrases: '«nit» · «nuestro nit»', body: '901.234.567-8', sensitive: true }
+    ]
+  };
+
+  componentDidMount() {
+    let p = null;
+    try { p = JSON.parse(localStorage.getItem('gluffi.pillPos') || 'null'); } catch (e) { p = null; }
+    const seed = (p && typeof p.x === 'number') ? p : { x: (window.innerWidth || 1440) - 250, y: (window.innerHeight || 900) - 104 };
+    this.setState({ pillPos: this.clampPos(seed) });
+    this.lastWord = Date.now() - 900000;
+    this.tick = setInterval(() => {
+      const s = this.state;
+      if (s.pill === 'recording') this.setState({ secs: s.secs + 0.1 });
+      else if (s.pill === 'processing') {
+        const n = s.procStep + 1;
+        if (n > 26) { this.setState({ pill: 'idle', secs: 0, procStep: 0 }); }
+        else this.setState({ procStep: n, secs: s.secs + 0.1 });
+      } else this.maybeRotate();
+    }, 100);
+  }
+  componentWillUnmount() { clearInterval(this.tick); }
+
+  // La palabra en reposo solo cambia al volver a reposo (nunca mientras la miras)
+  // y como máximo una vez cada 15 min: es un guiño, no una animación.
+  maybeRotate() {
+    const now = Date.now();
+    if (now - (this.lastWord || 0) < 900000) return;
+    this.lastWord = now;
+    this.setState(st => ({ wordIdx: st.wordIdx + 1, wordFlip: !st.wordFlip }));
+  }
+
+  clampPos(p) {
+    return {
+      x: Math.max(8, Math.min((window.innerWidth || 1440) - 215, p.x)),
+      y: Math.max(34, Math.min((window.innerHeight || 900) - 76, p.y))
+    };
+  }
+
+  pillTap() {
+    const s = this.state;
+    if (s.pill === 'idle') this.setState({ pill: 'recording', secs: 0, menuOpen: false });
+    else if (s.pill === 'recording') this.setState({ pill: 'processing', secs: 0, procStep: 0, menuOpen: false });
+  }
+
+  pillDown(e) {
+    if (e.button !== 0) return;
+    const sx = e.clientX, sy = e.clientY;
+    const start = this.state.pillPos || { x: 0, y: 0 };
+    let moved = false;
+    const onMove = ev => {
+      const dx = ev.clientX - sx, dy = ev.clientY - sy;
+      if (!moved && Math.abs(dx) + Math.abs(dy) > 4) { moved = true; this.setState({ dragging: true }); }
+      if (moved) this.setState({ pillPos: this.clampPos({ x: start.x + dx, y: start.y + dy }) });
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      if (moved) {
+        this.setState({ dragging: false });
+        try { localStorage.setItem('gluffi.pillPos', JSON.stringify(this.state.pillPos)); } catch (er) {}
+      } else this.pillTap();
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
+
+  sw(on) { return on ? '#7ee800' : 'rgba(255,255,255,.16)'; }
+  swX(on, d) { return on ? 'translateX(' + (d || 16) + 'px)' : 'translateX(0)'; }
+  t(k) { return () => this.setState(s => { const o = {}; o[k] = !s[k]; return o; }); }
+
+  langName(c) {
+    const m = { es: 'Español', en: 'Inglés', pt: 'Portugués', fr: 'Francés', de: 'Alemán', it: 'Italiano', auto: 'Detectar solo' };
+    return m[c] || c;
+  }
+
+  ready() { return this.state.readyOverride !== null ? this.state.readyOverride : (this.props.setupComplete ?? false); }
+
+  renderVals() {
+    const s = this.state, R = this.ready();
+    const mv = (this.props.menuVariant ?? 'A · Menú de acciones').charAt(0);
+    const pv = (this.props.prefsVariant ?? 'A · Barra lateral').charAt(0);
+    const rec = s.pill === 'recording', proc = s.pill === 'processing';
+    const timer = (() => { const t = Math.floor(s.secs); return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); })();
+
+    const open = w => () => this.setState({ win: w, menuOpen: false, submenuOpen: false });
+    const activeDict = s.dict.filter(d => !s.dictOff[d.id]).length;
+    const activeSnips = s.snips.filter(x => !s.snipOff[x.id]).length;
+
+    // Diccionario: prueba en vivo
+    let corrected = s.dictTest, applied = [];
+    s.dict.forEach(d => {
+      if (s.dictOff[d.id]) return;
+      d.variants.split(' · ').forEach(v => {
+        const re = new RegExp(v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        if (re.test(corrected)) { corrected = corrected.replace(re, d.canon); applied.push(d.canon); }
+      });
+    });
+    const changed = applied.length > 0;
+
+    const presets = ['Rápido', 'Equilibrado', 'Preciso'];
+    const presetDesc = {
+      'Rápido': 'Aparecen palabras casi al instante, con más errores que se corrigen solos.',
+      'Equilibrado': 'Un segundo de retraso. Es el ajuste que usa casi todo el mundo.',
+      'Preciso': 'Hasta tres segundos de retraso, pero apenas se corrige a sí mismo.'
+    }[s.preset];
+
+    const setupItems = [
+      { title: 'Motor de voz', tag: 'obligatorio', desc: 'El programa que convierte el audio en texto.', path: '/opt/homebrew/bin/whisper-cli', ok: true, primary: 'Cambiar…', secondary: null },
+      { title: 'Modelo de voz', tag: R ? 'obligatorio' : 'falta esto', desc: R ? 'ggml-large-v3 · 3,1 GB · español incluido.' : 'Sin modelo, Gluffi no puede transcribir nada.', path: R ? '~/Modelos/ggml-large-v3.bin' : 'No hay ningún modelo elegido', ok: R, primary: R ? 'Cambiar…' : 'Descargar (3,1 GB)', secondary: R ? null : 'Elegir uno que ya tengo…' },
+      { title: 'Corrección con IA', tag: 'opcional', desc: 'Arregla puntuación y mayúsculas antes de pegar.', path: '/opt/homebrew/bin/llama-completion · Llama-3.2-3B', ok: true, primary: 'Cambiar…', secondary: null },
+      { title: 'Transcripción en vivo', tag: 'opcional', desc: 'Necesario solo para la ventana que escribe mientras hablas.', path: 'whisper-stream no está instalado', ok: null, primary: 'Instalar con Homebrew', secondary: null }
+    ].map(it => ({
+      title: it.title, tag: it.tag, desc: it.desc, path: it.path,
+      badge: it.ok === true ? '✓' : it.ok === null ? '–' : '!',
+      badgeBg: it.ok === true ? '#7ee800' : it.ok === null ? 'rgba(255,255,255,.14)' : '#ffd60a',
+      badgeFg: it.ok === true ? '#14200a' : it.ok === null ? 'rgba(255,255,255,.6)' : '#2a2200',
+      primary: it.primary, secondary: it.secondary,
+      primaryBg: it.ok === false ? '#7ee800' : 'rgba(255,255,255,.09)',
+      primaryFg: it.ok === false ? '#14200a' : 'rgba(255,255,255,.92)',
+      onPrimary: () => this.setState({ readyOverride: true })
+    }));
+
+    const perms = [
+      { title: 'Accesibilidad', desc: 'Para pegar el texto en la app donde estás escribiendo.', ok: true },
+      { title: 'Micrófono', desc: 'Para grabar tu voz.', ok: true },
+      { title: 'Llavero', desc: 'Solo si usas snippets sensibles. Se pide al insertar el primero.', ok: null, action: 'Probar ahora' }
+    ].map(p => ({
+      title: p.title, desc: p.desc, action: p.action || '',
+      badge: p.ok === true ? '✓' : '–',
+      badgeBg: p.ok === true ? '#7ee800' : 'rgba(255,255,255,.14)',
+      badgeFg: p.ok === true ? '#14200a' : 'rgba(255,255,255,.6)'
+    }));
+
+    const tabs = [
+      { id: 'general', label: 'General', hint: '' },
+      { id: 'texto', label: 'Texto', hint: '3' },
+      { id: 'idiomas', label: 'Idiomas', hint: '' },
+      { id: 'comandos', label: 'Comandos', hint: '' },
+      { id: 'envivo', label: 'En vivo', hint: '' },
+      { id: 'audio', label: 'Sonido', hint: '' },
+      { id: 'atajos', label: 'Atajos', hint: '3' }
+    ].map(t => ({
+      label: t.label, hint: t.hint,
+      bg: s.prefsTab === t.id ? 'rgba(126,232,0,.16)' : 'transparent',
+      dot: s.prefsTab === t.id ? '#7ee800' : 'rgba(255,255,255,.22)',
+      onClick: () => this.setState({ prefsTab: t.id })
+    }));
+    const tabTitle = { general: 'General', texto: 'Texto', idiomas: 'Idiomas', comandos: 'Comandos', envivo: 'En vivo', audio: 'Sonido', atajos: 'Atajos' }[s.prefsTab];
+
+    const q = s.query.trim().toLowerCase();
+    const historyRows = (s.cleared ? [] : s.history).filter(h => !q || h.text.toLowerCase().includes(q)).map(h => ({
+      time: h.time, app: h.app, dur: h.dur, text: h.text, copied: s.copied === h.id,
+      bg: s.copied === h.id ? 'rgba(126,232,0,.1)' : 'transparent',
+      onClick: () => { this.setState({ copied: h.id }); setTimeout(() => this.setState(st => st.copied === h.id ? { copied: null } : {}), 1200); }
+    }));
+
+    const dq = s.dictQuery.trim().toLowerCase();
+    const dictRows = s.dict.filter(d => !dq || d.canon.toLowerCase().includes(dq) || d.variants.toLowerCase().includes(dq)).map(d => {
+      const on = !s.dictOff[d.id];
+      return {
+        canon: d.canon, variants: d.variants, uses: d.uses + '×', opacity: on ? 1 : 0.4,
+        sw: this.sw(on), swX: this.swX(on, 13),
+        onToggle: () => this.setState(st => ({ dictOff: Object.assign({}, st.dictOff, { [d.id]: on }) }))
+      };
+    });
+
+    const sq = s.snipQuery.trim().toLowerCase();
+    const snipRows = s.snips.filter(x => !sq || x.name.toLowerCase().includes(sq)).map(x => {
+      const on = !s.snipOff[x.id];
+      const locked = s.locks[x.id] !== undefined ? s.locks[x.id] : x.sensitive;
+      const shown = s.reveal === x.id;
+      return {
+        name: x.name, phrases: x.phrases, opacity: on ? 1 : 0.4,
+        body: locked && !shown ? '••••••••••••••' : x.body,
+        sw: this.sw(on), swX: this.swX(on, 13),
+        lockBg: locked ? 'rgba(255,214,10,.16)' : 'rgba(255,255,255,.07)',
+        lockFg: locked ? '#ffd60a' : 'rgba(255,255,255,.4)',
+        lockLabel: locked ? 'Sensible' : 'Normal',
+        showReveal: locked, revealLabel: shown ? 'Ocultar' : 'Mostrar',
+        onReveal: () => this.setState(st => ({ reveal: st.reveal === x.id ? null : x.id })),
+        onToggle: () => this.setState(st => ({ snipOff: Object.assign({}, st.snipOff, { [x.id]: on }) })),
+        onLock: () => this.setState(st => ({ locks: Object.assign({}, st.locks, { [x.id]: !locked }), reveal: null }))
+      };
+    });
+
+    const allToasts = [
+      { id: 'model', title: 'Falta el modelo de voz', body: 'Gluffi no puede transcribir hasta que elijas uno. Toma un minuto.', primary: 'Configurar', secondary: 'Luego', accent: true, act: open('setup') },
+      { id: 'update', title: 'Nueva versión del motor de voz', body: 'whisper-cli 1.7.2 → 1.7.4. Se actualiza en segundo plano.', primary: 'Actualizar', secondary: 'Ignorar', accent: false, act: open('setup') },
+      { id: 'mic', title: 'No se pudo grabar', body: 'FaceTime está usando el micrófono. Ciérralo y vuelve a intentarlo.', primary: 'Reintentar', secondary: 'Cerrar', accent: false, act: () => this.setState({ pill: 'recording', secs: 0 }) }
+    ];
+    const toasts = allToasts.filter(t => !s.dismissed.includes(t.id) && (t.id !== 'model' || !R)).slice(0, 2).map(t => ({
+      title: t.title, body: t.body, primary: t.primary, secondary: t.secondary,
+      iconBg: t.accent ? 'rgba(255,214,10,.18)' : 'rgba(255,255,255,.1)',
+      iconFg: t.accent ? '#ffd60a' : 'rgba(255,255,255,.75)',
+      primaryBg: t.accent ? '#ffd60a' : 'rgba(255,255,255,.16)',
+      primaryFg: t.accent ? '#2a2200' : 'rgba(255,255,255,.95)',
+      onPrimary: () => { t.act(); this.setState(st => ({ dismissed: st.dismissed.concat(t.id) })); },
+      onDismiss: () => this.setState(st => ({ dismissed: st.dismissed.concat(t.id) }))
+    }));
+
+    const words = ['Dime', 'Te escucho', 'Cuéntame', 'Aquí estoy', 'Suéltalo', 'Sin prisa', 'Piensa alto', 'Al oído'];
+    const idleWord = words[s.wordIdx % words.length];
+
+    return {
+      // barra de menú
+      toggleMenu: () => this.setState({ menuOpen: !s.menuOpen, submenuOpen: false }),
+      closeMenu: () => this.setState({ menuOpen: false, submenuOpen: false }),
+      menuOpen: s.menuOpen, menuOpenA: s.menuOpen && mv === 'A', menuOpenB: s.menuOpen && mv === 'B',
+      iconBg: s.menuOpen ? 'rgba(255,255,255,.16)' : 'transparent',
+      isRecording: rec, isProcessing: proc, isIdle: s.pill === 'idle', notRecording: !rec,
+      needsSetup: !R,
+      statusDot: R ? '#7ee800' : '#ffd60a',
+      statusLabel: R ? 'Todo listo' : 'Falta el modelo de voz',
+      recordLabel: rec ? 'Detener y transcribir' : proc ? 'Procesando…' : 'Grabar ahora',
+      recordHint: rec ? 'Suelta el atajo o pulsa aquí' : proc ? 'Puedes seguir trabajando' : 'Mantén ⌘⌥ desde cualquier app',
+      recordCardBg: rec ? 'rgba(255,69,58,.12)' : 'rgba(126,232,0,.07)',
+      recordBtnBg: rec ? '#ff453a' : '#7ee800',
+      recordBtnAnim: rec ? 'gpulse 1.4s ease-in-out infinite' : 'none',
+      showTimer: rec || proc, timer,
+      pillTap: () => this.pillTap(),
+      tileRecLabel: rec ? 'Grabando' : proc ? 'Procesando' : 'Grabar',
+      tileRecBg: rec ? 'rgba(255,69,58,.13)' : 'rgba(126,232,0,.13)',
+      tileRecBorder: rec ? 'rgba(255,69,58,.3)' : 'rgba(126,232,0,.3)',
+      tileRecIcon: '#7ee800',
+      submenuBg: s.submenuOpen ? 'rgba(255,255,255,.1)' : 'transparent',
+      submenuOpen: s.submenuOpen,
+      toggleSubmenu: () => this.setState({ submenuOpen: !s.submenuOpen }),
+      snippetMenu: s.snips.filter(x => !s.snipOff[x.id]).map(x => ({
+        name: x.name, locked: s.locks[x.id] !== undefined ? s.locks[x.id] : x.sensitive,
+        onClick: () => this.setState({ menuOpen: false, submenuOpen: false })
+      })),
+      liveTileBg: s.liveOpen ? 'rgba(126,232,0,.13)' : 'rgba(255,255,255,.05)',
+      liveTileBorder: s.liveOpen ? 'rgba(126,232,0,.3)' : 'rgba(255,255,255,.07)',
+      liveTileDot: s.liveOpen ? '#7ee800' : 'rgba(255,255,255,.22)',
+      pillTileBg: s.pillOn ? 'rgba(126,232,0,.13)' : 'rgba(255,255,255,.05)',
+      pillTileBorder: s.pillOn ? 'rgba(126,232,0,.3)' : 'rgba(255,255,255,.07)',
+      pillTileDot: s.pillOn ? '#7ee800' : 'rgba(255,255,255,.22)',
+      historyCount: s.cleared ? 0 : s.history.length, dictCount: s.dict.length, snipCount: s.snips.length,
+      footerSummary: this.langName(s.lang) + ' · ' + (s.llmOn ? 'corrección activa' : 'sin corrección') + ' · ' + activeDict + ' términos',
+
+      // ventanas
+      openSetup: open('setup'), openPrefs: open('prefs'), openHistory: open('history'),
+      openDict: open('dict'), openSnippets: open('snips'),
+      closeWin: () => this.setState({ win: null }),
+      winSetup: s.win === 'setup', winHistory: s.win === 'history', winDict: s.win === 'dict', winSnip: s.win === 'snips',
+      winPrefsA: s.win === 'prefs' && pv === 'A', winPrefsB: s.win === 'prefs' && pv === 'B',
+
+      // configuración
+      setupSummary: R ? 'Los 4 componentes están en su sitio.' : 'Falta 1 de 4. Los otros 3 ya están listos.',
+      setupItems, permItems: perms,
+      recheck: () => this.forceUpdate(),
+      finishSetup: () => this.setState({ win: null, readyOverride: true }),
+
+      // preferencias
+      prefTabs: tabs, prefsTabTitle: tabTitle,
+      tabGeneral: s.prefsTab === 'general', tabTexto: s.prefsTab === 'texto', tabIdiomas: s.prefsTab === 'idiomas',
+      tabComandos: s.prefsTab === 'comandos', tabEnVivo: s.prefsTab === 'envivo', tabAudio: s.prefsTab === 'audio',
+      tabAtajos: s.prefsTab === 'atajos',
+      langs: [{ code: 'es', name: 'Español' }, { code: 'en', name: 'Inglés' }, { code: 'pt', name: 'Portugués' }, { code: 'fr', name: 'Francés' }, { code: 'de', name: 'Alemán' }, { code: 'it', name: 'Italiano' }, { code: 'auto', name: 'Detectar solo' }],
+      lang: s.lang, langName: this.langName(s.lang),
+      onLang: e => this.setState({ lang: e.target.value }),
+      minDur: s.minDur, minDurLabel: s.minDur.toFixed(1) + ' s',
+      onMinDur: e => this.setState({ minDur: parseFloat(e.target.value) }),
+      swPill: this.sw(s.pillOn), swPillX: this.swX(s.pillOn),
+      swLogin: this.sw(s.loginOn), swLoginX: this.swX(s.loginOn),
+      swLlm: this.sw(s.llmOn), swLlmX: this.swX(s.llmOn), llmOn: s.llmOn,
+      swDict: this.sw(s.dictOn), swDictX: this.swX(s.dictOn),
+      swSnip: this.sw(s.snipOn), swSnipX: this.swX(s.snipOn),
+      swTrans: this.sw(s.transOn), swTransX: this.swX(s.transOn), transOpacity: s.transOn ? 1 : 0.35,
+      swActions: this.sw(s.actionsOn), swActionsX: this.swX(s.actionsOn),
+      actionsNeedLlm: s.actionsOn && !s.llmOn,
+      swSound: this.sw(s.soundOn), swSoundX: this.swX(s.soundOn), soundOpacity: s.soundOn ? 1 : 0.35,
+      toggleLogin: this.t('loginOn'), toggleLlm: this.t('llmOn'), toggleDict: this.t('dictOn'),
+      toggleSnip: this.t('snipOn'), toggleTrans: this.t('transOn'), toggleActions: this.t('actionsOn'),
+      toggleSound: this.t('soundOn'),
+      enableLlm: () => this.setState({ llmOn: true }),
+      togglePill: () => this.setState({ pillOn: !s.pillOn }),
+      prompt: s.prompt, onPrompt: e => this.setState({ prompt: e.target.value }),
+      vol: s.vol, volLabel: s.vol + '%', onVol: e => this.setState({ vol: parseInt(e.target.value, 10) }),
+      sounds: ['Gota', 'Tecla', 'Tinta', 'Radar', 'Marimba', 'Silencio'].map(n => ({
+        name: n, check: s.sound === n ? '✓' : '',
+        bg: s.sound === n ? 'rgba(126,232,0,.13)' : 'rgba(255,255,255,.045)',
+        border: s.sound === n ? 'rgba(126,232,0,.32)' : 'rgba(255,255,255,.07)',
+        onClick: () => this.setState({ sound: n })
+      })),
+      streamPresets: presets.map(p => ({
+        label: p, bg: s.preset === p ? '#7ee800' : 'transparent',
+        fg: s.preset === p ? '#14200a' : 'rgba(255,255,255,.75)',
+        onClick: () => this.setState({ preset: p })
+      })),
+      streamPresetDesc: presetDesc,
+      advOpen: s.advOpen, advArrow: s.advOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+      toggleAdv: this.t('advOpen'),
+      streamSliders: [
+        { label: 'Cada cuánto revisa', desc: 'Más seguido = texto más inmediato, más CPU.', min: 200, max: 1500, step: 100, value: s.step, display: s.step + ' ms', onChange: e => this.setState({ step: parseInt(e.target.value, 10) }) },
+        { label: 'Cuánto audio escucha a la vez', desc: 'Más largo = entiende mejor las frases completas.', min: 2000, max: 10000, step: 500, value: s.len, display: (s.len / 1000).toFixed(1) + ' s', onChange: e => this.setState({ len: parseInt(e.target.value, 10) }) },
+        { label: 'Cuánto recuerda del tramo anterior', desc: 'Ayuda a no cortar palabras entre tramos.', min: 0, max: 800, step: 50, value: s.keep, display: s.keep + ' ms', onChange: e => this.setState({ keep: parseInt(e.target.value, 10) }) }
+      ],
+      shortcuts: [
+        { label: 'Grabar y transcribir', mode: 'Mantener pulsado', keys: [{ k: '⌘' }, { k: '⌥' }] },
+        { label: 'Grabar y traducir', mode: 'Mantener pulsado', keys: [{ k: '⌘' }, { k: '⌥' }, { k: '⇧' }] },
+        { label: 'Transcripción en vivo', mode: 'Pulsar una vez', keys: [{ k: '⌘' }, { k: '⌥' }, { k: '⌃' }] }
+      ],
+      commands: [
+        { say: 'abre Safari', does: 'Abre la app que nombres' },
+        { say: 'busca hoteles en Cartagena', does: 'Busca en el navegador' },
+        { say: 'sube el volumen', does: 'Controla el volumen del sistema' },
+        { say: 'pon música', does: 'Reproduce o pausa' },
+        { say: 'bloquea la pantalla', does: 'Bloquea el Mac' }
+      ],
+      dictSummary: s.dict.length + ' términos · ' + activeDict + ' activos',
+      snipSummary: s.snips.length + ' snippets · ' + activeSnips + ' activos · ' + s.snips.filter(x => (s.locks[x.id] !== undefined ? s.locks[x.id] : x.sensitive)).length + ' sensibles',
+
+      // historial
+      query: s.query, onQuery: e => this.setState({ query: e.target.value }),
+      historyRows, historyEmpty: historyRows.length === 0,
+      historyEmptyText: s.cleared ? 'Historial vacío. Lo que dictes aparecerá aquí.' : (q ? 'Nada coincide con «' + s.query + '».' : 'Aún no has dictado nada.'),
+      historyLabel: historyRows.length + (historyRows.length === 1 ? ' resultado' : ' resultados'),
+      clearHistory: () => this.setState({ cleared: true, copied: null }),
+
+      // diccionario / snippets
+      dictQuery: s.dictQuery, onDictQuery: e => this.setState({ dictQuery: e.target.value }),
+      dictRows, dictTest: s.dictTest, onDictTest: e => this.setState({ dictTest: e.target.value }),
+      dictResult: !s.dictTest.trim() ? '—' : changed ? corrected : 'Igual: ninguna entrada aplica.',
+      dictResultColor: changed ? '#a4f53c' : 'rgba(255,255,255,.45)',
+      snipQuery: s.snipQuery, onSnipQuery: e => this.setState({ snipQuery: e.target.value }),
+      snipRows,
+
+      // en vivo
+      liveOpen: s.liveOpen, livePaused: s.livePaused, liveRunning: !s.livePaused,
+      toggleLive: () => this.setState({ liveOpen: !s.liveOpen, menuOpen: false, livePaused: false }),
+      closeLive: () => this.setState({ liveOpen: false }),
+      toggleLivePause: this.t('livePaused'),
+      clearLive: () => this.setState({ liveCopied: false }),
+      copyLive: () => { this.setState({ liveCopied: true }); setTimeout(() => this.setState({ liveCopied: false }), 1200); },
+      copyLiveColor: s.liveCopied ? '#7ee800' : 'currentColor',
+      liveDot: s.livePaused ? 'rgba(255,255,255,.3)' : '#7ee800',
+      liveDotAnim: s.livePaused ? 'none' : 'gpulse 1.6s ease-in-out infinite',
+      liveTitle: s.livePaused ? 'En pausa' : 'Escuchando',
+      liveMeta: s.livePaused ? '· 142 palabras' : '· 142 palabras · 2:18',
+      liveText: 'La idea es que el menú deje de ser un panel de diagnóstico. Que solo tenga cosas que se puedan pulsar, y que el estado de la instalación viva en su propia ventana',
+      liveTextOpacity: 0.9,
+
+      // píldora
+      pillOn: s.pillOn, pillIdle: s.pill === 'idle',
+      pillX: s.pillPos ? s.pillPos.x : 1160, pillY: s.pillPos ? s.pillPos.y : 700,
+      pillCursor: s.dragging ? 'grabbing' : 'grab',
+      pillDown: e => this.pillDown(e),
+      stopDrag: e => e.stopPropagation(),
+      idleWord, wordAnim: (s.wordFlip ? 'gfadeA' : 'gfadeB') + ' .45s ease-out',
+      pillCancel: e => { if (e && e.stopPropagation) e.stopPropagation(); this.setState({ pill: 'idle', secs: 0, procStep: 0 }); },
+      pillBg: rec ? 'linear-gradient(180deg,#1c2216,#0f120b)' : proc ? 'rgba(20,23,18,.94)' : 'rgba(20,23,18,.9)',
+      pillBorder: rec ? 'rgba(126,232,0,.5)' : proc ? 'rgba(126,232,0,.3)' : 'rgba(126,232,0,.4)',
+      pillShadow: rec ? '0 0 24px rgba(126,232,0,.16),0 10px 28px rgba(0,0,0,.55)' : '0 8px 24px rgba(0,0,0,.5)',
+      pillAnim: s.pill === 'idle' ? 'gbreathe 3.4s ease-in-out infinite' : 'none',
+      processLabel: s.procStep > 16 ? 'Corrigiendo' : 'Transcribiendo',
+      pillHint: rec ? 'Clic para transcribir · Esc para cancelar' : proc ? 'Se pega solo donde estabas escribiendo' : 'Clic para grabar · arrástrala donde quieras',
+
+      toasts
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -5,6 +5,9 @@ import ApplicationServices
 struct HotkeyCombination {
     let id: String
     let modifiers: NSEvent.ModifierFlags
+    /// En modo `toggle` la primera pulsación llama a onKeyDown y la siguiente a
+    /// onKeyUp: soltar la tecla no termina nada.
+    let mode: HotkeyBinding.Mode
     let onKeyDown: () -> Void
     let onKeyUp: () -> Void
 }
@@ -15,6 +18,8 @@ class HotkeyManager {
 
     private var combinations: [HotkeyCombination] = []
     private var activeComboId: String?
+    /// Combos en modo toggle que están encendidos ahora mismo.
+    private var toggledOn: Set<String> = []
 
     private var flagsMonitor: Any?
     private var retryTimer:   DispatchSourceTimer?
@@ -26,10 +31,19 @@ class HotkeyManager {
 
     /// Registra una combinación de teclas. Llamar ANTES de `setupWhenReady()`.
     func register(id: String, modifiers: NSEvent.ModifierFlags,
+                  mode: HotkeyBinding.Mode = .hold,
                   onKeyDown: @escaping () -> Void, onKeyUp: @escaping () -> Void) {
         combinations.append(HotkeyCombination(
-            id: id, modifiers: modifiers,
+            id: id, modifiers: modifiers, mode: mode,
             onKeyDown: onKeyDown, onKeyUp: onKeyUp))
+    }
+
+    /// Borra lo registrado. Se usa al cambiar los atajos en Preferencias: hay que
+    /// volver a registrarlos sin reiniciar la app.
+    func unregisterAll() {
+        combinations.removeAll()
+        activeComboId = nil
+        toggledOn.removeAll()
     }
 
     func setupWhenReady() {
@@ -70,7 +84,7 @@ class HotkeyManager {
                 .intersection(self.relevantMask)
 
             if let activeId = self.activeComboId {
-                // Ya hay un combo activo — verificar si se soltó
+                // Ya hay un combo de mantener pulsado activo: se mira si se soltó.
                 if let combo = self.combinations.first(where: { $0.id == activeId }) {
                     if current != combo.modifiers {
                         self.activeComboId = nil
@@ -82,12 +96,23 @@ class HotkeyManager {
                 let sorted = self.combinations.sorted {
                     $0.modifiers.rawValue.nonzeroBitCount > $1.modifiers.rawValue.nonzeroBitCount
                 }
-                for combo in sorted {
-                    if current == combo.modifiers {
+                for combo in sorted where current == combo.modifiers {
+                    switch combo.mode {
+                    case .hold:
                         self.activeComboId = combo.id
                         combo.onKeyDown()
-                        break
+                    case .toggle:
+                        // Soltar no cierra nada: la siguiente pulsación es la que
+                        // termina. Así se puede dictar largo sin sostener teclas.
+                        if self.toggledOn.contains(combo.id) {
+                            self.toggledOn.remove(combo.id)
+                            combo.onKeyUp()
+                        } else {
+                            self.toggledOn.insert(combo.id)
+                            combo.onKeyDown()
+                        }
                     }
+                    break
                 }
             }
         }

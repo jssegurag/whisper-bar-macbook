@@ -21,7 +21,30 @@ struct VoiceActionsTab: View {
                     Config.shared.voiceActionsEnabled = newValue
                 }
 
-            Text("Requiere LLM activado para detectar comandos.")
+            Group {
+                    if !Config.shared.llmEnabled {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(Theme.warn)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Los comandos necesitan la corrección con IA")
+                                    .font(.system(size: 12.5, weight: .semibold))
+                                Text("Es la que interpreta lo que pides. Sin ella, lo que dictes se pega tal cual.")
+                                    .font(.system(size: 11.5))
+                                    .foregroundStyle(.secondary)
+                                // Un aviso sin acción obliga a ir a buscar el
+                                // interruptor a otra sección.
+                                Button("Activarla") {
+                                    Config.shared.llmEnabled = true
+                                }
+                                .controlSize(.small)
+                            }
+                        }
+                        .padding(12)
+                        .background(Theme.warn.opacity(0.10))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                }
                 .foregroundColor(.secondary).font(.caption)
 
             Section("Comandos disponibles") {

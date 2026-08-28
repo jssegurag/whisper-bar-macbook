@@ -18,7 +18,7 @@ class SnippetsWindowController: NSObject, NSWindowDelegate {
         let win = NSWindow(contentViewController: hostingController)
         win.title = "Gluffi — Snippets"
         win.styleMask = [.titled, .closable, .resizable, .miniaturizable]
-        win.setContentSize(NSSize(width: 600, height: 560))
+        win.setContentSize(NSSize(width: 620, height: 570))
         win.center()
         win.isReleasedWhenClosed = false
         win.delegate = self

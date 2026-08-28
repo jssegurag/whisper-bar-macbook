@@ -120,13 +120,10 @@ struct AudioTab: View {
 
             Divider().padding(.horizontal)
 
-            // ── Dispositivo de entrada ───────────────────────────────────────
             HStack {
                 Image(systemName: "mic").foregroundColor(.secondary)
-                Text("Dispositivo de entrada: Default del sistema")
                     .foregroundColor(.secondary).font(.caption)
                 Spacer()
-                Text("(próximamente)").foregroundColor(.secondary).font(.caption).italic()
             }
             .padding(.horizontal, 16).padding(.vertical, 8)
         }
