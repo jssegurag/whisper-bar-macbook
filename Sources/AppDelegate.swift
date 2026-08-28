@@ -190,16 +190,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Única fila que queda del diagnóstico: nombra qué falta, y lleva a
         // resolverlo. Las otras seis se fueron a la ventana de Configuración.
         let status = SetupStatus.current(config)
-        menu.addItem(row(leading: .dot(status.needsAttention ? Theme.warnNS : Theme.brandNS),
-                         title: status.title,
+        let statusColor = status.needsAttention ? Theme.warnNS : Theme.brandNS
+        menu.addItem(row(leading: .symbol("gearshape", tint: statusColor),
+                         title: status.menuRowTitle,
                          action: #selector(openSetup),
-                         showsChevron: true))
+                         showsChevron: true,
+                         trailingDot: statusColor))
 
         menu.addItem(.separator())
 
         let activeSnippets = SnippetStore.shared.activeSnippets
         if !activeSnippets.isEmpty {
-            let insertItem = row(leading: .symbol("text.badge.plus"),
+            let insertItem = row(leading: .symbol("text.badge.plus", tint: nil),
                                  title: "Insertar snippet",
                                  action: nil,
                                  showsChevron: true)
@@ -223,13 +225,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
-        menu.addItem(row(leading: .symbol("clock"), title: "Historial…",
+        menu.addItem(row(leading: .symbol("clock", tint: nil), title: "Historial…",
                          action: #selector(openHistory), keyEquivalent: "h"))
-        menu.addItem(row(leading: .symbol("character.book.closed"), title: "Diccionario…",
+        menu.addItem(row(leading: .symbol("character.book.closed", tint: nil), title: "Diccionario…",
                          action: #selector(openDictionary), keyEquivalent: "d"))
-        menu.addItem(row(leading: .symbol("text.alignleft"), title: "Snippets…",
+        menu.addItem(row(leading: .symbol("text.alignleft", tint: nil), title: "Snippets…",
                          action: #selector(openSnippets), keyEquivalent: "s"))
-        menu.addItem(row(leading: .symbol("slider.horizontal.3"), title: "Preferencias…",
+        menu.addItem(row(leading: .symbol("slider.horizontal.3", tint: nil), title: "Preferencias…",
                          action: #selector(openPreferences), keyEquivalent: ","))
 
         menu.addItem(.separator())
@@ -251,12 +253,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                      title: String,
                      action: Selector?,
                      keyEquivalent: String = "",
-                     showsChevron: Bool = false) -> NSMenuItem {
+                     showsChevron: Bool = false,
+                     trailingDot: NSColor? = nil) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: keyEquivalent)
         item.target = self
         let glyph = keyEquivalent.isEmpty ? nil : "⌘" + keyEquivalent.uppercased()
         item.view = MenuRowView(leading: leading, title: title,
-                                shortcut: glyph, showsChevron: showsChevron)
+                                shortcut: glyph, showsChevron: showsChevron,
+                                trailingDot: trailingDot)
         return item
     }
 

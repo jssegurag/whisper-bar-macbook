@@ -16,7 +16,9 @@ class MenuRowView: NSView {
 
     /// Lo que va a la izquierda del título: un símbolo, o un punto de estado.
     enum Leading {
-        case symbol(String)
+        /// `tint` para cuando el icono comunica estado por color, como el
+        /// engranaje de Configuración: verde si todo está, ámbar si falta algo.
+        case symbol(String, tint: NSColor? = nil)
         case dot(NSColor)
         case none
     }
@@ -26,13 +28,17 @@ class MenuRowView: NSView {
     private let shortcut: String?
     /// Chevron a la derecha: la fila lleva a otra ventana.
     private let showsChevron: Bool
+    /// Punto de estado antes del chevron.
+    private let trailingDot: NSColor?
     private var hovering = false
 
-    init(leading: Leading, title: String, shortcut: String? = nil, showsChevron: Bool = false) {
+    init(leading: Leading, title: String, shortcut: String? = nil,
+         showsChevron: Bool = false, trailingDot: NSColor? = nil) {
         self.leading = leading
         self.title = title
         self.shortcut = shortcut
         self.showsChevron = showsChevron
+        self.trailingDot = trailingDot
         super.init(frame: NSRect(x: 0, y: 0,
                                 width: Theme.menuContentWidth,
                                 height: Theme.menuRowHeight))
@@ -87,11 +93,14 @@ class MenuRowView: NSView {
         // arranquen alineados aunque una fila no tenga icono.
         let iconBox = NSRect(x: 8, y: (bounds.height - 16) / 2, width: 16, height: 16)
         switch leading {
-        case .symbol(let name):
+        case .symbol(let name, let tint):
             if let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil) {
                 let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
                 let sized = symbol.withSymbolConfiguration(config) ?? symbol
-                tinted(sized, textColor).draw(in: iconBox)
+                // Sobre el verde del resaltado, el tinte propio se pierde: ahí
+                // manda el color del texto.
+                let color = active ? textColor : (tint ?? textColor)
+                tinted(sized, color).draw(in: iconBox)
             }
         case .dot(let color):
             let d: CGFloat = 7
@@ -114,6 +123,12 @@ class MenuRowView: NSView {
                  at: NSRect(x: bounds.width - 46, y: 0, width: 38, height: bounds.height),
                  alignment: .right)
         } else if showsChevron {
+            if let trailingDot {
+                let d: CGFloat = 7
+                let x = bounds.width - 34
+                (active ? Theme.onBrandNS : trailingDot).setFill()
+                NSBezierPath(ovalIn: NSRect(x: x, y: bounds.midY - d / 2, width: d, height: d)).fill()
+            }
             draw("›", font: NSFont.systemFont(ofSize: 14),
                  color: textColor.withAlphaComponent(active ? 0.7 : 0.35),
                  at: NSRect(x: bounds.width - 22, y: 0, width: 14, height: bounds.height),

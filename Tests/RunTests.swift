@@ -1908,6 +1908,13 @@ func testSetupStatus() {
     let sinNada = SetupStatus.evaluate(hasEngine: false, hasModel: false)
     assertEqual(sinNada.title, "Falta el motor de voz",
         "sin motor ni modelo se nombra primero el motor, no los dos")
+
+    // El título de la fila del menú no es el del estado: con todo listo la fila
+    // se llama por su destino, porque «Todo listo» no dice a dónde lleva.
+    assertEqual(listo.menuRowTitle, "Configuración",
+        "sin nada pendiente la fila se llama Configuración")
+    assertEqual(sinModelo.menuRowTitle, "Falta el modelo de voz",
+        "con algo pendiente la fila se llama por el problema, no por el destino")
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

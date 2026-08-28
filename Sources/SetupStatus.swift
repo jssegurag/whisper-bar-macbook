@@ -19,6 +19,15 @@ struct SetupStatus: Equatable {
 
     var needsAttention: Bool { level != .ready }
 
+    /// Título de la fila del menú.
+    ///
+    /// Con todo en su sitio la fila se llama por su destino —«Configuración»—,
+    /// porque «Todo listo» no dice a dónde lleva. Cuando falta algo se llama por
+    /// el problema, que en ese momento importa más que el destino.
+    var menuRowTitle: String {
+        needsAttention ? title : "Configuración"
+    }
+
     /// Orden de prioridad deliberado: sin motor no importa el modelo, así que se
     /// nombra primero el motor. Solo se reporta **una** cosa: la que hay que
     /// resolver ahora.
