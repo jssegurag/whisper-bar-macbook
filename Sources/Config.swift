@@ -229,6 +229,20 @@ class Config {
 
     // MARK: - Snippets por voz
 
+    // MARK: - Píldora flotante
+
+    /// Palabra en reposo de la píldora. Se persiste para que reiniciar la app no
+    /// fuerce un cambio: la regla es que la palabra no se mueva a la vista.
+    var idleWordIndex: Int {
+        get { defaults.integer(forKey: "idleWordIndex") }
+        set { defaults.set(newValue, forKey: "idleWordIndex") }
+    }
+
+    var idleWordChangedAt: Date? {
+        get { defaults.object(forKey: "idleWordChangedAt") as? Date }
+        set { defaults.set(newValue, forKey: "idleWordChangedAt") }
+    }
+
     /// Si los snippets se insertan al pronunciar sus disparadores.
     /// Sin snippets registrados es inerte, así que el default es true.
     var snippetsEnabled: Bool {

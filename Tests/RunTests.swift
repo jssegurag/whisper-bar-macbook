@@ -2002,6 +2002,45 @@ func testModelDownloaderFormatting() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - IdleWord — La palabra que no se mueve
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testIdleWord() {
+    suite("IdleWord — Regla anti-distracción")
+
+    assert(IdleWord.words.count >= 4, "hay varias palabras entre las que rotar")
+    assertEqual(IdleWord.word(at: 0), IdleWord.words[0], "word(at:) devuelve la palabra")
+    assertEqual(IdleWord.word(at: IdleWord.words.count), IdleWord.words[0],
+        "el índice da la vuelta sin salirse del arreglo")
+    assertEqual(IdleWord.word(at: -1), IdleWord.words[IdleWord.words.count - 1],
+        "un índice negativo tampoco revienta")
+
+    // Primera vez: se fija el reloj sin cambiar la palabra, para que el usuario
+    // no vea un cambio antes de tener referencia.
+    let primera = IdleWord.rotate(current: 3, lastChange: nil)
+    assertEqual(primera.index, 3, "la primera vez no cambia la palabra")
+    assert(primera.changed, "pero sí registra el momento")
+
+    // La regla que importa: menos de 15 minutos, no se toca.
+    let ahora = Date()
+    let reciente = IdleWord.rotate(current: 2, lastChange: ahora.addingTimeInterval(-60), now: ahora)
+    assertEqual(reciente.index, 2, "a un minuto del último cambio, la palabra se queda")
+    assert(!reciente.changed, "y no se registra cambio")
+
+    let justoAntes = IdleWord.rotate(current: 2, lastChange: ahora.addingTimeInterval(-899), now: ahora)
+    assert(!justoAntes.changed, "a 14:59 todavía no rota")
+
+    let cumplido = IdleWord.rotate(current: 2, lastChange: ahora.addingTimeInterval(-900), now: ahora)
+    assertEqual(cumplido.index, 3, "a los 15 minutos exactos rota a la siguiente")
+    assert(cumplido.changed, "y lo registra")
+
+    // Da la vuelta al llegar al final
+    let ultima = IdleWord.rotate(current: IdleWord.words.count - 1,
+                                 lastChange: ahora.addingTimeInterval(-1000), now: ahora)
+    assertEqual(ultima.index, 0, "desde la última vuelve a la primera")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -2068,6 +2107,7 @@ struct TestRunner {
         testSetupStatus()
         testMenuBarIcon()
         testSetupSummary()
+        testIdleWord()
         testModelDownloaderFormatting()
 
         // Summary

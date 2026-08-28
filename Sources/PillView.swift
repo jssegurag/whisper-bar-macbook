@@ -1,327 +1,238 @@
 import SwiftUI
 
-/// Estado visual del pill flotante.
+/// Estado visual de la píldora flotante.
 enum PillState {
-    case idle           // Listo para grabar
-    case recording      // Grabando (usuario habla)
-    case transcribing   // Procesando audio → texto
+    case idle
+    case recording
+    case transcribing
 }
 
 /// View model observable. Único punto de cambio de estado para la UI.
 final class PillViewModel: ObservableObject {
     @Published var state: PillState = .idle
+    /// «Transcribiendo» o «Corrigiendo»: la píldora dice en qué va, no solo que
+    /// está ocupada.
+    @Published var processingLabel: String = "Transcribiendo"
+    /// Nivel de voz 0…1 que alimenta la onda. Lo empuja AppDelegate mientras graba.
+    @Published var micLevel: CGFloat = 0
+    /// Palabra en reposo. Solo cambia al volver a reposo tras un dictado.
+    @Published var idleWord: String = IdleWord.word(at: Config.shared.idleWordIndex)
 }
 
-// MARK: - Paleta neón
-
-private enum Neon {
-    static let cyan    = Color(red: 0.00, green: 0.92, blue: 1.00) // #00EBFF
-    static let magenta = Color(red: 1.00, green: 0.10, blue: 0.78) // #FF1AC8
-    static let red     = Color(red: 1.00, green: 0.18, blue: 0.34) // #FF2D57
-    static let purple  = Color(red: 0.55, green: 0.36, blue: 1.00) // #8C5CFF
-    static let lime    = Color(red: 0.32, green: 1.00, blue: 0.55) // #52FF8C
-    static let inkTop    = Color(red: 0.10, green: 0.10, blue: 0.18)
-    static let inkBottom = Color(red: 0.04, green: 0.04, blue: 0.10)
-}
-
-/// Pill alargado con paleta neón y animaciones específicas por estado.
-/// Diseño Krug: estado autoevidente, alta visibilidad sobre cualquier fondo.
+/// Píldora flotante.
+///
+/// El rediseño quita los tres neones —cian, magenta y púrpura— que eran el
+/// lenguaje visual de la app por accidente. Ahora hay un solo acento, el verde de
+/// marca, y el logo está presente en los tres estados: la píldora es Gluffi, no
+/// un widget genérico de micrófono.
+///
+/// También desaparecen la palabra «REC» y el cronómetro: ninguno de los dos
+/// aportaba, y el cronómetro además obligaba a una tipografía monoespaciada que
+/// no pertenece a nada más de la app.
 struct PillView: View {
     @ObservedObject var model: PillViewModel
     var onTap: () -> Void
     var onCancel: () -> Void
+    /// Desplazamiento acumulado del arrastre, en coordenadas de pantalla.
+    var onDrag: (CGSize) -> Void = { _ in }
+    var onDragEnded: () -> Void = {}
+    /// Tamaño real del contenido, para que el panel se ajuste.
+    var onSizeChange: (CGSize) -> Void = { _ in }
 
-    @State private var isHovering: Bool = false
+    @State private var breathing = false
+    @State private var spin = false
+    @State private var dragDistance: CGFloat = 0
 
-    private let height: CGFloat = 44
+    private let height: CGFloat = 46
 
     var body: some View {
-        // Color.clear fill expande para ocupar el NSPanel; el capsule queda
-        // centrado con margen suficiente para que el glow no se recorte en las
-        // esquinas rectangulares del panel.
-        ZStack {
-            Color.clear
-                .allowsHitTesting(false)
-
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { ctx in
-                let t = ctx.date.timeIntervalSinceReferenceDate
-                content(time: t)
-                    .padding(.horizontal, 14)
-                    .frame(height: height)
-                    .frame(minWidth: 150)
-                    .background(background(time: t))
-                    .overlay(border(time: t))
-                    .clipShape(Capsule())
-                    .shadow(color: glowColor.opacity(glowOpacity(time: t)),
-                            radius: glowRadius(time: t), x: 0, y: 0)
-                    .scaleEffect(isHovering ? 1.05 : 1.0)
-                    .animation(.spring(response: 0.28, dampingFraction: 0.7), value: isHovering)
-            }
-            .fixedSize()
-            .contentShape(Capsule())
-            .onTapGesture { onTap() }
-            .onHover { hovering in
-                isHovering = hovering
-                if hovering { NSCursor.pointingHand.push() }
-                else { NSCursor.pop() }
+        HStack(spacing: 11) {
+            switch model.state {
+            case .idle:        idleContent
+            case .recording:   recordingContent
+            case .transcribing: processingContent
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityAddTraits(.isButton)
-        .help(helpText)
-    }
-
-    // MARK: Contenido por estado
-
-    @ViewBuilder
-    private func content(time: TimeInterval) -> some View {
-        switch model.state {
-        case .idle:         IdleContent(time: time)
-        case .recording:    RecordingContent(time: time, onCancel: onCancel)
-        case .transcribing: TranscribingContent(time: time, onCancel: onCancel)
+        .padding(.horizontal, 16)
+        .frame(height: height)
+        .background(background)
+        .overlay(
+            Capsule().stroke(Theme.brand.opacity(0.4), lineWidth: 1)
+        )
+        .overlay(breathRing)
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(0.5), radius: 12, x: 0, y: 8)
+        .fixedSize()
+        .background(sizeReporter)
+        .contentShape(Capsule())
+        .onTapGesture { onTap() }
+        .gesture(dragGesture)
+        .onAppear {
+            breathing = true
+            spin = true
         }
     }
 
-    // MARK: Fondo + borde con animación
+    // MARK: - Estados
 
-    @ViewBuilder
-    private func background(time: TimeInterval) -> some View {
-        switch model.state {
-        case .idle:
-            LinearGradient(
-                colors: [Neon.inkTop, Neon.inkBottom],
-                startPoint: .top, endPoint: .bottom
-            )
-        case .recording:
-            // Gradient hot red→magenta con shift sutil de fase
-            let shift = sin(time * 1.2) * 0.5 + 0.5  // 0..1
-            LinearGradient(
-                colors: [Neon.red, Neon.magenta],
-                startPoint: UnitPoint(x: shift * 0.3, y: 0),
-                endPoint:   UnitPoint(x: 1.0 - shift * 0.3, y: 1.0)
-            )
-        case .transcribing:
-            let shift = (time.truncatingRemainder(dividingBy: 2)) / 2  // 0..1
-            LinearGradient(
-                colors: [Neon.purple, Neon.cyan],
-                startPoint: UnitPoint(x: shift, y: 0),
-                endPoint:   UnitPoint(x: 1 + shift, y: 1)
-            )
+    private var idleContent: some View {
+        HStack(spacing: 11) {
+            GluffiMarkView(size: 20, color: Theme.brand)
+            Text(model.idleWord)
+                .font(.system(size: 13.5, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.92))
+                .transition(.opacity)
+                .id(model.idleWord)          // fuerza el cruce al cambiar
+            Text("⌘⌥")
+                .font(.system(size: 11.5))
+                .foregroundStyle(.white.opacity(0.38))
         }
+        .animation(.easeInOut(duration: 0.45), value: model.idleWord)
     }
 
-    @ViewBuilder
-    private func border(time: TimeInterval) -> some View {
-        switch model.state {
-        case .idle:
-            // Borde respirado cyan↔magenta
-            let breath = sin(time * 1.6) * 0.5 + 0.5  // 0..1
-            Capsule()
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            Neon.cyan.opacity(0.6 + breath * 0.4),
-                            Neon.magenta.opacity(0.6 + breath * 0.4),
-                        ],
-                        startPoint: .leading, endPoint: .trailing
-                    ),
-                    lineWidth: 1.6
-                )
-        case .recording, .transcribing:
-            Capsule().strokeBorder(Color.white.opacity(0.55), lineWidth: 1.4)
-        }
-    }
-
-    // MARK: Glow dinámico
-
-    private var glowColor: Color {
-        switch model.state {
-        case .idle:         return Neon.cyan
-        case .recording:    return Neon.red
-        case .transcribing: return Neon.purple
-        }
-    }
-
-    private func glowRadius(time: TimeInterval) -> CGFloat {
-        switch model.state {
-        case .idle:
-            let breath = sin(time * 1.6) * 0.5 + 0.5
-            return 6 + CGFloat(breath) * 6   // 6..12
-        case .recording:
-            let pulse = sin(time * 4.5) * 0.5 + 0.5
-            return 12 + CGFloat(pulse) * 8   // 12..20
-        case .transcribing:
-            return 14
-        }
-    }
-
-    private func glowOpacity(time: TimeInterval) -> Double {
-        switch model.state {
-        case .idle:
-            let breath = sin(time * 1.6) * 0.5 + 0.5
-            return 0.35 + breath * 0.25
-        case .recording:    return 0.85
-        case .transcribing: return 0.7
-        }
-    }
-
-    // MARK: Accesibilidad
-
-    private var accessibilityLabel: String {
-        switch model.state {
-        case .idle:         return "Micrófono — listo. Click para grabar."
-        case .recording:    return "Grabando. Click para detener y transcribir."
-        case .transcribing: return "Procesando transcripción."
-        }
-    }
-
-    private var helpText: String {
-        switch model.state {
-        case .idle:         return "Click para grabar"
-        case .recording:    return "Click para detener y transcribir · Esc o ✕ para cancelar"
-        case .transcribing: return "Procesando… · Esc o ✕ para cancelar"
-        }
-    }
-}
-
-// MARK: - Contenido por estado
-
-private struct IdleContent: View {
-    let time: TimeInterval
-
-    var body: some View {
-        let breath = sin(time * 1.6) * 0.5 + 0.5  // 0..1
-        HStack(spacing: 8) {
-            Image(systemName: "mic.fill")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Neon.cyan, Neon.magenta],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                )
-                .shadow(color: Neon.cyan.opacity(0.6 + breath * 0.4), radius: 4)
-            Text("Listo")
-                .font(.system(.callout, design: .rounded).weight(.semibold))
-                .foregroundColor(.white.opacity(0.92))
-                .tracking(0.3)
-        }
-    }
-}
-
-private struct RecordingContent: View {
-    let time: TimeInterval
-    let onCancel: () -> Void
-
-    var body: some View {
-        // Punto rojo pulsante
-        let pulse = sin(time * 4.5) * 0.5 + 0.5  // 0..1
-        HStack(spacing: 8) {
+    private var recordingContent: some View {
+        HStack(spacing: 11) {
+            // El logo sigue visible mientras graba: el estado lo comunica el
+            // punto rojo y la onda, no la desaparición de la marca.
+            GluffiMarkView(size: 20, color: Theme.brand)
             Circle()
-                .fill(Color.white)
-                .frame(width: 9, height: 9)
-                .scaleEffect(0.85 + pulse * 0.35)
-                .opacity(0.75 + pulse * 0.25)
-                .shadow(color: .white.opacity(0.6), radius: 3)
-
-            Text("REC")
-                .font(.system(.callout, design: .monospaced).weight(.heavy))
-                .tracking(2.5)
-                .foregroundColor(.white)
-                .shadow(color: .black.opacity(0.25), radius: 1)
-
-            WaveformBars(time: time)
-
-            CancelButton(action: onCancel)
+                .fill(Theme.danger)
+                .frame(width: 6, height: 6)
+                .opacity(breathing ? 0.45 : 1)
+                .scaleEffect(breathing ? 0.82 : 1)
+                .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true), value: breathing)
+            VoiceWaveView(level: model.micLevel)
+            cancelButton
         }
     }
-}
 
-private struct WaveformBars: View {
-    let time: TimeInterval
-    private let count = 4
-
-    var body: some View {
-        HStack(spacing: 2.5) {
-            ForEach(0..<count, id: \.self) { i in
-                Capsule()
-                    .fill(Color.white)
-                    .frame(width: 2.8, height: barHeight(for: i))
-            }
-        }
-        .frame(height: 18)
-    }
-
-    private func barHeight(for index: Int) -> CGFloat {
-        // Cada barra desfasada para dar sensación de onda viajera
-        let speed: Double = 6.0
-        let phase = time * speed + Double(index) * 0.7
-        let v = sin(phase) * 0.5 + 0.5  // 0..1
-        return 5 + CGFloat(v) * 13       // 5..18
-    }
-}
-
-private struct TranscribingContent: View {
-    let time: TimeInterval
-    let onCancel: () -> Void
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "waveform")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white)
-            Text("Procesando")
-                .font(.system(.callout, design: .rounded).weight(.semibold))
-                .foregroundColor(.white)
-                .tracking(0.3)
-            DotsLoader(time: time)
-
-            CancelButton(action: onCancel)
-        }
-    }
-}
-
-private struct DotsLoader: View {
-    let time: TimeInterval
-
-    var body: some View {
-        HStack(spacing: 3) {
-            ForEach(0..<3, id: \.self) { i in
+    private var processingContent: some View {
+        HStack(spacing: 11) {
+            ZStack {
+                GluffiMarkView(size: 20, color: Theme.brand.opacity(0.55))
                 Circle()
-                    .fill(Color.white)
-                    .frame(width: 5, height: 5)
-                    .opacity(opacity(for: i))
-                    .scaleEffect(scale(for: i))
+                    .trim(from: 0, to: 0.22)
+                    .stroke(Theme.brand, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    .frame(width: 24, height: 24)
+                    .rotationEffect(.degrees(spin ? 360 : 0))
+                    .animation(.linear(duration: 0.85).repeatForever(autoreverses: false), value: spin)
             }
+            Text(model.processingLabel)
+                .font(.system(size: 13.5, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.92))
+            cancelButton
         }
     }
 
-    private func opacity(for index: Int) -> Double {
-        let phase = time * 3.5 + Double(index) * 0.5
-        return 0.35 + (sin(phase) * 0.5 + 0.5) * 0.65
-    }
-
-    private func scale(for index: Int) -> CGFloat {
-        let phase = time * 3.5 + Double(index) * 0.5
-        return 0.85 + CGFloat(sin(phase) * 0.5 + 0.5) * 0.4
-    }
-}
-
-/// Botón ✕ para cancelar grabación o transcripción.
-/// Se diferencia del área principal del pill para que no active el onTap.
-private struct CancelButton: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.white.opacity(0.80))
-                .shadow(color: .black.opacity(0.3), radius: 2)
+    private var cancelButton: some View {
+        Button(action: onCancel) {
+            Image(systemName: "xmark")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.55))
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("Cancelar (Esc)")
+        .help("Cancelar sin pegar (Esc)")
+    }
+
+    // MARK: - Fondo
+
+    private var background: some View {
+        Group {
+            if model.state == .recording {
+                // Grabando no se pone roja: el handoff lo pide explícitamente.
+                // El estado se lee por el punto y la onda, no por un semáforo.
+                LinearGradient(colors: [Color(red: 0.11, green: 0.13, blue: 0.086),
+                                        Color(red: 0.06, green: 0.07, blue: 0.043)],
+                               startPoint: .top, endPoint: .bottom)
+            } else {
+                Color(red: 20/255, green: 23/255, blue: 18/255).opacity(0.90)
+            }
+        }
+    }
+
+    /// Anillo que respira en reposo. No aparece en los otros estados: ahí ya hay
+    /// movimiento y sumar otro sería ruido.
+    @ViewBuilder
+    private var breathRing: some View {
+        if model.state == .idle {
+            Capsule()
+                .stroke(Theme.brand.opacity(breathing ? 0.35 : 0.0), lineWidth: 3)
+                .blur(radius: 3)
+                .animation(.easeInOut(duration: 3.4).repeatForever(autoreverses: true), value: breathing)
+        }
+    }
+
+    private var sizeReporter: some View {
+        GeometryReader { proxy in
+            Color.clear
+                .onAppear { onSizeChange(proxy.size) }
+                .onChange(of: proxy.size) { onSizeChange($0) }
+        }
+    }
+
+    // MARK: - Arrastre
+
+    /// Un clic sin movimiento sigue siendo «grabar». Solo a partir de 4 px de
+    /// desplazamiento acumulado se considera arrastre, así que un pulso torpe no
+    /// mueve la píldora en vez de grabar.
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .global)
+            .onChanged { value in
+                dragDistance = abs(value.translation.width) + abs(value.translation.height)
+                onDrag(value.translation)
+            }
+            .onEnded { _ in
+                dragDistance = 0
+                onDragEnded()
+            }
+    }
+}
+
+/// Onda de voz: siete barras que crecen simétricamente desde el centro.
+///
+/// Cada barra es un halo translúcido con un núcleo sólido más estrecho, que es lo
+/// que le da cuerpo sin necesidad de sombras.
+struct VoiceWaveView: View {
+    /// 0…1 del micrófono. Con señal la altura la manda la voz; sin señal queda la
+    /// animación como respaldo, para que la píldora no parezca congelada.
+    var level: CGFloat
+
+    private let heights: [CGFloat] = [14, 20, 26, 30, 26, 20, 14]
+    private let cores:   [CGFloat] = [6, 9, 11, 13, 11, 9, 6]
+    private let offsets: [Double]  = [0, 0.14, 0.28, 0.42, 0.28, 0.14, 0]
+
+    @State private var animating = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(heights.indices, id: \.self) { i in
+                bar(index: i)
+            }
+        }
+        .frame(height: 30)
+        .onAppear { animating = true }
+    }
+
+    private func bar(index: Int) -> some View {
+        let amplitude = max(0.25, level)
+        let full = heights[index]
+        let core = cores[index]
+        return ZStack {
+            Capsule()
+                .fill(Theme.brand.opacity(0.28))
+                .frame(width: 5, height: full)
+            Capsule()
+                .fill(Theme.brand)
+                .frame(width: 5, height: core)
+        }
+        .scaleEffect(y: animating ? amplitude : 0.38, anchor: .center)
+        .animation(
+            .easeInOut(duration: 1.25)
+                .repeatForever(autoreverses: true)
+                .delay(offsets[index]),
+            value: animating)
+        .animation(.easeOut(duration: 0.12), value: level)
     }
 }

@@ -293,6 +293,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 guard let self else { return }
                 self.iconPhase += treatment == .recording ? 0.22 : 0.34
                 self.renderIcon()
+                // La onda de la píldora sigue el volumen real: se aprovecha el
+                // mismo tic para no montar un segundo temporizador.
+                if treatment == .recording {
+                    PillWindowController.shared.setMicLevel(self.recorder.currentLevel())
+                }
             }
         }
     }
@@ -388,7 +393,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// Restaura UI a estado idle (icono menubar + pill) y limpia destino del paste.
-    private func resetIdleUI() {
+    /// Vuelta a reposo. `afterDictation` distingue el final de un dictado de un
+    /// simple reinicio de UI: la palabra de la píldora solo puede rotar en el
+    /// primer caso.
+    private func resetIdleUI(afterDictation: Bool = false) {
+        if afterDictation {
+            PillWindowController.shared.rotateIdleWordAfterDictation()
+        }
+        resetIdleUIInternal()
+    }
+
+    private func resetIdleUIInternal() {
         removeEscMonitor()
         setIconState(.idle)
         PillWindowController.shared.setState(.idle)
@@ -407,6 +422,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         setIconState(.transcribing)
+        PillWindowController.shared.setProcessingLabel("Transcribiendo")
         PillWindowController.shared.setState(.transcribing)
         audioFeedback.start()
 
@@ -422,6 +438,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 // LLM post-procesamiento (retorna texto original si está deshabilitado)
                 self.setIconState(.correcting)
+                PillWindowController.shared.setProcessingLabel("Corrigiendo")
                 let finalText: String
                 switch self.llmProcessor.process(text: text) {
                 case .success(let processed):
@@ -603,7 +620,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(previous, forType: .string)
             }
-            self?.resetIdleUI()
+            // Único punto donde se vuelve a reposo habiendo dictado de verdad.
+            self?.resetIdleUI(afterDictation: true)
             self?.rebuildMenu()
         }
     }

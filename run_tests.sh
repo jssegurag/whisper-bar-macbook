@@ -19,6 +19,7 @@ swiftc \
     "$DIR/Tests/RunTests.swift" \
     "$DIR/Sources/Config.swift" \
     "$DIR/Sources/Theme.swift" \
+    "$DIR/Sources/IdleWord.swift" \
     "$DIR/Sources/SetupStatus.swift" \
     "$DIR/Sources/SetupComponent.swift" \
     "$DIR/Sources/ModelDownloader.swift" \
