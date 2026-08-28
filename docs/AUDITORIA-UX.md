@@ -1,4 +1,4 @@
-# Auditoría de interfaz y experiencia — WhisperBar
+# Auditoría de interfaz y experiencia — Gluffi
 
 | | |
 |---|---|
