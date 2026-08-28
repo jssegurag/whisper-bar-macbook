@@ -60,6 +60,13 @@ imperativo, ≤ 72 caracteres. El cuerpo explica el *por qué*, no el *qué*.
 - **Depende de:** —
 - **Estado:** listo para PR.
 
+### `chore/ui-preview-harness`
+
+- **Propósito:** revisar diseño de ventanas sin instalar la app ni perder el permiso de Accesibilidad.
+- **Alcance:** `Tools/PreviewUI.swift`, `Tools/sample-dictionary.json`, `preview_ui.sh`, notas en `CONTRIBUTING.md` y `CLAUDE.md`.
+- **Depende de:** — (sale de `main`; solo abre ventanas que existen en toda rama, para que la herramienta no se rompa al cambiar de rama).
+- **Estado:** listo para PR.
+
 ### `feat/custom-dictionary`
 
 - **Propósito:** implementar HU-001 — diccionario personalizado con CRUD y corrección determinística.
@@ -96,6 +103,33 @@ función del lado `HEAD` (la llave de cierre queda en la línea compartida que s
 marcador `>>>>>>>`), así que hay que cerrar esa función con `}` antes de pegar el
 bloque entrante. Tras resolver, `bash run_tests.sh` debe dar **151 tests** (118 en
 `main` + 20 de la primera rama + 13 de la segunda); verificado con un merge de prueba.
+
+---
+
+## Rama de integración
+
+`integration/validate-all` no va a PR. Es una rama local desechable donde se
+mezcla todo lo pendiente para compilar e instalar la app una vez y validar el
+conjunto antes de abrir los PRs — un release candidate, no una línea de trabajo.
+
+Se rehace desde cero cada vez que cambia cualquier rama de origen:
+
+```bash
+git checkout main
+git branch -D integration/validate-all 2>/dev/null
+git checkout -b integration/validate-all
+for b in docs/branch-strategy chore/ui-preview-harness \
+         fix/transcriber-subprocess-reliability \
+         fix/audiorecorder-start-failure \
+         feat/custom-dictionary; do
+    git merge --no-edit "$b"   # resolver conservando ambos lados
+done
+bash run_tests.sh && bash build.sh
+```
+
+Nunca se mezcla `integration/*` hacia `main`: lo que se mezcla son las ramas de
+origen, por PR y por separado. Si un fallo aparece solo en la integración, se
+corrige en la rama que lo causó y se rehace esta.
 
 ---
 
