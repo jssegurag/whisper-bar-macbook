@@ -11,6 +11,8 @@ struct GeneralTab: View {
     @State private var language: String
     @State private var minDuration: Double
     @State private var pillEnabled: Bool
+    @State private var launchAtLogin: Bool
+    @State private var launchError: String?
 
     private let languages = [
         ("es", "Español"), ("en", "English"), ("fr", "Français"),
@@ -22,6 +24,7 @@ struct GeneralTab: View {
         _language    = State(initialValue: Config.shared.language)
         _minDuration = State(initialValue: Config.shared.minRecordingDuration)
         _pillEnabled = State(initialValue: Config.shared.floatingPillEnabled)
+        _launchAtLogin = State(initialValue: LaunchAtLogin.isEnabled)
     }
 
     var body: some View {
@@ -58,6 +61,20 @@ struct GeneralTab: View {
                 Text("Click para grabar, click de nuevo para transcribir. Arrastra para reposicionar.")
                     .foregroundColor(.secondary)
                     .font(.caption)
+
+                Toggle("Abrir Gluffi al iniciar sesión", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { newValue in
+                        // Se informa el error en vez de dejar el interruptor
+                        // mintiendo: el caso más común es que la app no esté en
+                        // una carpeta de aplicaciones.
+                        launchError = LaunchAtLogin.set(newValue)
+                        if launchError != nil { launchAtLogin = LaunchAtLogin.isEnabled }
+                    }
+                if let launchError {
+                    Text(launchError)
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+                }
             }
         }
         .padding()

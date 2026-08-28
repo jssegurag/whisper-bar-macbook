@@ -54,9 +54,11 @@ swiftc \
     "$DIR/Sources/PillView.swift" \
     "$DIR/Sources/PillWindowController.swift" \
     "$DIR/Sources/PreferencesView.swift" \
+    "$DIR/Sources/StreamingPriority.swift" \
+    "$DIR/Sources/LaunchAtLogin.swift" \
+    "$DIR/Sources/PreferencesTextSection.swift" \
+    "$DIR/Sources/PreferencesLiveSection.swift" \
     "$DIR/Sources/PreferencesGeneralTab.swift" \
-    "$DIR/Sources/PreferencesModelsTab.swift" \
-    "$DIR/Sources/PreferencesLLMTab.swift" \
     "$DIR/Sources/PreferencesTranslationTab.swift" \
     "$DIR/Sources/PreferencesVoiceActionsTab.swift" \
     "$DIR/Sources/PreferencesAudioTab.swift" \

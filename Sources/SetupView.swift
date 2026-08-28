@@ -117,24 +117,31 @@ struct SetupView: View {
     private func actions(for component: SetupComponent) -> some View {
         switch component.kind {
         case .engine:
-            HStack(spacing: 8) {
-                if component.state != .ready {
-                    Button("Instalar con Homebrew") { install("whisper-cpp", for: .engine) }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(installing != nil)
+            VStack(alignment: .leading, spacing: 6) {
+                // La comprobación de actualizaciones viaja con las rutas: aquí es
+                // donde vive lo instalado, no en Preferencias.
+                UpdateRow(packageName: "whisper-cpp",
+                          state: UpdateChecker.shared.whisperState,
+                          onUpdate: { UpdateChecker.shared.upgradeWhisper() },
+                          onCheck: { UpdateChecker.shared.checkForUpdates(force: true) })
+                engineButtons(component)
+            }
+        case .llm:
+            VStack(alignment: .leading, spacing: 6) {
+                UpdateRow(packageName: "llama.cpp",
+                          state: UpdateChecker.shared.llamaState,
+                          onUpdate: { UpdateChecker.shared.upgradeLlama() },
+                          onCheck: { UpdateChecker.shared.checkForUpdates(force: true) })
+                HStack(spacing: 8) {
+                    if component.state != .ready {
+                        Button("Instalar con Homebrew") { install("llama.cpp", for: .llm) }
+                            .disabled(installing != nil)
+                    }
+                    Button("Elegir modelo…") { pickFile(for: .llm) }
                 }
-                Button("Cambiar…") { pickFile(for: .engine) }
             }
         case .model:
             modelActions(component)
-        case .llm:
-            HStack(spacing: 8) {
-                if component.state != .ready {
-                    Button("Instalar con Homebrew") { install("llama.cpp", for: .llm) }
-                        .disabled(installing != nil)
-                }
-                Button("Elegir modelo…") { pickFile(for: .llm) }
-            }
         case .streaming:
             HStack(spacing: 8) {
                 if component.state != .ready {
@@ -143,6 +150,17 @@ struct SetupView: View {
                 }
                 Button("Cambiar…") { pickFile(for: .streaming) }
             }
+        }
+    }
+
+    private func engineButtons(_ component: SetupComponent) -> some View {
+        HStack(spacing: 8) {
+            if component.state != .ready {
+                Button("Instalar con Homebrew") { install("whisper-cpp", for: .engine) }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(installing != nil)
+            }
+            Button("Cambiar…") { pickFile(for: .engine) }
         }
     }
 

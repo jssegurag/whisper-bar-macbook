@@ -2104,6 +2104,49 @@ func testAppNotificationContent() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - StreamingPriority — Tres números detrás de un nombre
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testStreamingPriority() {
+    suite("StreamingPriority — Prioridad en vez de milisegundos")
+
+    assertEqual(StreamingPriority.allCases.count, 3, "tres prioridades")
+    for priority in StreamingPriority.allCases {
+        assert(!priority.title.isEmpty, "\(priority.rawValue) tiene nombre en español")
+        assert(priority.explanation.count > 30,
+            "\(priority.rawValue) explica qué se gana y qué se pierde")
+    }
+
+    // Más preciso = escucha tramos más largos y revisa menos seguido.
+    let rapido = StreamingPriority.fast.parameters
+    let preciso = StreamingPriority.accurate.parameters
+    assert(rapido.step < preciso.step, "rápido revisa más seguido")
+    assert(rapido.length < preciso.length, "preciso escucha tramos más largos")
+    assert(rapido.keep < preciso.keep, "preciso recuerda más del tramo anterior")
+
+    // Ida y vuelta: la UI tiene que poder mostrar la prioridad correcta al abrir.
+    for priority in StreamingPriority.allCases {
+        let p = priority.parameters
+        assertEqual(StreamingPriority.matching(step: p.step, length: p.length, keep: p.keep),
+                    priority, "\(priority.title) se reconoce desde sus valores")
+    }
+
+    // Valores propios: no se debe fingir que corresponden a una prioridad, o la
+    // UI los sobrescribiría sin avisar.
+    assert(StreamingPriority.matching(step: 777, length: 4321, keep: 111) == nil,
+        "unos valores ajustados a mano no coinciden con ninguna prioridad")
+
+    // Los nombres de los parámetros dejan de ser jerga.
+    let labels = StreamingPriority.parameterLabels
+    assertEqual(labels.step.0, "Cada cuánto revisa", "Step tiene nombre en español")
+    assertEqual(labels.length.0, "Cuánto audio escucha a la vez", "Length también")
+    assertEqual(labels.keep.0, "Cuánto recuerda del tramo anterior", "y Keep")
+    for label in [labels.step, labels.length, labels.keep] {
+        assert(!label.1.isEmpty, "cada parámetro explica su efecto")
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -2172,6 +2215,7 @@ struct TestRunner {
         testSetupSummary()
         testIdleWord()
         testAppNotificationContent()
+        testStreamingPriority()
         testModelDownloaderFormatting()
 
         // Summary
