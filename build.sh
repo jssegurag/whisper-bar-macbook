@@ -18,6 +18,10 @@ echo "→ Compilando fuentes..."
 swiftc \
     "$DIR/Sources/main.swift" \
     "$DIR/Sources/Config.swift" \
+    "$DIR/Sources/Theme.swift" \
+    "$DIR/Sources/SetupStatus.swift" \
+    "$DIR/Sources/MenuBarIcon.swift" \
+    "$DIR/Sources/MenuViews.swift" \
     "$DIR/Sources/AudioRecorder.swift" \
     "$DIR/Sources/Transcriber.swift" \
     "$DIR/Sources/PhraseRewriter.swift" \
@@ -76,6 +80,10 @@ mkdir -p "$APP/Contents/Resources"
 cp "$DIR/Gluffi_bin" "$APP/Contents/MacOS/Gluffi"
 cp "$DIR/Info.plist"     "$APP/Contents/Info.plist"
 cp "$DIR/AppIcon.icns"   "$APP/Contents/Resources/AppIcon.icns"
+# Mark de la barra de menú. Se copian los dos tamaños con el sufijo @2x para que
+# NSImage(named:) elija la variante correcta según la pantalla.
+cp "$DIR/Assets/GluffiMark.png"     "$APP/Contents/Resources/GluffiMark.png"
+cp "$DIR/Assets/GluffiMark@2x.png"  "$APP/Contents/Resources/GluffiMark@2x.png"
 
 echo "→ Firmando (ad-hoc)..."
 codesign --force --deep --sign - "$APP"

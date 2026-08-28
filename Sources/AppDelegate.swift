@@ -45,8 +45,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Animación de grabación
 
-    private var animTimer: Timer?
-    private var animPhase: CGFloat = 0
+    private var iconTimer: Timer?
+    private var iconPhase: CGFloat = 0
 
     // MARK: - Ciclo de vida
 
@@ -140,7 +140,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         hotkey.tearDown()
-        stopRecordingAnimation()
+        stopIconAnimation()
         FloatingTranscriptionWindowController.shared.hideWindow()
         PillWindowController.shared.hidePill()
     }
@@ -149,7 +149,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        setIconEmoji("🎙")
+        setIconState(.idle)
         // Rastrea qué app externa está activa para saber dónde pegar después.
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
@@ -164,190 +164,148 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func rebuildMenu() {
         let menu = NSMenu()
+        menu.minimumWidth = Theme.menuWidth
+        menu.delegate = self
 
-        menu.addItem(withTitle: "Gluffi", action: nil, keyEquivalent: "")
-        menu.addItem(.separator())
+        // Tres accesos rápidos arriba. Reemplazan las cuatro filas que solo
+        // recordaban atajos: ahora el atajo se lee al lado de su propia acción.
+        let tilesItem = NSMenuItem()
+        tilesItem.view = MenuTilesView(tiles: [
+            MenuTilesView.Tile(symbol: "mic",
+                               label: recordTileLabel,
+                               isActive: recorder.isRecording,
+                               action: #selector(recordTileTapped),
+                               showsWave: recorder.isRecording),
+            MenuTilesView.Tile(symbol: "waveform",
+                               label: "En vivo",
+                               isActive: FloatingTranscriptionWindowController.shared.isVisible,
+                               action: #selector(toggleFloatingAction)),
+            MenuTilesView.Tile(symbol: "capsule",
+                               label: "Píldora",
+                               isActive: config.floatingPillEnabled,
+                               action: #selector(togglePillAction)),
+        ], target: self)
+        menu.addItem(tilesItem)
 
-        let hint = NSMenuItem(title: "Mantén ⌘⌥ para grabar", action: nil, keyEquivalent: "")
-        hint.isEnabled = false
-        menu.addItem(hint)
-
-        if config.translationEnabled {
-            let target = Config.languageName(for: config.translationTargetLanguage)
-            let transHint = NSMenuItem(title: "Mantén ⌘⌥⇧ para traducir → \(target)", action: nil, keyEquivalent: "")
-            transHint.isEnabled = false
-            menu.addItem(transHint)
-        }
-
-        menu.addItem(.separator())
-
-        // Transcripción flotante
-        let floatingItem: NSMenuItem
-        if config.isWhisperStreamValid {
-            let label = FloatingTranscriptionWindowController.shared.isVisible
-                ? "⏹ Detener transcripción en vivo"
-                : "🔴 Transcripción en tiempo real"
-            floatingItem = NSMenuItem(title: label, action: #selector(toggleFloatingAction), keyEquivalent: "t")
-            floatingItem.keyEquivalentModifierMask = [.command]
-        } else {
-            floatingItem = NSMenuItem(title: "Streaming: whisper-stream no encontrado", action: nil, keyEquivalent: "")
-            floatingItem.isEnabled = false
-        }
-        menu.addItem(floatingItem)
-
-        let floatingHint = NSMenuItem(title: "⌘⌥⌃ para toggle rápido", action: nil, keyEquivalent: "")
-        floatingHint.isEnabled = false
-        menu.addItem(floatingHint)
+        // Única fila que queda del diagnóstico: nombra qué falta, y lleva a
+        // resolverlo. Las otras seis se fueron a la ventana de Configuración.
+        let status = SetupStatus.current(config)
+        menu.addItem(row(leading: .dot(status.needsAttention ? Theme.warnNS : Theme.brandNS),
+                         title: status.title,
+                         action: #selector(openSetup),
+                         showsChevron: true))
 
         menu.addItem(.separator())
 
-        // Pill flotante de micrófono
-        let pillTitle = config.floatingPillEnabled
-            ? "✓ Pill flotante visible"
-            : "🎤 Mostrar pill flotante"
-        let pillItem = NSMenuItem(title: pillTitle, action: #selector(togglePillAction), keyEquivalent: "p")
-        pillItem.keyEquivalentModifierMask = [.command, .option]
-        menu.addItem(pillItem)
-
-        let pillHint = NSMenuItem(title: "Click en el pill para grabar/transcribir", action: nil, keyEquivalent: "")
-        pillHint.isEnabled = false
-        menu.addItem(pillHint)
-
-        menu.addItem(.separator())
-
-        menu.addItem(statusMenuItem(for: config.isWhisperCliValid,
-                                    ok:  "whisper-cli: \(URL(fileURLWithPath: config.whisperCliPath).lastPathComponent)",
-                                    err: "❌ whisper-cli no encontrado"))
-        menu.addItem(statusMenuItem(for: config.isModelValid,
-                                    ok:  "Modelo: \(URL(fileURLWithPath: config.modelPath).lastPathComponent)",
-                                    err: "❌ Modelo no encontrado"))
-
-        if config.llmEnabled {
-            menu.addItem(statusMenuItem(for: config.isLlmCliValid,
-                                        ok:  "LLM: \(URL(fileURLWithPath: config.llmCliPath).lastPathComponent)",
-                                        err: "❌ llama-completion no encontrado"))
-            menu.addItem(statusMenuItem(for: config.isLlmModelValid,
-                                        ok:  "LLM Modelo: \(URL(fileURLWithPath: config.llmModelPath).lastPathComponent)",
-                                        err: "❌ LLM Modelo no configurado"))
-        } else {
-            let llmOff = NSMenuItem(title: "LLM: desactivado", action: nil, keyEquivalent: "")
-            llmOff.isEnabled = false
-            menu.addItem(llmOff)
-        }
-
-        if config.isWhisperStreamValid {
-            menu.addItem(statusMenuItem(for: true,
-                                        ok: "whisper-stream: \(URL(fileURLWithPath: config.whisperStreamPath).lastPathComponent)",
-                                        err: ""))
-        }
-
-        let langItem = NSMenuItem(title: "Idioma: \(config.language)", action: nil, keyEquivalent: "")
-        langItem.isEnabled = false
-        menu.addItem(langItem)
-
-        let actionsItem = NSMenuItem(
-            title: config.voiceActionsEnabled ? "⚡ Acciones por voz: activadas" : "Acciones por voz: desactivadas",
-            action: nil, keyEquivalent: "")
-        actionsItem.isEnabled = false
-        menu.addItem(actionsItem)
-
-        // Insertar sin dictar: nadie recuerda sus propios comandos a los tres meses.
         let activeSnippets = SnippetStore.shared.activeSnippets
         if !activeSnippets.isEmpty {
-            let insertItem = NSMenuItem(title: "Insertar snippet", action: nil, keyEquivalent: "")
+            let insertItem = row(leading: .symbol("text.badge.plus"),
+                                 title: "Insertar snippet",
+                                 action: nil,
+                                 showsChevron: true)
             let submenu = NSMenu()
+            submenu.minimumWidth = 210
             for snippet in activeSnippets {
                 let item = NSMenuItem(title: snippet.name,
                                       action: #selector(insertSnippet(_:)),
                                       keyEquivalent: "")
+                item.target = self
                 item.representedObject = snippet.id.uuidString
+                // Los sensibles se marcan: insertarlos no pide autenticación, así
+                // que conviene saber qué se está pegando antes de pulsar.
+                if snippet.isSensitive {
+                    item.image = NSImage(systemSymbolName: "lock.fill", accessibilityDescription: "sensible")
+                }
                 submenu.addItem(item)
             }
             insertItem.submenu = submenu
-            menu.addItem(.separator())
             menu.addItem(insertItem)
+            menu.addItem(.separator())
         }
 
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Preferencias…", action: #selector(openPreferences), keyEquivalent: ",")
-        menu.addItem(withTitle: "Historial…", action: #selector(openHistory), keyEquivalent: "h")
-        menu.addItem(withTitle: "Diccionario…", action: #selector(openDictionary), keyEquivalent: "d")
-        menu.addItem(withTitle: "Snippets…", action: #selector(openSnippets), keyEquivalent: "s")
-        menu.addItem(withTitle: "Salir", action: #selector(quit), keyEquivalent: "q")
+        menu.addItem(row(leading: .symbol("clock"), title: "Historial…",
+                         action: #selector(openHistory), keyEquivalent: "h"))
+        menu.addItem(row(leading: .symbol("character.book.closed"), title: "Diccionario…",
+                         action: #selector(openDictionary), keyEquivalent: "d"))
+        menu.addItem(row(leading: .symbol("text.alignleft"), title: "Snippets…",
+                         action: #selector(openSnippets), keyEquivalent: "s"))
+        menu.addItem(row(leading: .symbol("slider.horizontal.3"), title: "Preferencias…",
+                         action: #selector(openPreferences), keyEquivalent: ","))
 
-        menu.delegate = self
+        menu.addItem(.separator())
+        menu.addItem(row(leading: .none, title: "Salir de Gluffi",
+                         action: #selector(quit), keyEquivalent: "q"))
+
         statusItem.menu = menu
     }
 
-    // MARK: - NSMenuDelegate
+    /// Etiqueta del tile de grabar según el estado.
+    private var recordTileLabel: String {
+        if recorder.isRecording { return "Grabando" }
+        return iconState == .idle ? "Grabar" : "Procesando"
+    }
 
-    /// Captura la app destino al abrir el menú, antes de que el clic pueda mover
-    /// el foco. Sin esto, "Insertar snippet" no sabe dónde pegar.
+    /// Fila con vista propia. El resaltado verde del handoff no se puede lograr
+    /// con filas nativas: `NSMenu` usa el color de acento del sistema.
+    private func row(leading: MenuRowView.Leading,
+                     title: String,
+                     action: Selector?,
+                     keyEquivalent: String = "",
+                     showsChevron: Bool = false) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: keyEquivalent)
+        item.target = self
+        let glyph = keyEquivalent.isEmpty ? nil : "⌘" + keyEquivalent.uppercased()
+        item.view = MenuRowView(leading: leading, title: title,
+                                shortcut: glyph, showsChevron: showsChevron)
+        return item
+    }
+
+
     func menuWillOpen(_ menu: NSMenu) {
         if pasteTargetApp == nil {
             pasteTargetApp = currentPasteTarget()
         }
     }
 
-    private func statusMenuItem(for ok: Bool, ok okText: String, err errText: String) -> NSMenuItem {
-        let item = NSMenuItem(title: ok ? "✅ \(okText)" : errText, action: nil, keyEquivalent: "")
-        item.isEnabled = false
-        return item
-    }
+    // MARK: - Icono de la barra
 
-    // MARK: - Iconos
+    /// Estado que se está mostrando. Los seis estados de la app se comunican con
+    /// tres tratamientos del logo (ver MenuBarIcon), no con seis emoji.
+    private var iconState: MenuBarIcon.AppState = .idle
 
-    /// Icono de emoji estático (idle / procesando)
-    private func setIconEmoji(_ s: String) {
+    private func setIconState(_ state: MenuBarIcon.AppState) {
         DispatchQueue.main.async {
-            self.statusItem.button?.image = nil
-            self.statusItem.button?.title = s
-        }
-    }
+            self.iconState = state
+            self.iconTimer?.invalidate()
+            self.iconTimer = nil
+            self.iconPhase = 0
+            self.renderIcon()
 
-    /// Imagen dinámica para la animación de grabación
-    private func makeWaveformImage(phase: CGFloat) -> NSImage {
-        let w: CGFloat = 28
-        let h: CGFloat = 18
-        return NSImage(size: NSSize(width: w, height: h), flipped: false) { _ in
-            let nBars   = 4
-            let barW:  CGFloat = 3.5
-            let gap:   CGFloat = 2.5
-            let total  = CGFloat(nBars) * barW + CGFloat(nBars - 1) * gap
-            let startX = (w - total) / 2
-            let phases: [CGFloat] = [0, 1.1, 2.0, 3.0]   // desfase por barra
-
-            NSColor.systemRed.withAlphaComponent(0.92).setFill()
-            for i in 0..<nBars {
-                let barHeight = (sin(phase + phases[i]) * 0.42 + 0.58) * (h - 4)
-                let x = startX + CGFloat(i) * (barW + gap)
-                let y = (h - barHeight) / 2
-                NSBezierPath(
-                    roundedRect: NSRect(x: x, y: y, width: barW, height: barHeight),
-                    xRadius: barW / 2, yRadius: barW / 2
-                ).fill()
+            let treatment = MenuBarIcon.treatment(for: state)
+            guard MenuBarIcon.isAnimated(treatment) else { return }
+            // 30 fps: suficiente para la onda y el anillo, y no calienta la CPU
+            // por un icono de 16 px.
+            self.iconTimer = Timer.scheduledTimer(withTimeInterval: 1 / 30.0, repeats: true) { [weak self] _ in
+                guard let self else { return }
+                self.iconPhase += treatment == .recording ? 0.22 : 0.34
+                self.renderIcon()
             }
-            return true
         }
     }
 
-    // MARK: - Animación de grabación
-
-    private func startRecordingAnimation() {
-        animPhase = 0
-        animTimer = Timer.scheduledTimer(withTimeInterval: 0.07, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            self.animPhase += 0.28
-            let img = self.makeWaveformImage(phase: self.animPhase)
-            self.statusItem.button?.image = img
-            self.statusItem.button?.title = ""
-        }
+    private func renderIcon() {
+        let image = MenuBarIcon.image(treatment: MenuBarIcon.treatment(for: iconState),
+                                     phase: iconPhase,
+                                     needsSetup: SetupStatus.current(config).needsAttention)
+        statusItem.button?.image = image
+        statusItem.button?.title = ""
     }
 
-    private func stopRecordingAnimation() {
-        animTimer?.invalidate()
-        animTimer = nil
+    private func stopIconAnimation() {
+        iconTimer?.invalidate()
+        iconTimer = nil
     }
+
 
     // MARK: - Grabación
 
@@ -362,7 +320,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         registerEscMonitor()
         do {
             try recorder.start()
-            startRecordingAnimation()
+            setIconState(.recording)
             PillWindowController.shared.setState(.recording)
         } catch {
             notify("Error al iniciar grabación: \(error.localizedDescription)")
@@ -384,7 +342,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         transcriber.cancel()
         audioFeedback.stop()
-        stopRecordingAnimation()
+        stopIconAnimation()
         removeEscMonitor()
         resetIdleUI()
     }
@@ -428,14 +386,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Restaura UI a estado idle (icono menubar + pill) y limpia destino del paste.
     private func resetIdleUI() {
         removeEscMonitor()
-        setIconEmoji("🎙")
+        setIconState(.idle)
         PillWindowController.shared.setState(.idle)
         pasteTargetApp = nil
     }
 
     private func stopAndTranscribe() {
         guard recorder.isRecording else { return }
-        stopRecordingAnimation()
+        stopIconAnimation()
 
         let duration = recorder.stop()
 
@@ -444,7 +402,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
-        setIconEmoji("⏳")
+        setIconState(.transcribing)
         PillWindowController.shared.setState(.transcribing)
         audioFeedback.start()
 
@@ -459,7 +417,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     return
                 }
                 // LLM post-procesamiento (retorna texto original si está deshabilitado)
-                self.setIconEmoji("🧠")
+                self.setIconState(.correcting)
                 let finalText: String
                 switch self.llmProcessor.process(text: text) {
                 case .success(let processed):
@@ -489,7 +447,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         self.paste(text: originalText)
                     default:
                         // Ejecutar acción
-                        self.setIconEmoji("⚡")
+                        self.setIconState(.runningAction)
                         let result = self.actionExecutor.execute(intent)
                         self.notify(result)
                         DispatchQueue.main.async {
@@ -521,7 +479,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func stopAndTranslate() {
         guard recorder.isRecording else { return }
-        stopRecordingAnimation()
+        stopIconAnimation()
 
         let duration = recorder.stop()
 
@@ -530,7 +488,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
-        setIconEmoji("🌐")
+        setIconState(.translating)
         PillWindowController.shared.setState(.transcribing)
         audioFeedback.start()
 
@@ -667,6 +625,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openDictionary() {
         DictionaryWindowController.shared.showWindow()
+    }
+
+    /// Tile «Grabar» del menú: mismo flujo que el clic en la píldora.
+    @objc private func recordTileTapped() {
+        handlePillTap()
+    }
+
+    /// Fila de estado del menú y, más adelante, notificaciones y sidebar.
+    /// Paso 2 del rediseño sustituye esto por la ventana de Configuración; hasta
+    /// entonces lleva a Preferencias, que es donde están hoy esas rutas.
+    @objc private func openSetup() {
+        PreferencesWindowController.shared.showWindow()
     }
 
     @objc private func openSnippets() {

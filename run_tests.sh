@@ -18,6 +18,10 @@ echo "→ Compilando tests + sources..."
 swiftc \
     "$DIR/Tests/RunTests.swift" \
     "$DIR/Sources/Config.swift" \
+    "$DIR/Sources/Theme.swift" \
+    "$DIR/Sources/SetupStatus.swift" \
+    "$DIR/Sources/MenuBarIcon.swift" \
+    "$DIR/Sources/MenuViews.swift" \
     "$DIR/Sources/AudioRecorder.swift" \
     "$DIR/Sources/Transcriber.swift" \
     "$DIR/Sources/PhraseRewriter.swift" \

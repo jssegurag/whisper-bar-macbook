@@ -1885,6 +1885,67 @@ func testPasteTargetTracker() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - SetupStatus — Qué falta, nombrado
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testSetupStatus() {
+    suite("SetupStatus — Nombra qué falta, no «configuración incompleta»")
+
+    let listo = SetupStatus.evaluate(hasEngine: true, hasModel: true)
+    assertEqual(listo.title, "Todo listo", "con todo instalado dice Todo listo")
+    assert(!listo.needsAttention, "y no pide atención")
+
+    let sinModelo = SetupStatus.evaluate(hasEngine: true, hasModel: false)
+    assertEqual(sinModelo.title, "Falta el modelo de voz",
+        "nombra el modelo, no «configuración incompleta»")
+    assert(sinModelo.needsAttention, "pide atención")
+
+    let sinMotor = SetupStatus.evaluate(hasEngine: false, hasModel: true)
+    assertEqual(sinMotor.title, "Falta el motor de voz", "nombra el motor")
+
+    // Solo se reporta UNA cosa: la que hay que resolver ahora. Sin motor da igual
+    // el modelo, así que el motor gana.
+    let sinNada = SetupStatus.evaluate(hasEngine: false, hasModel: false)
+    assertEqual(sinNada.title, "Falta el motor de voz",
+        "sin motor ni modelo se nombra primero el motor, no los dos")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - MenuBarIcon — Seis estados, tres tratamientos
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testMenuBarIcon() {
+    suite("MenuBarIcon — Tratamientos y badge")
+
+    assertEqual(MenuBarIcon.treatment(for: .idle), .idle, "reposo → logo")
+    assertEqual(MenuBarIcon.treatment(for: .recording), .recording, "grabando → onda")
+    for state in [MenuBarIcon.AppState.transcribing, .correcting, .translating, .runningAction] {
+        assertEqual(MenuBarIcon.treatment(for: state), .working,
+            "\(state) → anillo girando (los cuatro comparten tratamiento)")
+    }
+
+    assert(!MenuBarIcon.isAnimated(.idle), "el reposo no necesita temporizador")
+    assert(MenuBarIcon.isAnimated(.recording), "grabando sí")
+    assert(MenuBarIcon.isAnimated(.working), "trabajando sí")
+
+    // Marco único de 16×16 en los tres tratamientos: el icono no debe saltar de
+    // tamaño al cambiar de estado.
+    for treatment in [MenuBarIcon.Treatment.idle, .recording, .working] {
+        let image = MenuBarIcon.image(treatment: treatment, phase: 0.5)
+        assertEqual(image.size.width, 16, "\(treatment): ancho 16")
+        assertEqual(image.size.height, 16, "\(treatment): alto 16")
+    }
+
+    // El reposo sin badge es plantilla: es el único caso en que macOS puede
+    // invertir el icono cuando el menú está abierto. Con badge ámbar deja de
+    // poder serlo, y es un compromiso conocido.
+    assert(MenuBarIcon.image(treatment: .idle, needsSetup: false).isTemplate,
+        "reposo sin badge es imagen de plantilla")
+    assert(!MenuBarIcon.image(treatment: .idle, needsSetup: true).isTemplate,
+        "con badge ámbar deja de ser plantilla: el punto tiene color propio")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -1948,6 +2009,8 @@ struct TestRunner {
         testSnippetStoreImportExport()
         testRewritePipelineOrder()
         testPasteTargetTracker()
+        testSetupStatus()
+        testMenuBarIcon()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")

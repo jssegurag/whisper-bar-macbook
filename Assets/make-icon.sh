@@ -30,3 +30,12 @@ cp "$SRC" "$SET/icon_512x512@2x.png"
 
 iconutil -c icns "$SET" -o "$DIR/../AppIcon.icns"
 echo "✓ AppIcon.icns regenerado"
+
+# Mark para la barra de menú. Va en negro puro: como imagen de plantilla macOS
+# solo usa el canal alfa, y lo recolorea según el tema y el estado destacado.
+qlmanage -t -s 512 -o "$WORK" "$DIR/gluffi-mark.svg" >/dev/null 2>&1
+MARK="$WORK/gluffi-mark.svg.png"
+[ -f "$MARK" ] || { echo "✗ qlmanage no pudo rasterizar el mark"; exit 1; }
+sips -z 16 16 "$MARK" --out "$DIR/GluffiMark.png"    >/dev/null
+sips -z 32 32 "$MARK" --out "$DIR/GluffiMark@2x.png" >/dev/null
+echo "✓ GluffiMark.png y @2x regenerados"
