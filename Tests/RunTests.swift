@@ -1109,6 +1109,287 @@ func testTranscriberCancellation() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - 26. DictionaryProcessor — Motor del diccionario personalizado
+// ══════════════════════════════════════════════════════════════════════════════
+
+private func entry(_ canonical: String, _ variants: [String] = [], active: Bool = true) -> DictionaryEntry {
+    DictionaryEntry(canonical: canonical, variants: variants, isActive: active)
+}
+
+func testDictionaryNormalize() {
+    suite("DictionaryProcessor — Normalización")
+
+    assertEqual(DictionaryProcessor.normalize("DocFly"), "docfly",
+        "normalize baja a minúsculas")
+    assertEqual(DictionaryProcessor.normalize("Bogotá"), "bogota",
+        "normalize quita acentos")
+    assertEqual(DictionaryProcessor.normalize("  Banco   de   Bogotá "), "banco de bogota",
+        "normalize colapsa espacios y recorta bordes")
+    assertEqual(DictionaryProcessor.normalize("Ñoño"), "nono",
+        "normalize plancha la ñ (comparación, no escritura)")
+    assertEqual(DictionaryProcessor.normalize(""), "",
+        "normalize de vacío es vacío")
+}
+
+func testDictionaryIndex() {
+    suite("DictionaryProcessor — Índice")
+
+    let index = DictionaryProcessor.buildIndex(from: [
+        entry("DocFly", ["doc fly", "dog fly"]),
+        entry("Banco de Bogotá"),
+        entry("Inactiva", ["nunca"], active: false),
+    ])
+
+    assertEqual(index.byPhrase["docfly"], "DocFly",
+        "la forma canónica también es objetivo de coincidencia")
+    assertEqual(index.byPhrase["doc fly"], "DocFly",
+        "las variantes apuntan a la canónica")
+    assertEqual(index.byPhrase["banco de bogota"], "Banco de Bogotá",
+        "las frases se indexan normalizadas")
+    assert(index.byPhrase["nunca"] == nil,
+        "las entradas inactivas no entran al índice")
+    assertEqual(index.maxWords, 3,
+        "maxWords = la frase más larga registrada")
+
+    let vacio = DictionaryProcessor.buildIndex(from: [])
+    assert(vacio.isEmpty, "índice sin entradas está vacío")
+}
+
+func testDictionaryApplyAcceptanceCriteria() {
+    suite("DictionaryProcessor — Criterios de aceptación H1")
+
+    let docfly = [entry("DocFly", ["doc fly"])]
+
+    // whisper parte la marca en dos palabras
+    assertEqual(DictionaryProcessor.apply(to: "ya subí el archivo a doc fly ayer", entries: docfly),
+        "ya subí el archivo a DocFly ayer",
+        "variante de dos palabras → forma canónica")
+
+    // la canónica en minúsculas también se corrige
+    assertEqual(DictionaryProcessor.apply(to: "oriuno ya está en producción", entries: [entry("Oriuno")]),
+        "Oriuno ya está en producción",
+        "canónica sin variantes corrige mayúsculas")
+
+    // acentos
+    assertEqual(DictionaryProcessor.apply(to: "viajo a bogota el lunes", entries: [entry("Bogotá", ["bogota"])]),
+        "viajo a Bogotá el lunes",
+        "corrige acentos faltantes")
+
+    // sin subcadenas: "documento fly" no es "doc fly"
+    assertEqual(DictionaryProcessor.apply(to: "el documento fly no existe", entries: docfly),
+        "el documento fly no existe",
+        "no reemplaza subcadenas ni palabras parecidas")
+
+    // puntuación pegada
+    assertEqual(DictionaryProcessor.apply(to: "subilo a doc fly.", entries: docfly),
+        "subilo a DocFly.",
+        "conserva la puntuación final")
+    assertEqual(DictionaryProcessor.apply(to: "¿ya está en doc fly?", entries: docfly),
+        "¿ya está en DocFly?",
+        "conserva signos de apertura y cierre")
+
+    // coincidencia más larga primero
+    let bancos = [entry("Banco"), entry("Banco de Bogotá")]
+    assertEqual(DictionaryProcessor.apply(to: "fui al banco de bogota", entries: bancos),
+        "fui al Banco de Bogotá",
+        "la coincidencia más larga gana sobre la más corta")
+
+    // entrada inactiva
+    assertEqual(DictionaryProcessor.apply(to: "subilo a doc fly", entries: [entry("DocFly", ["doc fly"], active: false)]),
+        "subilo a doc fly",
+        "una entrada inactiva no se aplica")
+
+    // diccionario vacío = cero regresión
+    let original = "texto cualquiera sin términos registrados"
+    assertEqual(DictionaryProcessor.apply(to: original, entries: []),
+        original,
+        "diccionario vacío devuelve el texto idéntico")
+}
+
+func testDictionaryApplyEdgeCases() {
+    suite("DictionaryProcessor — Casos borde")
+
+    let docfly = [entry("DocFly", ["doc fly"])]
+
+    // idempotencia
+    let corregido = "subilo a DocFly ahora"
+    assertEqual(DictionaryProcessor.apply(to: corregido, entries: docfly),
+        corregido,
+        "aplicar sobre texto ya corregido no lo cambia")
+
+    // varias ocurrencias
+    assertEqual(DictionaryProcessor.apply(to: "doc fly y luego doc fly", entries: docfly),
+        "DocFly y luego DocFly",
+        "corrige todas las ocurrencias")
+
+    // saltos de línea y espacios múltiples se preservan
+    assertEqual(DictionaryProcessor.apply(to: "linea uno\n  doc fly\ttab", entries: docfly),
+        "linea uno\n  DocFly\ttab",
+        "preserva saltos de línea, sangría y tabulaciones")
+
+    // puntuación interna rompe la coincidencia (probablemente no es la marca)
+    assertEqual(DictionaryProcessor.apply(to: "doc, fly", entries: docfly),
+        "doc, fly",
+        "puntuación en un token interno impide la coincidencia")
+
+    // texto vacío
+    assertEqual(DictionaryProcessor.apply(to: "", entries: docfly), "",
+        "texto vacío devuelve vacío")
+
+    // término al inicio y al final del texto
+    assertEqual(DictionaryProcessor.apply(to: "doc fly", entries: docfly), "DocFly",
+        "el término solo, sin contexto, se corrige")
+
+    // sigla con puntos internos
+    let sas = [entry("Trycore S.A.S")]
+    assertEqual(DictionaryProcessor.apply(to: "factura de trycore s.a.s.", entries: sas),
+        "factura de Trycore S.A.S.",
+        "los puntos internos de una sigla sobreviven; el punto final se conserva")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - 27. CustomDictionary — CRUD, persistencia, importar/exportar
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Corre `body` con un diccionario respaldado por un archivo temporal, para no
+/// tocar el dictionary.json real del usuario.
+private func withTempDictionary(_ body: (CustomDictionary, URL) -> Void) {
+    let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("whisperbar_dict_\(UUID().uuidString)")
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let file = dir.appendingPathComponent("dictionary.json")
+    body(CustomDictionary(storageURL: file), file)
+    try? FileManager.default.removeItem(at: dir)
+}
+
+func testDictionaryCRUD() {
+    suite("CustomDictionary — CRUD")
+
+    withTempDictionary { dict, _ in
+        assertEqual(dict.entries.count, 0, "arranca vacío con archivo inexistente")
+
+        let created = try? dict.add(canonical: "DocFly", variants: ["doc fly", "dog fly"])
+        assert(created != nil, "add crea la entrada")
+        assertEqual(dict.entries.count, 1, "la entrada queda en la lista")
+        assertEqual(dict.entries.first?.variants.count, 2, "conserva las dos variantes")
+
+        // canónica vacía se rechaza
+        var rejected = false
+        do { _ = try dict.add(canonical: "   ", variants: ["x"]) } catch { rejected = true }
+        assert(rejected, "add rechaza una canónica vacía")
+        assertEqual(dict.entries.count, 1, "el rechazo no agrega nada")
+
+        guard let id = created?.id else { return }
+
+        // update conserva id y createdAt
+        let createdAt = dict.entries.first?.createdAt
+        try? dict.update(id: id, canonical: "DocFly Pro", variants: ["doc fly pro"], isActive: true)
+        assertEqual(dict.entries.first?.canonical, "DocFly Pro", "update cambia la canónica")
+        assertEqual(dict.entries.first?.id, id, "update conserva el id")
+        assertEqual(dict.entries.first?.createdAt, createdAt, "update conserva createdAt")
+
+        // activar / desactivar
+        dict.setActive(id: id, false)
+        assertEqual(dict.activeEntries.count, 0, "una entrada desactivada sale de activeEntries")
+        dict.setActive(id: id, true)
+        assertEqual(dict.activeEntries.count, 1, "reactivar la devuelve a activeEntries")
+
+        // borrado quirúrgico
+        _ = try? dict.add(canonical: "Oriuno", variants: [])
+        dict.delete(id: id)
+        assertEqual(dict.entries.count, 1, "delete quita solo la entrada pedida")
+        assertEqual(dict.entries.first?.canonical, "Oriuno", "el resto queda intacto")
+    }
+}
+
+func testDictionaryPersistence() {
+    suite("CustomDictionary — Persistencia")
+
+    withTempDictionary { dict, file in
+        _ = try? dict.add(canonical: "Bogotá", variants: ["bogota"])
+        _ = try? dict.add(canonical: "DocFly", variants: ["doc fly"])
+        assert(FileManager.default.fileExists(atPath: file.path),
+            "add escribe el archivo JSON")
+
+        // Una instancia nueva sobre el mismo archivo ve lo mismo
+        let reloaded = CustomDictionary(storageURL: file)
+        assertEqual(reloaded.entries.count, 2, "una instancia nueva relee las entradas")
+        assertEqual(reloaded.entries.first?.canonical, "Bogotá",
+            "la forma canónica sobrevive el viaje a JSON con acentos")
+        assertEqual(reloaded.entries.first?.variants.count, 0,
+            "una variante que solo difiere en acentos o mayúsculas es redundante: el match ya las ignora, así que sanitize la descarta")
+        assertEqual(reloaded.entries.last?.variants.first, "doc fly",
+            "las variantes que aportan algo sobreviven")
+    }
+}
+
+func testDictionarySanitize() {
+    suite("CustomDictionary — Saneamiento")
+
+    let clean = CustomDictionary.sanitize(
+        canonical: "  DocFly  ",
+        variants: [" doc fly ", "doc fly", "DOC FLY", "", "   ", "dog fly", "docfly"])
+    assertEqual(clean.canonical, "DocFly", "recorta espacios de la canónica")
+    assertEqual(clean.variants, ["doc fly", "dog fly"],
+        "descarta vacías, duplicadas ignorando mayúsculas y las que repiten la canónica")
+}
+
+func testDictionarySearchAndConflicts() {
+    suite("CustomDictionary — Búsqueda y colisiones")
+
+    withTempDictionary { dict, _ in
+        _ = try? dict.add(canonical: "Bogotá", variants: ["bogota"])
+        _ = try? dict.add(canonical: "DocFly", variants: ["doc fly"])
+
+        assertEqual(dict.search("").count, 2, "búsqueda vacía devuelve todo")
+        assertEqual(dict.search("bogot").count, 1, "busca por canónica")
+        assertEqual(dict.search("BOGOTA").count, 1, "la búsqueda ignora mayúsculas y acentos")
+        assertEqual(dict.search("doc fly").count, 1, "busca también dentro de las variantes")
+        assertEqual(dict.search("zzz").count, 0, "sin resultados cuando no hay coincidencia")
+
+        let claimers = dict.entriesClaiming(["DOC FLY"])
+        assertEqual(claimers.count, 1, "detecta qué entrada ya reclama una forma")
+        assertEqual(claimers.first?.canonical, "DocFly", "identifica la entrada en conflicto")
+
+        let selfClaim = dict.entriesClaiming(["doc fly"], excluding: claimers.first?.id)
+        assertEqual(selfClaim.count, 0, "una entrada no choca consigo misma al editarse")
+    }
+}
+
+func testDictionaryImportExport() {
+    suite("CustomDictionary — Importar / exportar")
+
+    withTempDictionary { source, _ in
+        _ = try? source.add(canonical: "DocFly", variants: ["doc fly"])
+        _ = try? source.add(canonical: "Oriuno", variants: [])
+
+        let exportURL = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("whisperbar_export_\(UUID().uuidString).json")
+        do { try source.export(to: exportURL) } catch { assert(false, "export lanzó: \(error)") }
+        assert(FileManager.default.fileExists(atPath: exportURL.path), "export escribe el archivo")
+
+        withTempDictionary { target, _ in
+            _ = try? target.add(canonical: "DocFly", variants: [])   // ya existe
+            let added = (try? target.importEntries(from: exportURL)) ?? -1
+            assertEqual(added, 1, "importa solo lo que no tenía (DocFly ya existía)")
+            assertEqual(target.entries.count, 2, "no duplica canónicas existentes")
+
+            // archivo corrupto: error claro, diccionario intacto
+            let badURL = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("whisperbar_bad_\(UUID().uuidString).json")
+            try? Data("no soy un diccionario".utf8).write(to: badURL)
+            var failed = false
+            do { _ = try target.importEntries(from: badURL) } catch { failed = true }
+            assert(failed, "un archivo corrupto lanza error")
+            assertEqual(target.entries.count, 2, "el diccionario queda intacto tras un import fallido")
+            try? FileManager.default.removeItem(at: badURL)
+        }
+
+        try? FileManager.default.removeItem(at: exportURL)
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -1150,6 +1431,15 @@ struct TestRunner {
         testTranscriberStderrFlood()
         testTranscriberProcessFailure()
         testTranscriberCancellation()
+        testDictionaryNormalize()
+        testDictionaryIndex()
+        testDictionaryApplyAcceptanceCriteria()
+        testDictionaryApplyEdgeCases()
+        testDictionaryCRUD()
+        testDictionaryPersistence()
+        testDictionarySanitize()
+        testDictionarySearchAndConflicts()
+        testDictionaryImportExport()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")

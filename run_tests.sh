@@ -20,6 +20,8 @@ swiftc \
     "$DIR/Sources/Config.swift" \
     "$DIR/Sources/AudioRecorder.swift" \
     "$DIR/Sources/Transcriber.swift" \
+    "$DIR/Sources/CustomDictionary.swift" \
+    "$DIR/Sources/DictionaryProcessor.swift" \
     "$DIR/Sources/HotkeyManager.swift" \
     "$DIR/Sources/AudioFeedback.swift" \
     "$DIR/Sources/LLMProcessor.swift" \
