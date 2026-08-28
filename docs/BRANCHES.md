@@ -5,6 +5,18 @@ con su propósito, alcance y estado. Actualízalo cuando abras o cierres una ram
 
 ---
 
+## Cómo se sube el trabajo
+
+Quien tenga permiso de escritura empuja las ramas directo a `origin` y abre el PR
+desde ahí. Quien no lo tenga trabaja con fork, como describe `CONTRIBUTING.md`.
+
+La diferencia no es solo comodidad: **los PRs desde un fork no reciben los
+secrets del repositorio.** Mientras CI solo corra tests da igual, pero el día que
+haya que firmar, notarizar o publicar una release desde CI, un PR desde fork no
+puede.
+
+---
+
 ## Convención
 
 ```
