@@ -66,6 +66,16 @@ Principios del proyecto:
 
 ### 4. Compilar y probar
 
+Antes del primer build, una sola vez por máquina:
+
+```bash
+bash signing.sh
+```
+
+Crea una identidad de firma estable. Sin ella macOS revoca el permiso de
+Accesibilidad y el acceso al Llavero **en cada build**, y hay que volver a
+concederlos a mano para probar cualquier cosa.
+
 ```bash
 bash build.sh
 open ~/Applications/Gluffi.app

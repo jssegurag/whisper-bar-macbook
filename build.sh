@@ -96,8 +96,23 @@ cp "$DIR/AppIcon.icns"   "$APP/Contents/Resources/AppIcon.icns"
 cp "$DIR/Assets/GluffiMark.png"     "$APP/Contents/Resources/GluffiMark.png"
 cp "$DIR/Assets/GluffiMark@2x.png"  "$APP/Contents/Resources/GluffiMark@2x.png"
 
-echo "→ Firmando (ad-hoc)..."
-codesign --force --deep --sign - "$APP"
+# Identidad de firma. Con una identidad estable —un certificado autofirmado
+# basta— macOS deja de revocar Accesibilidad y el acceso al Llavero en cada
+# build, porque la identidad de la app deja de ser el hash de su binario.
+# Ver signing.sh.
+IDENTIDAD="${GLUFFI_SIGN_IDENTITY:-}"
+if [ -z "$IDENTIDAD" ]; then
+    IDENTIDAD=$(security find-identity -v -p codesigning 2>/dev/null \
+                | grep -o '"Gluffi[^"]*"' | head -1 | tr -d '"' || true)
+fi
+
+if [ -n "$IDENTIDAD" ]; then
+    echo "→ Firmando con: $IDENTIDAD"
+    codesign --force --deep --sign "$IDENTIDAD" "$APP"
+else
+    echo "→ Firmando ad-hoc (sin identidad estable)"
+    codesign --force --deep --sign - "$APP"
+fi
 
 echo ""
 echo "✓ Gluffi.app instalada en: $APP"
@@ -108,6 +123,13 @@ if [ -d "$HOME/Applications/WhisperBar.app" ]; then
     echo "⚠  Quedó el bundle anterior en ~/Applications/WhisperBar.app"
     echo "   Bórralo cuando confirmes que Gluffi funciona:"
     echo "   rm -rf ~/Applications/WhisperBar.app"
+fi
+
+if [ -z "$IDENTIDAD" ]; then
+    echo ""
+    echo "⚠  Firma ad-hoc: macOS revocará Accesibilidad y el acceso al Llavero"
+    echo "   en este build y en cada uno siguiente. Se arregla una sola vez:"
+    echo "   bash signing.sh"
 fi
 
 echo ""
