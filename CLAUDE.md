@@ -235,7 +235,7 @@ All settings stored in `com.user.WhisperBar` UserDefaults domain:
 - `language` — transcription language code (default: "es")
 - `minRecordingDuration` — minimum seconds before transcribing (default: 0.5)
 - `llmEnabled`, `llmCliPath`, `llmModelPath`, `llmPrompt` — LLM configuration
-- `translationEnabled`, `translationTargetLanguage` — translation mode
+- `translationEnabled` — translate to English while dictating (whisper's own `-tr`; there is no reverse direction)
 - `voiceActionsEnabled` — enable/disable voice command detection
 - `floatingPillEnabled`, `floatingPillOriginX/Y` — floating button state & position
 - `streamStepMs`, `streamLengthMs`, `streamKeepMs` — streaming parameters

@@ -97,11 +97,6 @@ class Config {
         set { defaults.set(newValue, forKey: "translationEnabled") }
     }
 
-    /// Idioma destino para traducción (default: "en" — usa whisper-cli -tr sin LLM)
-    var translationTargetLanguage: String {
-        get { defaults.string(forKey: "translationTargetLanguage") ?? "en" }
-        set { defaults.set(newValue, forKey: "translationTargetLanguage") }
-    }
 
     // MARK: - Acciones por voz
 
