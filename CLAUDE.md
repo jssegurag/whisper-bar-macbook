@@ -35,6 +35,33 @@ nobody adds them back by reflex:
 What is left needs **only the voice model**. No llama.cpp, no `.gguf`, no second
 download.
 
+## SystemPolish — the model macOS already ships
+
+`SystemPolish` is an **opt-in** layer that runs the transcript through Apple's
+on-device model via `FoundationModels`. It answers the obvious question — "can we have
+something smarter?" — without downloading anything: on macOS 26 the model is already
+there.
+
+Three things worth knowing before touching it:
+
+- **It runs *before* the dictionary**, not after. A language model tends to "correct"
+  the user's own terms into standard Spanish — that is exactly why the llama.cpp
+  corrector was removed — so the dictionary runs afterwards and puts them back.
+- **Any failure returns `nil` and the caller pastes the original.** A polish that fails
+  must never cost the user their dictation. There is an 8-second timeout for the same
+  reason.
+- **`clean(_:original:)` rejects answers that stopped correcting and started writing**,
+  by comparing length against the original. Small models add preambles and quotes.
+
+**CI cannot compile this file.** The GitHub runner uses an SDK older than macOS 26,
+so `canImport(FoundationModels)` is false there and the whole implementation is
+excluded — a syntax error inside it would pass CI. Typecheck it locally on a machine
+with the newer SDK before pushing.
+
+`FoundationModels` is **weak-linked** (`-Xlinker -weak_framework`), so the app still
+launches on macOS 13 where the framework does not exist. `availability` reports why it
+cannot be used in words the user can act on.
+
 ## Naming
 
 The app is called **Gluffi**. Everything the user sees says Gluffi: the bundle display

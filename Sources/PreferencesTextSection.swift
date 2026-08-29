@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Sección «Texto»: las tres capas que tocan la transcripción antes de pegarla.
 ///
@@ -14,6 +15,8 @@ struct TextSection: View {
     @State private var snippetCount: Int
     @State private var recognitionBias: Bool
     @State private var spellFix: Bool
+    @State private var systemPolish: Bool
+    private let polishAvailability = SystemPolish.availability
 
     init() {
         _dictionaryEnabled = State(initialValue: Config.shared.dictionaryEnabled)
@@ -22,6 +25,7 @@ struct TextSection: View {
         _snippetCount      = State(initialValue: SnippetStore.shared.snippets.count)
         _recognitionBias   = State(initialValue: Config.shared.recognitionBiasEnabled)
         _spellFix          = State(initialValue: Config.shared.spellFixEnabled)
+        _systemPolish      = State(initialValue: Config.shared.systemPolishEnabled)
     }
 
     var body: some View {
@@ -52,7 +56,33 @@ struct TextSection: View {
                 Config.shared.spellFixEnabled = spellFix
             } extra: { EmptyView() }
 
-            layer(number: 3, title: "Snippets",
+            layer(number: 3, title: "Repasar con el modelo de macOS",
+                  purpose: "Arregla puntuación y concordancia usando el modelo que ya trae el sistema: no descarga nada. Añade un par de segundos por dictado, así que viene apagado.",
+                  isOn: $systemPolish) {
+                Config.shared.systemPolishEnabled = systemPolish
+            } extra: {
+                HStack(alignment: .top, spacing: 7) {
+                    Image(systemName: polishAvailability.isAvailable ? "checkmark.circle" : "exclamationmark.triangle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(polishAvailability.isAvailable ? Theme.brand : Theme.warn)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(polishAvailability.message)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if polishAvailability == .needsAppleIntelligence {
+                            Button("Abrir Ajustes") {
+                                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security") {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            }
+                            .controlSize(.small)
+                        }
+                    }
+                }
+            }
+
+            layer(number: 4, title: "Snippets",
                   purpose: "Inserta textos preconfigurados al pronunciar su frase. Va al final: su contenido es literal y nada debe reescribirlo.",
                   isOn: $snippetsEnabled) {
                 Config.shared.snippetsEnabled = snippetsEnabled

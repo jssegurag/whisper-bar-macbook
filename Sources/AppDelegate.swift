@@ -474,7 +474,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 // modelo de lenguaje corrigiendo el texto; se quitó porque hacía el
                 // mismo trabajo que el corrector del sistema, tardaba segundos y
                 // reescribía los términos propios del usuario.
-                let correctedText = self.applyRewrites(text)
+                // El repaso con el modelo del sistema va ANTES del diccionario: un
+                // modelo de lenguaje tiende a «corregir» los términos propios hacia
+                // el español estándar, y el diccionario los devuelve después a su
+                // forma correcta. Si falla o tarda, se sigue con el texto original.
+                var textoBase = text
+                if self.config.systemPolishEnabled {
+                    self.setIconState(.transcribing)
+                    PillWindowController.shared.setProcessingLabel("Repasando")
+                    if let repasado = SystemPolish.polish(text) { textoBase = repasado }
+                }
+                let correctedText = self.applyRewrites(textoBase)
 
                 let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
                 let entry = TranscriptionEntry(text: correctedText, duration: duration, sourceApp: sourceApp)

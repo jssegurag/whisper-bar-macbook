@@ -2365,6 +2365,56 @@ func testPipelineWithSpellFix() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - SystemPolish — El modelo que ya trae macOS
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testSystemPolish() {
+    suite("SystemPolish — Repaso opcional, sin descargar nada")
+
+    // No vale la pena molestar al modelo con dos palabras.
+    assert(!SystemPolish.shouldPolish(""), "texto vacío no se repasa")
+    assert(!SystemPolish.shouldPolish("hola mundo"), "dos palabras tampoco")
+    assert(SystemPolish.shouldPolish("esta frase ya tiene suficientes palabras"),
+        "a partir de tres sí")
+
+    // Un modelo que se sale del encargo devuelve algo que no es una corrección.
+    // Se compara contra el original: si se desvía mucho, dejó de corregir.
+    let original = "quiero que revises esta frase por favor"
+    assertEqual(SystemPolish.clean("quiero que revises esta frase, por favor.", original: original),
+                "quiero que revises esta frase, por favor.",
+                "una corrección de tamaño parecido se acepta")
+    assertEqual(SystemPolish.clean("\"quiero que revises esta frase, por favor.\"", original: original),
+                "quiero que revises esta frase, por favor.",
+                "se le quitan las comillas con que a veces responde")
+    assert(SystemPolish.clean("Claro, aquí tienes el texto corregido con mucho gusto, además he mejorado el estilo y he añadido detalles que no estaban", original: original) == nil,
+        "una respuesta que se puso a redactar se descarta")
+    assert(SystemPolish.clean("ok", original: original) == nil,
+        "una respuesta demasiado corta también")
+    assert(SystemPolish.clean("   ", original: original) == nil, "y una vacía")
+
+    // Las instrucciones prohíben lo que hizo fracasar al corrector anterior.
+    for prohibicion in ["sinónimo", "reformules", "traduzcas"] {
+        assertContains(SystemPolish.instructions, prohibicion,
+            "las instrucciones prohíben explícitamente: \(prohibicion)")
+    }
+
+    // El estado se reporta en palabras accionables, no con un código.
+    for estado in [SystemPolish.Availability.available,
+                   .needsAppleIntelligence,
+                   .unsupported("necesita macOS 26 o posterior")] {
+        assert(estado.message.count > 20, "\(estado) explica su situación")
+    }
+    assert(SystemPolish.Availability.available.isAvailable, "disponible es disponible")
+    assert(!SystemPolish.Availability.needsAppleIntelligence.isAvailable,
+        "con Apple Intelligence apagado, no")
+    assertContains(SystemPolish.Availability.needsAppleIntelligence.message, "Ajustes",
+        "y dice dónde se enciende")
+
+    // Estado real de esta máquina, informativo.
+    print("  \u{001B}[33mℹ estado aquí: \(SystemPolish.availability.message)\u{001B}[0m")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -2439,6 +2489,7 @@ struct TestRunner {
         testDictionaryUsageCount()
         testWhisperPrompt()
         testSpellFixerPolicy()
+        testSystemPolish()
         testPipelineWithSpellFix()
         testModelDownloaderFormatting()
 
