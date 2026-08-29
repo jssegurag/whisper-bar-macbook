@@ -36,6 +36,8 @@ swiftc \
     "$DIR/Sources/SnippetAuth.swift" \
     "$DIR/Sources/SnippetStore.swift" \
     "$DIR/Sources/RewritePipeline.swift" \
+    "$DIR/Sources/WhisperPrompt.swift" \
+    "$DIR/Sources/SpellFixer.swift" \
     "$DIR/Sources/SnippetsView.swift" \
     "$DIR/Sources/SnippetsWindowController.swift" \
     "$DIR/Sources/CustomDictionary.swift" \

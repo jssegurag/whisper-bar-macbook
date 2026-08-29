@@ -232,6 +232,21 @@ class Config {
         set { defaults.set(newValue, forKey: "dictionaryEnabled") }
     }
 
+    // MARK: - Reconocimiento y ortografía
+
+    /// Pasarle los términos del diccionario a whisper antes de transcribir, para
+    /// que los oiga bien en vez de corregirlos después.
+    var recognitionBiasEnabled: Bool {
+        get { defaults.object(forKey: "recognitionBiasEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "recognitionBiasEnabled") }
+    }
+
+    /// Corrección ortográfica con el corrector del sistema.
+    var spellFixEnabled: Bool {
+        get { defaults.object(forKey: "spellFixEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "spellFixEnabled") }
+    }
+
     // MARK: - Snippets por voz
 
     // MARK: - Atajos
