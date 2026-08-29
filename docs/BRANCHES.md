@@ -73,195 +73,66 @@ imperativo, ≤ 72 caracteres. El cuerpo explica el *por qué*, no el *qué*.
 
 ## Ramas activas
 
-### `docs/branch-strategy`
+| Rama | Propósito | Estado |
+|---|---|---|
+| `feat/50-auto-limpieza-determinista` | HU-003: quitar del dictado muletillas, repeticiones y autocorrecciones, sin modelo de lenguaje. | PR #50, CI en verde |
+| `chore/higiene-de-ramas` | `worktree.sh`, destino de build configurable, y la limpieza de ramas de este documento. | implementada |
 
-- **Propósito:** documentar la convención de ramas y este registro.
-- **Alcance:** `docs/BRANCHES.md`, sección "Estrategia de ramas" en `CONTRIBUTING.md`.
-- **Depende de:** —
-- **Estado:** listo para PR.
+Esta tabla es corta a propósito. Antes vivía aquí una ficha por rama —propósito,
+alcance, bugs que cerraba, orden de mezcla— y para el 29-08-2026 doce de esas
+fichas describían ramas mezcladas hacía días. Un registro que hay que mantener a
+mano deja de ser cierto en cuanto alguien se olvida una vez, y entonces engaña
+más de lo que ayuda.
 
-### `fix/transcriber-subprocess-reliability`
-
-- **Propósito:** corregir dos fallos en la gestión del subproceso `whisper-cli`.
-- **Alcance:** `Sources/Transcriber.swift`, tests en `Tests/RunTests.swift`.
-- **Bugs que cierra:**
-  - **Bloqueo por tubería sin drenar.** `standardError` se asignaba a un `Pipe()` que nunca se leía y `standardOutput` se leía *después* de `waitUntilExit()`. `whisper-cli` escribe progreso continuo a stderr; al llenarse el búfer del kernel (~64 KB) el proceso queda bloqueado escribiendo y la transcripción moría con "tiempo de espera agotado" a los 60 s. Se reproduce con audios largos o modelos verbosos.
-  - **Carrera en `cancel()`.** `currentProcess` era una `var` sin protección, mutada desde el hilo principal (`cancel()`) y desde background (`transcribe(url:)`). Además se publicaba *antes* de `proc.run()`: un `cancel()` en esa ventana llamaba `terminate()` sobre un proceso no lanzado → excepción de `NSInvalidArgumentException` y caída de la app.
-- **Extra:** un `whisper-cli` que sale con código distinto de 0 ya no devuelve `.success("")` en silencio; se reporta con su stderr.
-- **Depende de:** —
-- **Estado:** listo para PR.
-
-### `fix/audiorecorder-start-failure`
-
-- **Propósito:** que un fallo al abrir el micrófono deje de ser silencioso.
-- **Alcance:** `Sources/AudioRecorder.swift`, tests en `Tests/RunTests.swift`.
-- **Bug que cierra:** `start()` descartaba el `Bool` de `AVAudioRecorder.record()`. Con el micrófono ocupado o el permiso denegado, `record()` devuelve `false`, pero la app marcaba `isRecording = true`, animaba el icono y grababa un WAV vacío: el usuario dictaba y recibía una transcripción vacía sin ningún error. La documentación del método ya prometía lanzar error; ahora lo cumple.
-- **Depende de:** —
-- **Estado:** listo para PR.
-
-### `refactor/split-preferences-view`
-
-- **Propósito:** paso 1 de la secuencia de `docs/AUDITORIA-UX.md`. Partir las diez pantallas de configuración en un archivo cada una.
-- **Alcance:** `PreferencesView.swift` (queda con el TabView, 39 líneas) y nueve archivos nuevos `Preferences*Tab.swift` más `PreferencesComponents.swift`; `build.sh`, `run_tests.sh`, `CLAUDE.md`.
-- **Depende de:** `feat/voice-snippets`. Sale del extremo de la cadena porque ahí está el archivo con las diez pestañas; partirlo sobre `main`, que tiene ocho, garantizaría conflicto con las dos ramas de funcionalidad. Se rebasa sobre `main` cuando el lote entre.
-- **Criterio de revisión:** el archivo original reconstruido concatenando los diez nuevos es idéntico línea por línea al de su padre. Cero código alterado.
-- **Estado:** implementada, 295 tests en verde.
-
-### `docs/ux-audit`
-
-- **Propósito:** inventario y problemas medidos de la interfaz, como insumo de la fase de diseño. No es un diseño.
-- **Alcance:** `docs/AUDITORIA-UX.md`. Sin código.
-- **Depende de:** — (sale de `main`).
-- **Estado:** listo para PR.
-
-### `chore/github-actions-ci`
-
-- **Propósito:** que los tests se corran solos en cada PR. Hoy solo se ejecutan cuando alguien se acuerda.
-- **Alcance:** `.github/workflows/ci.yml`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/` (bug y feature), notas en `CONTRIBUTING.md` y `CLAUDE.md`.
-- **Depende de:** — (sale de `main`; conviene mezclarla **primero** para que los demás PRs ya se validen solos).
-- **Estado:** listo para PR. El workflow no se ha ejecutado nunca: GitHub Actions solo corre al subir la rama, así que la primera corrida es la prueba real. Lo verificable en local está verificado: YAML válido y los dos comandos del workflow pasan.
-
-### `chore/ui-preview-harness`
-
-- **Propósito:** revisar diseño de ventanas sin instalar la app ni perder el permiso de Accesibilidad.
-- **Alcance:** `Tools/PreviewUI.swift`, `Tools/sample-dictionary.json`, `preview_ui.sh`, notas en `CONTRIBUTING.md` y `CLAUDE.md`.
-- **Depende de:** — (sale de `main`; solo abre ventanas que existen en toda rama, para que la herramienta no se rompa al cambiar de rama).
-- **Estado:** listo para PR.
-
-### `feat/custom-dictionary`
-
-- **Propósito:** implementar HU-001 — diccionario personalizado con CRUD y corrección determinística.
-- **Alcance:** `Sources/CustomDictionary.swift`, `DictionaryProcessor.swift`, `DictionaryView.swift`, `DictionaryWindowController.swift` (nuevos); `AppDelegate.swift`, `Config.swift`, `FloatingTranscriptionViewModel.swift` (puntos de inserción); `build.sh`, `run_tests.sh`, `CLAUDE.md`, `Tests/RunTests.swift`.
-- **Historia:** `docs/historias/HU-001-diccionario-personalizado.md`, en la propia rama.
-- **Depende de:** `fix/transcriber-subprocess-reliability` — sale de esa rama, no de `main`. Tocar el pipeline saliendo de `main` reintroduciría en el diff el bug de la tubería sin drenar.
-- **Estado:** implementada, 206 tests en verde.
+Lo que aquella ficha contaba lo cuenta mejor el PR: el diff, la discusión, el
+resultado de CI y la fecha del merge. Aquí solo van las ramas **vivas**, con una
+línea. El detalle de una funcionalidad va en su historia de `docs/historias/`,
+que sí sobrevive al merge.
 
 ---
 
-## Orden de mezcla y conflictos previstos
+## Al mezclar, se borra la rama
 
-Las dos ramas `fix/` son independientes en `Sources/`, pero se cruzan en dos archivos
-compartidos:
+Es la regla que más se incumplió: el 29-08-2026 había **36 ramas locales y 44 en
+`origin`**, de las cuales 33 y 42 tenían su contenido íntegro en `main`. Ninguna
+aportaba nada; todas parecían trabajo pendiente.
 
-- `Tests/RunTests.swift` — ambas añaden suites al final y registran sus llamadas en la
-  misma lista de `TestRunner.main()`.
-- `CLAUDE.md` — los bloques de `AudioRecorder.swift` y `Transcriber.swift` son
-  contiguos, y ambas ramas añaden un bullet a "Key test areas".
+Se limpiaron tras comprobar, rama por rama con `git merge-tree`, que mezclarlas
+en `main` no cambiaba un solo byte. Las dos que divergían —`feat/system-language-polish`
+y `feat/llm-local`— se verificaron comparando su árbol con el del commit de
+squash que las incorporó: idénticos.
 
-La segunda que se mezcle dará conflicto en esas regiones.
+Para que no vuelva a pasar:
 
-Orden recomendado:
+```bash
+gh pr merge <n> --squash --delete-branch   # borra la rama al mezclar
+git config remote.origin.prune true        # limpia refs remotas muertas al hacer fetch
+```
 
-0. `chore/github-actions-ci` — primero, para que los PRs siguientes se validen solos.
-1. `fix/transcriber-subprocess-reliability` — sección de tests nº 24.
-2. `fix/audiorecorder-start-failure` — sección de tests nº 25.
-3. `feat/custom-dictionary` — secciones nº 26 a 28.
-4. `feat/voice-snippets` — secciones nº 29 a 32. Ya trae `fix/paste-target-window` mezclado.
-5. `refactor/split-preferences-view` — sin tests nuevos.
-6. `rename/gluffi`.
-7. `design/gluffi-redesign` — el último. Sale de `rename/gluffi` y trae toda la cadena.
+Lo definitivo es la casilla **Settings → General → «Automatically delete head
+branches»** del repositorio. Requiere permiso de admin: quien tenga solo `WRITE`
+no puede activarla por API —GitHub responde 404, no 403— y tiene que pedirlo.
 
-`fix/paste-target-window` puede entrar en cualquier punto antes del 4. Sale del diccionario, así que solo choca con la nº 25. Ya trae la nº 24 porque sale de la rama del Transcriber, así que solo choca con la nº 25.
+Si hiciera falta resucitar una rama archivada, sus SHAs están en
+`~/Local/whisper-ramas-archivadas-2026-08-29.txt` y como refs locales bajo
+`refs/archivo/`:
 
-`feat/custom-dictionary` también edita `CLAUDE.md` cerca de "Key test areas", igual que esta rama y que las dos de `fix/`. Mismo criterio: conservar todos los bullets.
-
-Resolución del conflicto: conservar **ambas** suites y **ambas** llamadas cuando
-no haya solapamiento — pero **verifica que no lo haya**. Si una rama ya mezcló a
-la otra, «conservar ambos lados» duplica una suite entera y el archivo no
-compila (`invalid redeclaration`). Pasó de verdad con `PasteTargetTracker`, que
-`feat/voice-snippets` ya traía dentro. Tras resolver, busca definiciones
-repetidas antes de dar el conflicto por cerrado.
-
-Y no numeres las secciones nuevas de tests: el número se elige por rama, así que
-dos ramas salidas de `main` eligen el mismo y colisionan. Con el título solo
-basta. Ojo con un detalle: el hunk parte a la mitad de la última
-función del lado `HEAD` (la llave de cierre queda en la línea compartida que sigue al
-marcador `>>>>>>>`), así que hay que cerrar esa función con `}` antes de pegar el
-bloque entrante. Tras resolver, `bash run_tests.sh` debe dar **151 tests** (118 en
-`main` + 20 de la primera rama + 13 de la segunda); verificado con un merge de prueba.
-
-### `fix/paste-target-window`
-
-- **Propósito:** que el texto transcrito llegue a la app del usuario y no a una ventana nuestra.
-- **Alcance:** `Sources/PasteTargetTracker.swift` (nuevo), `AppDelegate.swift`, `CLAUDE.md`, tests.
-- **Bug que cierra:** `paste(text:)` ignoraba `pasteTargetApp` y posteaba ⌘V a lo que estuviera al frente, y `currentPasteTarget()` devolvía `nil` cuando el frontmost era WhisperBar — justo lo que ocurre tras abrir Preferencias, Historial o Snippets, porque llaman `NSApp.activate`. Dictar en ese momento dejaba el texto en el historial y en ningún otro sitio. Reportado por Jesús probando snippets el 28-08-2026.
-- **Depende de:** — (sale de `main`).
-- **Estado:** listo para PR. Reemplaza la propuesta `fix/unused-paste-target`.
-
-### `feat/voice-snippets`
-
-- **Propósito:** implementar HU-002 — snippets por voz con CRUD, importar/exportar y cifrado de los sensibles.
-- **Alcance:** `PhraseRewriter.swift`, `RewritePipeline.swift`, `SecretBox.swift`, `SnippetAuth.swift`, `SnippetStore.swift`, `SnippetsView.swift`, `SnippetsWindowController.swift` (nuevos); `DictionaryProcessor.swift` (pasa a capa delgada), `AppDelegate.swift`, `Config.swift`, `PreferencesView.swift`, `FloatingTranscriptionViewModel.swift`, `DictionaryView.swift`.
-- **Historia:** `docs/historias/HU-002-snippets-por-voz.md`, en la propia rama.
-- **Depende de:** `feat/custom-dictionary`. El primer commit generaliza el motor del diccionario sin cambiar comportamiento —los 68 tests del diccionario pasan sin tocarse, ese es su criterio de revisión— y los siguientes agregan la funcionalidad. Se revisa commit por commit.
-- **Estado:** implementada, 276 tests en verde.
-
-### `rename/gluffi`
-
-- **Propósito:** la app pasa a llamarse Gluffi. Renombra todo lo visible y reemplaza el icono.
-- **Alcance:** `Info.plist`, títulos de ventana, menú, notificaciones, textos de permisos, `Assets/`, `build.sh`, README y docs.
-- **No cambia** el bundle identifier, el servicio del Keychain ni la carpeta de datos: los tres guardan datos del usuario y cambian juntos, con migración, el día que haya Developer ID. Está comentado en cada sitio.
-- **Depende de:** `refactor/split-preferences-view`.
-- **Estado:** PR #16.
-
-### `design/gluffi-redesign`
-
-- **Propósito:** implementar el handoff de diseño completo, §9 pasos 1–7.
-- **Alcance:** icono y menú, ventana de Configuración nueva, píldora, notificaciones, Preferencias con barra lateral, Historial, ventana en vivo, Diccionario y Snippets. 15 commits, uno por paso más las correcciones que salieron al probar.
-- **Depende de:** `rename/gluffi`. Es el extremo de la cadena: mezclar al final de todo.
-- **Se revisa commit por commit.** Los pasos dependen entre sí y un diff plano de 15 commits no se puede leer.
-- **Estado:** PR #17, 446 tests en verde.
-
-### `chore/git-worktrees`
-
-- **Propósito:** poder trabajar varias ramas en paralelo sin que se pisen.
-- **Alcance:** `worktree.sh` (nuevo); `build.sh` (destino de instalación configurable); `CONTRIBUTING.md`, `docs/BRANCHES.md`, `CLAUDE.md`.
-- **Por qué ahora:** trabajando `feat/llm-local` y la limpieza determinista al mismo tiempo en un solo árbol, los cambios de una acabaron dentro de los commits de la otra. Se detectó y se reconstruyó la rama, pero el árbol compartido lo vuelve a provocar.
-- **No cambia** el bundle identifier: los builds paralelos separan binarios, no ajustes ni datos.
-- **Depende de:** — (sale de `main`).
-- **Estado:** implementada. `run_tests.sh` y `build.sh` verificados desde un worktree.
+```bash
+git show-ref | grep refs/archivo/
+git branch <nombre> <sha>
+```
 
 ---
 
 ## Rama de integración
 
-`integration/validate-all` no va a PR. Es una rama local desechable donde se
-mezcla todo lo pendiente para compilar e instalar la app una vez y validar el
-conjunto antes de abrir los PRs — un release candidate, no una línea de trabajo.
+`integration/validate-all` era una rama local desechable donde se mezclaba todo
+lo pendiente para compilar la app una vez y validar el conjunto antes de abrir
+los PRs. Se borró el 29-08-2026: existía porque había ocho ramas esperando a la
+vez, y con CI corriendo en cada PR y un worktree por rama ya no hace falta.
 
-Se rehace desde cero cada vez que cambia cualquier rama de origen:
-
-```bash
-git checkout main
-git branch -D integration/validate-all 2>/dev/null
-git checkout -b integration/validate-all
-for b in docs/branch-strategy chore/ui-preview-harness \
-         fix/transcriber-subprocess-reliability \
-         fix/audiorecorder-start-failure \
-         feat/custom-dictionary; do
-    git merge --no-edit "$b"   # resolver conservando ambos lados
-done
-bash run_tests.sh && bash build.sh
-```
-
-Nunca se mezcla `integration/*` hacia `main`: lo que se mezcla son las ramas de
-origen, por PR y por separado. Si un fallo aparece solo en la integración, se
-corrige en la rama que lo causó y se rehace esta.
-
----
-
-## Nota sobre el arnés de UI
-
-`preview_ui.sh` vive en `chore/ui-preview-harness` y no está disponible en las
-ramas que no lo tienen mezclado. Para revisar UI desde otra rama sin ensuciar su
-PR, saca el arnés de su rama y compílalo contra la actual:
-
-```bash
-git show chore/ui-preview-harness:Tools/PreviewUI.swift > /tmp/PreviewUI.swift
-# luego compila Sources/*.swift (menos main.swift) junto con ese archivo
-```
-
-Cuando el PR del arnés entre a `main`, el problema desaparece.
+Si vuelve a hacer falta validar un lote entero antes de mezclarlo, se rehace
+desde cero; nunca se mezcla hacia `main`.
 
 ---
 

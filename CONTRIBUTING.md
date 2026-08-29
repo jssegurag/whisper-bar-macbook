@@ -170,6 +170,20 @@ es menor que el de tu máquina. Lo que importa es que pase, no el conteo.
 
 ---
 
+
+### 7. Al mezclar, borra la rama
+
+```bash
+gh pr merge <n> --squash --delete-branch
+```
+
+No es cosmética. El 29-08-2026 el repo tenía 36 ramas locales y 44 en `origin`;
+33 y 42 de ellas ya estaban íntegramente en `main`. Todas parecían trabajo
+pendiente y ninguna lo era, así que nadie se atrevía a tocarlas.
+
+Lo que la rama contaba —el diff, la discusión, CI, la fecha— lo cuenta el PR, que
+no se borra. Lo que merece sobrevivir al merge va en `docs/historias/`.
+
 ## Estructura del proyecto
 
 ```
