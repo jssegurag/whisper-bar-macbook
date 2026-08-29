@@ -2441,6 +2441,110 @@ func testLlmModelValidation() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - Sesgo de reconocimiento y ortografía
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testWhisperPrompt() {
+    suite("WhisperPrompt — Sesgar el reconocimiento sin instalar nada")
+
+    assert(WhisperPrompt.build(from: []) == nil, "sin términos no hay prompt que pasar")
+
+    let entries = [
+        DictionaryEntry(canonical: "Oriuno", usageCount: 1),
+        DictionaryEntry(canonical: "DocFly", usageCount: 9),
+        DictionaryEntry(canonical: "Banco de Bogotá", usageCount: 0),
+        DictionaryEntry(canonical: "Inactivo", isActive: false, usageCount: 99),
+    ]
+
+    // Los que más han servido van primero: cuando el diccionario no cabe entero,
+    // entran los que hacen falta, no los primeros alfabéticamente.
+    assertEqual(WhisperPrompt.terms(from: entries), ["DocFly", "Oriuno", "Banco de Bogotá"],
+        "ordena por usos y excluye los inactivos")
+
+    let prompt = WhisperPrompt.build(from: entries) ?? ""
+    assertContains(prompt, "DocFly", "incluye los términos")
+    assert(prompt.hasSuffix("."), "termina en punto: whisper imita el estilo del prompt")
+    assert(prompt.count <= WhisperPrompt.maxCharacters, "respeta el tope")
+
+    // Con un diccionario grande, se recorta por términos completos: un recorte a
+    // mitad de palabra sesga hacia algo que no existe.
+    let muchos = (1...200).map { DictionaryEntry(canonical: "TerminoLargoNumero\($0)") }
+    let recortado = WhisperPrompt.build(from: muchos) ?? ""
+    assert(recortado.count <= WhisperPrompt.maxCharacters, "el tope se respeta con 200 términos")
+    assert(recortado.hasSuffix("."), "y sigue cerrando bien")
+    assert(!recortado.contains(", ."), "no deja una coma huérfana al recortar")
+}
+
+func testSpellFixerPolicy() {
+    suite("SpellFixer — Corregir de más es peor que no corregir")
+
+    assert(SpellFixer.shouldReplace(original: "cancion", suggestion: "canción"),
+        "una tilde que falta sí se corrige")
+    assert(SpellFixer.shouldReplace(original: "tambien", suggestion: "también"),
+        "otra tilde que falta")
+    assert(SpellFixer.shouldReplace(original: "qeu", suggestion: "que"),
+        "dos letras cambiadas de sitio")
+
+    // El límite es deliberado y este caso lo marca: «haci» → «así» son cuatro
+    // ediciones. Es una corrección plausible para una persona, pero a esa
+    // distancia el corrector empieza a proponer palabras que no tienen que ver, y
+    // dejar una errata es menos dañino que cambiar lo que el usuario dijo.
+    assert(!SpellFixer.shouldReplace(original: "haci", suggestion: "así"),
+        "a cuatro ediciones ya no se corrige, aunque suene razonable")
+
+    // Nombres propios, siglas y términos del usuario no son erratas.
+    assert(!SpellFixer.shouldReplace(original: "DocFly", suggestion: "Docile"),
+        "algo con mayúsculas dentro no se toca: es un nombre propio o una marca")
+    assert(!SpellFixer.shouldReplace(original: "S.A.S", suggestion: "SAS"),
+        "una sigla con mayúsculas tampoco")
+    assert(!SpellFixer.shouldReplace(original: "covid19", suggestion: "covid"),
+        "nada con cifras")
+
+    // Una sugerencia que parte la palabra en dos está reinterpretando la frase.
+    assert(!SpellFixer.shouldReplace(original: "porque", suggestion: "por que"),
+        "no se acepta una sugerencia de varias palabras")
+
+    // Y solo cambios pequeños: si hay que reescribir media palabra, el corrector
+    // no entendió de qué se habla.
+    assert(!SpellFixer.shouldReplace(original: "oriundo", suggestion: "orquesta"),
+        "un cambio grande se rechaza")
+    assert(!SpellFixer.shouldReplace(original: "hola", suggestion: "hola"),
+        "una sugerencia idéntica no es una corrección")
+    assert(!SpellFixer.shouldReplace(original: "", suggestion: "algo"),
+        "nada que corregir en una cadena vacía")
+
+    assertEqual(SpellFixer.distance("cancion", "canción"), 1, "una tilde es distancia 1")
+    assertEqual(SpellFixer.distance("", "abc"), 3, "contra vacío, la longitud")
+}
+
+func testPipelineWithSpellFix() {
+    suite("RewritePipeline — La ortografía va entre diccionario y snippets")
+
+    let entries = [DictionaryEntry(canonical: "DocFly", variants: ["doc fly"])]
+    let snippet = PhraseRewriter.Rule(phrases: ["mi correo"], replacement: "yo@ejemplo.com")
+
+    // El corrector recibe el texto con los términos YA canónicos, y nunca ve el
+    // cuerpo del snippet, que se inserta después.
+    var vistoPorElCorrector: String?
+    let resultado = RewritePipeline.applyReporting(
+        to: "subilo a doc fly y agrega mi correo",
+        dictionary: entries,
+        snippetRules: [snippet],
+        spellFix: { texto in vistoPorElCorrector = texto; return texto })
+
+    assertContains(vistoPorElCorrector ?? "", "DocFly",
+        "el corrector ve el término ya corregido por el diccionario")
+    assert(!(vistoPorElCorrector ?? "").contains("yo@ejemplo.com"),
+        "y NO ve el cuerpo del snippet: se inserta después para que nada lo toque")
+    assertContains(resultado.text, "yo@ejemplo.com", "el snippet igual se inserta")
+
+    // Sin corrector, el resultado no cambia
+    let sinCorrector = RewritePipeline.applyReporting(
+        to: "subilo a doc fly", dictionary: entries, snippetRules: [])
+    assertEqual(sinCorrector.text, "subilo a DocFly", "el corrector es opcional")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -2517,6 +2621,9 @@ struct TestRunner {
         testHistoryPresentation()
         testLiveMeta()
         testDictionaryUsageCount()
+        testWhisperPrompt()
+        testSpellFixerPolicy()
+        testPipelineWithSpellFix()
         testModelDownloaderFormatting()
 
         // Summary

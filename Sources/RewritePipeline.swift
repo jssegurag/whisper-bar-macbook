@@ -24,12 +24,19 @@ struct RewritePipeline {
     /// de usos.
     static func applyReporting(to text: String,
                                dictionary: [DictionaryEntry],
-                               snippetRules: [PhraseRewriter.Rule])
+                               snippetRules: [PhraseRewriter.Rule],
+                               spellFix: ((String) -> String)? = nil)
         -> (text: String, dictionaryUsed: Set<String>) {
 
         let corrected = PhraseRewriter.applyReporting(
             to: text, index: DictionaryProcessor.buildIndex(from: dictionary))
-        let expanded = PhraseRewriter.apply(to: corrected.text, rules: snippetRules)
+        // La ortografía va DESPUÉS del diccionario: así los términos propios ya
+        // están en su forma canónica —con mayúsculas— y el corrector los deja en
+        // paz. Al revés, intentaría «arreglar» palabras que no conoce.
+        let spelled = spellFix.map { $0(corrected.text) } ?? corrected.text
+        // Y los snippets al final: su contenido es literal y nada debe tocarlo,
+        // ni el diccionario ni el corrector ortográfico.
+        let expanded = PhraseRewriter.apply(to: spelled, rules: snippetRules)
         return (expanded, corrected.used)
     }
 }

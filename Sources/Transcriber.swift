@@ -58,7 +58,10 @@ class Transcriber {
     // MARK: - Transcripción
 
     /// Transcribe el archivo en `url` y devuelve el texto limpio.
-    func transcribe(url: URL) -> Result<String, Error> {
+    ///
+    /// `prompt` sesga el reconocimiento: los términos que aparecen ahí se oyen
+    /// mejor. Ver WhisperPrompt.
+    func transcribe(url: URL, prompt: String? = nil) -> Result<String, Error> {
         guard config.isValid else {
             return .failure(TranscriberError.invalidConfig(
                 whisperCli: config.whisperCliPath,
@@ -74,12 +77,18 @@ class Transcriber {
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: config.whisperCliPath)
-        proc.arguments = [
+        var argumentos = [
             "-m", config.modelPath,
             "-l", config.language,
             "--no-timestamps",
             "-f", url.path,
         ]
+        if let prompt, !prompt.isEmpty {
+            // --carry-initial-prompt lo reinyecta en cada ventana: sin él, el
+            // sesgo se pierde a los pocos segundos de audio.
+            argumentos += ["--prompt", prompt, "--carry-initial-prompt"]
+        }
+        proc.arguments = argumentos
 
         let outPipe = Pipe()
         let errPipe = Pipe()

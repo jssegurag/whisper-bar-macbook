@@ -375,11 +375,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Aplica diccionario y snippets en ese orden (ver RewritePipeline).
     /// Devuelve el texto intacto si ambos están apagados o vacíos.
+    /// Términos del diccionario para sesgar el reconocimiento, o nil si está
+    /// apagado o no hay ninguno.
+    private func recognitionPrompt() -> String? {
+        guard config.recognitionBiasEnabled, config.dictionaryEnabled else { return nil }
+        return WhisperPrompt.build(from: CustomDictionary.shared.activeEntries)
+    }
+
     private func applyRewrites(_ text: String) -> String {
         let entries = config.dictionaryEnabled ? CustomDictionary.shared.activeEntries : []
         let rules   = config.snippetsEnabled ? SnippetStore.shared.rules() : []
+        // Los términos del usuario y las frases de sus snippets no se corrigen:
+        // el corrector no los conoce y los «arreglaría».
+        let protegidas = Set(entries.flatMap(\.allForms)
+                             + SnippetStore.shared.activeSnippets.flatMap(\.triggers))
+        let spellFix: ((String) -> String)? = config.spellFixEnabled
+            ? { SpellFixer.fix($0, language: self.config.language, protected: protegidas) }
+            : nil
         let result = RewritePipeline.applyReporting(to: text, dictionary: entries,
-                                                  snippetRules: rules)
+                                                  snippetRules: rules,
+                                                  spellFix: spellFix)
         // Solo cuenta lo que corrigió un dictado real: el campo de prueba de la
         // ventana del diccionario no debe inflar el contador.
         CustomDictionary.shared.recordUsage(of: result.dictionaryUsed)
@@ -450,7 +465,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
-            switch self.transcriber.transcribe(url: audioURL) {
+            switch self.transcriber.transcribe(url: audioURL, prompt: self.recognitionPrompt()) {
             case .success(let text) where !text.isEmpty:
                 guard !self.isCancelled else {
                     DispatchQueue.main.async { self.audioFeedback.stop() }

@@ -15,6 +15,8 @@ struct TextSection: View {
     @State private var dictionaryCount: Int
     @State private var snippetCount: Int
     @State private var showPrompt = false
+    @State private var recognitionBias: Bool
+    @State private var spellFix: Bool
 
     init() {
         _llmEnabled        = State(initialValue: Config.shared.llmEnabled)
@@ -23,13 +25,21 @@ struct TextSection: View {
         _snippetsEnabled   = State(initialValue: Config.shared.snippetsEnabled)
         _dictionaryCount   = State(initialValue: CustomDictionary.shared.entries.count)
         _snippetCount      = State(initialValue: SnippetStore.shared.snippets.count)
+        _recognitionBias   = State(initialValue: Config.shared.recognitionBiasEnabled)
+        _spellFix          = State(initialValue: Config.shared.spellFixEnabled)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Se aplican en este orden, justo antes de pegar.")
+            Text("Se aplican en este orden, desde antes de transcribir hasta justo antes de pegar.")
                 .font(.system(size: 11.5))
                 .foregroundStyle(.secondary)
+
+            layer(number: 0, title: "Reconocer mejor mis términos",
+                  purpose: "Le pasa tu diccionario a whisper antes de transcribir, para que los oiga bien desde el principio en vez de corregirlos después. No cuesta tiempo ni ocupa espacio.",
+                  isOn: $recognitionBias) {
+                Config.shared.recognitionBiasEnabled = recognitionBias
+            } extra: { EmptyView() }
 
             layer(number: 1, title: "Corregir con IA",
                   purpose: "Arregla ortografía y puntuación. Si no está configurada, el texto se pega tal como lo oyó Gluffi.",
@@ -79,7 +89,13 @@ struct TextSection: View {
                 }
             }
 
-            layer(number: 3, title: "Snippets",
+            layer(number: 3, title: "Ortografía",
+                  purpose: "Arregla tildes y erratas con el corrector del sistema, sin instalar nada. Deja en paz tus términos y las frases de tus snippets. Va después del diccionario para no tocar lo que ya quedó en su forma correcta.",
+                  isOn: $spellFix) {
+                Config.shared.spellFixEnabled = spellFix
+            } extra: { EmptyView() }
+
+            layer(number: 4, title: "Snippets",
                   purpose: "Inserta textos preconfigurados al pronunciar su frase. Va al final: su contenido es literal y nada debe reescribirlo.",
                   isOn: $snippetsEnabled) {
                 Config.shared.snippetsEnabled = snippetsEnabled
@@ -103,7 +119,7 @@ struct TextSection: View {
                                     onChange: @escaping () -> Void,
                                     @ViewBuilder extra: () -> Extra) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Text("\(number)")
+            Text(number == 0 ? "→" : "\(number)")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(isOn.wrappedValue ? Theme.onBrand : .secondary)
                 .frame(width: 18, height: 18)
