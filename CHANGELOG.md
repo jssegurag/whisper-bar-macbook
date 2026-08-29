@@ -9,10 +9,14 @@ Las versiones siguen [SemVer](https://semver.org/lang/es/).
 > números de las versiones previas se asignaron ahora, agrupando por lo que cada
 > tanda le cambió al usuario. Empezar el archivo en la versión actual habría
 > dejado un documento que oculta cincuenta cambios anteriores.
+>
+> Solo llevan fecha las versiones cuyo cierre queda fijado por un merge concreto.
+> Las anteriores agrupan trabajo de varias semanas sin un corte identificable, y
+> ponerles una fecha sería inventar una precisión que no existe.
 
 ## [Sin publicar]
 
-## [0.5.0]
+## [0.5.0] — 2026-08-29
 
 ### Añadido
 
@@ -40,7 +44,7 @@ Las versiones siguen [SemVer](https://semver.org/lang/es/).
   registraba en una aplicación donde nunca se pegó nada. Ahora se anota la del
   momento en que empezaste a dictar (#51).
 
-## [0.4.0]
+## [0.4.0] — 2026-08-29
 
 ### Añadido
 
