@@ -4026,6 +4026,80 @@ func testSeedProfilesRunsOnce() {
         "con perfiles ya creados no siembra: el archivo es de quien lo tenga")
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - AppCatalog — El selector de aplicaciones
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testAppCatalogMerge() {
+    suite("AppCatalog — Mezcla de instaladas y en ejecución")
+
+    let terminal = AppEntry(bundleID: "com.apple.Terminal", name: "Terminal",
+                            url: URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"))
+    let safari = AppEntry(bundleID: "com.apple.Safari", name: "Safari",
+                          url: URL(fileURLWithPath: "/Applications/Safari.app"))
+    let cursor = AppEntry(bundleID: "com.todesktop.230313mzl4w4u92", name: "Cursor",
+                          url: URL(fileURLWithPath: "/Applications/Cursor.app"))
+
+    let mezcla = AppCatalog.merge(running: [safari], installed: [terminal, safari, cursor])
+    assertEqual(mezcla.count, 3, "una app en ejecución e instalada aparece una sola vez")
+    assertEqual(mezcla.filter { $0.bundleID == "com.apple.Safari" }.count, 1,
+        "sin duplicar")
+    assert(mezcla.first { $0.bundleID == "com.apple.Safari" }?.isRunning == true,
+        "y marcada como en ejecución")
+    assert(mezcla.first { $0.bundleID == "com.apple.Terminal" }?.isRunning == false,
+        "las que solo están instaladas, no")
+
+    // Alfabético y sin distinguir mayúsculas: el usuario busca por nombre.
+    assertEqual(mezcla.map(\.name), ["Cursor", "Safari", "Terminal"],
+        "ordenadas por nombre")
+
+    // Una app en ejecución que no aparece en las carpetas —lanzada desde otro
+    // sitio— tiene que salir igual, o el usuario no podría añadirla.
+    let suelta = AppEntry(bundleID: "com.ejemplo.Suelta", name: "Suelta",
+                          url: URL(fileURLWithPath: "/tmp/Suelta.app"))
+    let conSuelta = AppCatalog.merge(running: [suelta], installed: [terminal])
+    assertEqual(conSuelta.map(\.name), ["Suelta", "Terminal"],
+        "una app en ejecución fuera de las carpetas conocidas también se ofrece")
+}
+
+func testAppCatalogExcludesSelf() {
+    suite("AppCatalog — Gluffi no se ofrece a sí misma")
+
+    let gluffi = AppEntry(bundleID: ProfileResolver.ownBundleID, name: "Gluffi",
+                          url: URL(fileURLWithPath: "/Applications/Gluffi.app"))
+    let mail = AppEntry(bundleID: "com.apple.mail", name: "Mail",
+                        url: URL(fileURLWithPath: "/System/Applications/Mail.app"))
+
+    // Un perfil para Gluffi no significa nada: el dictado nunca se pega ahí.
+    // Ofrecerla es invitar a crear una regla que jamás se aplicará.
+    assertEqual(AppCatalog.merge(running: [gluffi], installed: [gluffi, mail]).map(\.bundleID),
+                ["com.apple.mail"],
+        "no aparece en la lista, ni corriendo ni instalada")
+}
+
+func testAppCatalogSearch() {
+    suite("AppCatalog — Búsqueda")
+
+    let apps = [
+        AppEntry(bundleID: "com.apple.Terminal", name: "Terminal",
+                 url: URL(fileURLWithPath: "/a")),
+        AppEntry(bundleID: "com.microsoft.VSCode", name: "Visual Studio Code",
+                 url: URL(fileURLWithPath: "/b")),
+    ]
+    assertEqual(AppCatalog.filter(apps, query: "").count, 2, "sin búsqueda salen todas")
+    assertEqual(AppCatalog.filter(apps, query: "term").map(\.name), ["Terminal"],
+        "busca por nombre, sin distinguir mayúsculas")
+    assertEqual(AppCatalog.filter(apps, query: "STUDIO").map(\.name), ["Visual Studio Code"],
+        "y por cualquier parte del nombre")
+    // El usuario nunca escribe un bundle ID, pero pegarlo desde algún sitio y que
+    // encuentre la app es mejor que devolver nada.
+    assertEqual(AppCatalog.filter(apps, query: "com.microsoft").map(\.name),
+                ["Visual Studio Code"], "también encuentra por identificador")
+    assertEqual(AppCatalog.filter(apps, query: "  ").count, 2,
+        "una búsqueda de solo espacios no filtra nada")
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -4148,6 +4222,9 @@ struct TestRunner {
         testSeedProfilesShipsWholeCatalogue()
         testProfileStoreSeedsItself()
         testSeedProfilesRunsOnce()
+        testAppCatalogMerge()
+        testAppCatalogExcludesSelf()
+        testAppCatalogSearch()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")

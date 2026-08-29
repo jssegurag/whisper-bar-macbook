@@ -1,18 +1,18 @@
 import SwiftUI
 
-/// Ventana de Preferencias: barra lateral con siete secciones.
+/// Ventana de Preferencias: barra lateral con ocho secciones.
 ///
 /// Venía de diez pestañas en un `TabView` de 580 pt, que necesitaban ~875: las
 /// etiquetas se comprimían y dejaban de leerse. Y cuatro de esas pestañas pedían
 /// rutas de binarios, que es configuración de instalación y no preferencia de
 /// uso: eso se fue a la ventana de Configuración.
 ///
-/// Las siete secciones agrupan por **lo que el usuario quiere hacer**, no por
+/// Las ocho secciones agrupan por **lo que el usuario quiere hacer**, no por
 /// cómo está construida la app. Ya no hay «Modelos» ni «Streaming».
 struct PreferencesView: View {
 
     enum Section: String, CaseIterable, Identifiable {
-        case general, text, intelligence, languages, live, sound, shortcuts
+        case general, text, profiles, intelligence, languages, live, sound, shortcuts
 
         var id: String { rawValue }
 
@@ -20,6 +20,7 @@ struct PreferencesView: View {
             switch self {
             case .general:   return "General"
             case .text:      return "Texto"
+            case .profiles:  return "Perfiles"
             case .intelligence: return "Inteligencia"
             case .languages: return "Idiomas"
             case .live:      return "En vivo"
@@ -32,6 +33,7 @@ struct PreferencesView: View {
             switch self {
             case .general:   return "gearshape"
             case .text:      return "text.alignleft"
+            case .profiles:  return "rectangle.on.rectangle"
             case .intelligence: return "sparkles"
             case .languages: return "globe"
             case .live:      return "waveform"
@@ -47,6 +49,7 @@ struct PreferencesView: View {
             switch self {
             case .general, .shortcuts: return true
             case .text:      return config.dictionaryEnabled || config.snippetsEnabled
+            case .profiles:  return !ProfileStore.shared.activeProfiles.isEmpty
             case .intelligence: return config.isLlmValid
             case .languages: return config.translationEnabled
             case .live:      return config.isWhisperStreamValid
@@ -144,6 +147,7 @@ struct PreferencesView: View {
                 switch selection {
                 case .general:   GeneralTab()
                 case .text:      TextSection()
+                case .profiles:  ProfilesView()
                 case .intelligence: IntelligenceTab()
                 case .languages: TranslationTab()
                 case .live:      LiveSection()
