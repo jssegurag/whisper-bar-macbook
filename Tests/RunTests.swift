@@ -3877,6 +3877,155 @@ func testPillShowsProfile() {
     assertEqual(controller.currentProfileName, nil, "y sabe volver a no enseñar nada")
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - SeedProfiles — Los tres perfiles de fábrica
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Catálogo de apps instaladas, fingido: preguntarle a NSWorkspace haría que la
+/// prueba dependiera de qué haya en la máquina que la corre.
+struct FakeInstalled: InstalledApps {
+    let presentes: Set<String>
+    func isInstalled(_ bundleID: String) -> Bool { presentes.contains(bundleID) }
+}
+
+func testSeedProfilesContent() {
+    suite("SeedProfiles — Qué trae cada uno")
+
+    let perfiles = SeedProfiles.build()
+    assertEqual(perfiles.count, 3, "son tres perfiles")
+    assertEqual(perfiles.map(\.name),
+                ["Terminal e IDE", "Mensajería", "Correo y documentos"],
+        "en el orden en que se declaran, que es el de prioridad")
+    assertEqual(perfiles.map(\.order), [0, 1, 2], "numerados desde cero")
+    assert(perfiles.allSatisfy(\.isActive), "activos, o no servirían de nada al actualizar")
+
+    let terminal = perfiles[0]
+    assertEqual(terminal.overrides.initialCapital, false, "Terminal: sin mayúscula inicial")
+    assertEqual(terminal.overrides.trailingPeriod, false, "Terminal: sin punto final")
+    assertEqual(terminal.overrides.spellFix, false, "Terminal: corrector apagado")
+    assertEqual(terminal.overrides.cleanupLevel, .conservador, "Terminal: limpieza conservadora")
+    assertEqual(terminal.overrides.dictionary, true, "Terminal: diccionario activo")
+    assertEqual(terminal.overrides.snippets, true, "Terminal: snippets activos")
+    // El repaso del sistema cuesta segundos y no le aporta nada a un comando.
+    assertEqual(terminal.overrides.systemPolish, false, "Terminal: sin repaso del sistema")
+
+    let mensajeria = perfiles[1]
+    assertEqual(mensajeria.overrides.trailingPeriod, false, "Mensajería: sin punto final")
+    assertEqual(mensajeria.overrides.cleanupLevel, .completo, "Mensajería: limpieza completa")
+    assertEqual(mensajeria.overrides.spellFix, nil, "Mensajería: el resto hereda")
+    assertEqual(mensajeria.overrides.initialCapital, nil, "y la mayúscula también")
+
+    let correo = perfiles[2]
+    assertEqual(correo.overrides.spellFix, true, "Correo: corrector activo")
+    assertEqual(correo.overrides.initialCapital, true, "Correo: con mayúscula inicial")
+    assertEqual(correo.overrides.trailingPeriod, true, "Correo: conserva el punto")
+    assertEqual(correo.overrides.cleanupLevel, .completo, "Correo: limpieza completa")
+
+    // Ningún perfil sobrescribe el modelo: elegirlo por el usuario exige que lo
+    // haya descargado, y sembrar uno ausente sería sembrar una sobrescritura
+    // inerte.
+    assert(perfiles.allSatisfy { $0.overrides.model == nil },
+        "ninguno fija modelo de voz: sembrarlo sin descargarlo no haría nada")
+}
+
+func testSeedProfilesShipsWholeCatalogue() {
+    suite("SeedProfiles — Se siembra el catálogo entero, no solo lo instalado")
+
+    let perfiles = SeedProfiles.build()
+
+    // Filtrar por lo instalado en el primer arranque dejaba la funcionalidad
+    // coja: quien instalaba Slack al día siguiente no lo veía aparecer nunca.
+    // Un identificador que no casa con nada es inofensivo.
+    let mensajeria = perfiles[1]
+    assert(mensajeria.bundleIDs.contains("com.tinyspeck.slackmacgap"),
+        "Slack está en Mensajería aunque no esté instalada en esta máquina")
+    assert(perfiles[0].bundleIDs.contains("com.googlecode.iterm2"),
+        "y iTerm en Terminal e IDE")
+
+    assertEqual(perfiles[0].bundleIDs, KnownApps.terminal.map(\.bundleID),
+        "cada perfil trae su categoría entera del catálogo")
+    assertEqual(perfiles[1].bundleIDs, KnownApps.messaging.map(\.bundleID),
+        "sin filtrar")
+    assertEqual(perfiles[2].bundleIDs, KnownApps.writing.map(\.bundleID),
+        "ni recortar")
+
+    // El nombre viaja con el identificador: es lo que permite enseñar «Slack» y
+    // no com.tinyspeck.slackmacgap para una app que el sistema no conoce.
+    assertEqual(KnownApps.name(for: "com.tinyspeck.slackmacgap"), "Slack",
+        "el catálogo sabe cómo se llama cada una")
+    assertEqual(KnownApps.name(for: "com.inventada.App"), nil,
+        "y admite no saberlo")
+
+    // Ningún identificador repetido entre categorías: dos perfiles compitiendo
+    // por la misma app en la siembra sería un empate que nadie pidió.
+    let todos = KnownApps.all.map(\.bundleID)
+    assertEqual(todos.count, Set(todos).count,
+        "ninguna aplicación aparece en dos categorías")
+}
+
+func testProfileStoreSeedsItself() {
+    suite("ProfileStore — La siembra es suya, no de AppDelegate")
+
+    let defaults = UserDefaults.standard
+    let previo = defaults.object(forKey: SeedProfiles.doneKey)
+    defer {
+        if let previo { defaults.set(previo, forKey: SeedProfiles.doneKey) }
+        else { defaults.removeObject(forKey: SeedProfiles.doneKey) }
+    }
+    defaults.removeObject(forKey: SeedProfiles.doneKey)
+
+    let url = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("gluffi-siembra-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    // Colgada de AppDelegate, cualquier entrada que no fuera la app completa
+    // —el arnés de preview_ui.sh, por ejemplo— abría la pestaña de Perfiles
+    // vacía, y ahí la funcionalidad no se entiende.
+    let conSiembra = ProfileStore(storageURL: url, seeds: true)
+    assertEqual(conSiembra.profiles.count, 3,
+        "un store que siembra trae los tres perfiles sin que nadie se lo pida")
+
+    // Y uno de pruebas no, o cada suite se encontraría tres perfiles dentro.
+    let otra = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("gluffi-siembra-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: otra) }
+    defaults.removeObject(forKey: SeedProfiles.doneKey)
+    assertEqual(ProfileStore(storageURL: otra).profiles.count, 0,
+        "y uno normal no siembra nada")
+}
+
+func testSeedProfilesRunsOnce() {
+    suite("SeedProfiles — Se siembra una vez y no vuelve")
+
+    let defaults = UserDefaults.standard
+    let previo = defaults.object(forKey: SeedProfiles.doneKey)
+    defer {
+        if let previo { defaults.set(previo, forKey: SeedProfiles.doneKey) }
+        else { defaults.removeObject(forKey: SeedProfiles.doneKey) }
+    }
+    defaults.removeObject(forKey: SeedProfiles.doneKey)
+
+    let (store, url) = storeDePruebas()
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    SeedProfiles.seedIfNeeded(into: store)
+    assertEqual(store.profiles.count, 3, "la primera vez siembra los tres")
+
+    // Y si el usuario los borra, no vuelven: borrarlos es una decisión suya.
+    for perfil in store.profiles { store.remove(perfil.id) }
+    SeedProfiles.seedIfNeeded(into: store)
+    assertEqual(store.profiles.count, 0,
+        "borrados por el usuario, no se recrean")
+
+    // Tampoco pisa perfiles que ya existan.
+    defaults.removeObject(forKey: SeedProfiles.doneKey)
+    store.add(Profile(name: "Mío", bundleIDs: ["com.apple.Safari"], order: 0))
+    SeedProfiles.seedIfNeeded(into: store)
+    assertEqual(store.profiles.map(\.name), ["Mío"],
+        "con perfiles ya creados no siembra: el archivo es de quien lo tenga")
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -3995,6 +4144,10 @@ struct TestRunner {
         testHistoryProfileLabel()
         testDictationSessionCarriesAppName()
         testPillShowsProfile()
+        testSeedProfilesContent()
+        testSeedProfilesShipsWholeCatalogue()
+        testProfileStoreSeedsItself()
+        testSeedProfilesRunsOnce()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")

@@ -46,6 +46,8 @@ swiftc \
     "$DIR/Sources/ProfileStore.swift" \
     "$DIR/Sources/ProfileResolver.swift" \
     "$DIR/Sources/DictationSession.swift" \
+    "$DIR/Sources/KnownApps.swift" \
+    "$DIR/Sources/SeedProfiles.swift" \
 "$DIR/Sources/ModelDownloader.swift" \
     "$DIR/Sources/SetupView.swift" \
     "$DIR/Sources/SetupWindowController.swift" \

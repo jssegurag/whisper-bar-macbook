@@ -9,7 +9,13 @@ import Foundation
 /// y evita ese mismo problema dentro de un año.
 final class ProfileStore: ObservableObject {
 
-    static let shared = ProfileStore()
+    /// El de la app. Siembra los perfiles de fábrica la primera vez.
+    ///
+    /// La siembra vive aquí y no en `AppDelegate` porque el dueño de «¿hay
+    /// perfiles?» es el store. Colgada del delegado, cualquier entrada que no
+    /// fuera la app completa —el arnés de `preview_ui.sh`, por ejemplo— abría la
+    /// pestaña de Perfiles vacía, y ahí la funcionalidad no se entiende.
+    static let shared = ProfileStore(seeds: true)
 
     /// Versión del formato en disco. Sube cuando la forma del archivo cambie de
     /// una manera que esta versión no sepa leer.
@@ -26,9 +32,12 @@ final class ProfileStore: ObservableObject {
 
     private let storageURL: URL
 
-    init(storageURL: URL? = nil) {
+    /// `seeds` solo lo pide `shared`: las pruebas construyen su propio store y no
+    /// tienen por qué encontrarse tres perfiles dentro.
+    init(storageURL: URL? = nil, seeds: Bool = false) {
         self.storageURL = storageURL ?? Self.defaultStorageURL()
         load()
+        if seeds { SeedProfiles.seedIfNeeded(into: self) }
     }
 
     private static func defaultStorageURL() -> URL {
