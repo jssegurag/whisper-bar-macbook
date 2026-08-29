@@ -250,9 +250,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
 
     func menuWillOpen(_ menu: NSMenu) {
-        if pasteTargetApp == nil {
-            pasteTargetApp = currentPasteTarget()
-        }
+        // Siempre se refresca: el menú puede abrirse muchas veces antes de que el
+        // usuario haga algo, y cada vez la app de destino puede ser otra.
+        pasteTargetApp = currentPasteTarget()
     }
 
     // MARK: - Icono de la barra
@@ -303,12 +303,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Grabación
 
     private func startRecording() {
-        // Capturar la app destino del paste antes de que cualquier UI nuestra robe foco.
-        // Para el shortcut esto es la app del usuario; para el pill la captura ocurre
-        // antes en handlePillTap (más fiable) y aquí solo se usa si no se capturó ya.
-        if pasteTargetApp == nil {
-            pasteTargetApp = currentPasteTarget()
-        }
+        // Se captura SIEMPRE, no solo si está vacío.
+        //
+        // Antes se conservaba el valor anterior si existía, y eso convivía con un
+        // paste() que ignoraba el destino capturado. Al arreglar paste() para que
+        // active la app de destino, un valor rancio dejó de ser inofensivo: abrir
+        // el menú deja capturada la app de ese momento, y si luego el usuario
+        // cambia de ventana y dicta, el texto se pegaba en la anterior.
+        //
+        // PasteTargetTracker ya resuelve el caso que motivó el guard original: si
+        // el frontmost es una ventana nuestra, devuelve la última app externa.
+        pasteTargetApp = currentPasteTarget()
         isCancelled = false
         registerEscMonitor()
         do {
