@@ -106,10 +106,17 @@ class FloatingTranscriptionViewModel: ObservableObject {
             repeatCount = 0
         }
 
-        // Diccionario personalizado: solo sobre texto ya finalizado. Aplicarlo al
+        // Limpieza y diccionario: solo sobre texto ya finalizado. Aplicarlos al
         // parcial haría parpadear la ventana mientras whisper reescribe la frase.
+        let nivel = Config.shared.cleanupLevel
+        let cleanup: ((String) -> String)? = nivel == .desactivado ? nil : { [self] texto in
+            Cleaner.clean(texto, level: nivel, rules: CleanupRules.current(),
+                          protected: Cleaner.Guard.from(dictionary: dictionaryEntries(),
+                                                        snippetRules: snippetRules()))
+        }
         let corrected = RewritePipeline.apply(
             to: trimmed,
+            cleanup: cleanup,
             dictionary: Config.shared.dictionaryEnabled ? dictionaryEntries() : [],
             snippetRules: Config.shared.snippetsEnabled ? snippetRules() : [])
 

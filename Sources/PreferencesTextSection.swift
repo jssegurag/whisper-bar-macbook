@@ -1,12 +1,12 @@
 import SwiftUI
 import AppKit
 
-/// Sección «Texto»: las tres capas que tocan la transcripción antes de pegarla.
+/// Sección «Texto»: las capas que tocan la transcripción antes de pegarla.
 ///
-/// Estaban en tres pestañas distintas —Corrección LLM, Diccionario, Snippets— y
-/// no había forma de saber en qué orden se aplican. La numeración 1·2·3 no es
-/// decoración: es el orden real del pipeline, y explica por qué el diccionario
-/// puede deshacer lo que hizo el LLM y no al revés.
+/// Estaban en pestañas distintas y no había forma de saber en qué orden se
+/// aplican. La numeración no es decoración: es el orden real del pipeline
+/// (ver `RewritePipeline`), y explica por qué el diccionario puede devolver a su
+/// sitio un término que otra capa tocó, y no al revés.
 struct TextSection: View {
 
     @State private var dictionaryEnabled: Bool
@@ -15,6 +15,7 @@ struct TextSection: View {
     @State private var snippetCount: Int
     @State private var recognitionBias: Bool
     @State private var spellFix: Bool
+    @State private var cleanupLevel: CleanupLevel
     @State private var systemPolish: Bool
     private let polishAvailability = SystemPolish.availability
 
@@ -26,6 +27,7 @@ struct TextSection: View {
         _recognitionBias   = State(initialValue: Config.shared.recognitionBiasEnabled)
         _spellFix          = State(initialValue: Config.shared.spellFixEnabled)
         _systemPolish      = State(initialValue: Config.shared.systemPolishEnabled)
+        _cleanupLevel      = State(initialValue: Config.shared.cleanupLevel)
     }
 
     var body: some View {
@@ -40,23 +42,7 @@ struct TextSection: View {
                 Config.shared.recognitionBiasEnabled = recognitionBias
             } extra: { EmptyView() }
 
-            layer(number: 1, title: "Diccionario",
-                  purpose: "Reescribe tus términos propios a la forma correcta, aunque whisper los haya oído mal.",
-                  isOn: $dictionaryEnabled) {
-                Config.shared.dictionaryEnabled = dictionaryEnabled
-            } extra: {
-                manageRow(count: dictionaryCount, noun: "término") {
-                    DictionaryWindowController.shared.showWindow()
-                }
-            }
-
-            layer(number: 2, title: "Ortografía",
-                  purpose: "Arregla tildes y erratas con el corrector del sistema, sin instalar nada. Deja en paz tus términos y las frases de tus snippets. Va después del diccionario para no tocar lo que ya quedó en su forma correcta.",
-                  isOn: $spellFix) {
-                Config.shared.spellFixEnabled = spellFix
-            } extra: { EmptyView() }
-
-            layer(number: 3, title: "Repasar con el modelo de macOS",
+            layer(number: 1, title: "Repasar con el modelo de macOS",
                   purpose: "Arregla puntuación y concordancia usando el modelo que ya trae el sistema: no descarga nada. Añade un par de segundos por dictado, así que viene apagado.",
                   isOn: $systemPolish) {
                 Config.shared.systemPolishEnabled = systemPolish
@@ -82,7 +68,25 @@ struct TextSection: View {
                 }
             }
 
-            layer(number: 4, title: "Snippets",
+            cleanupLayer
+
+            layer(number: 3, title: "Diccionario",
+                  purpose: "Reescribe tus términos propios a la forma correcta, aunque whisper los haya oído mal.",
+                  isOn: $dictionaryEnabled) {
+                Config.shared.dictionaryEnabled = dictionaryEnabled
+            } extra: {
+                manageRow(count: dictionaryCount, noun: "término") {
+                    DictionaryWindowController.shared.showWindow()
+                }
+            }
+
+            layer(number: 4, title: "Ortografía",
+                  purpose: "Arregla tildes y erratas con el corrector del sistema, sin instalar nada. Deja en paz tus términos y las frases de tus snippets. Va después del diccionario para no tocar lo que ya quedó en su forma correcta.",
+                  isOn: $spellFix) {
+                Config.shared.spellFixEnabled = spellFix
+            } extra: { EmptyView() }
+
+            layer(number: 5, title: "Snippets",
                   purpose: "Inserta textos preconfigurados al pronunciar su frase. Va al final: su contenido es literal y nada debe reescribirlo.",
                   isOn: $snippetsEnabled) {
                 Config.shared.snippetsEnabled = snippetsEnabled
@@ -96,6 +100,42 @@ struct TextSection: View {
         .onAppear {
             dictionaryCount = CustomDictionary.shared.entries.count
             snippetCount = SnippetStore.shared.snippets.count
+        }
+    }
+
+    /// La limpieza no es un interruptor: tiene tres niveles, y el de en medio
+    /// es el que se recomienda. Un Picker segmentado los enseña los tres a la
+    /// vez —con lo que hace cada uno debajo— en vez de esconder dos detrás de un
+    /// menú desplegable.
+    private var cleanupLayer: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("2")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(cleanupLevel == .desactivado ? .secondary : Theme.onBrand)
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(cleanupLevel == .desactivado
+                                          ? Color.white.opacity(0.12) : Theme.brand))
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Limpieza del dictado")
+                    .font(.system(size: 13))
+                Text("Quita lo que se dice al hablar y no se escribe: muletillas, palabras repetidas, frases empezadas dos veces. Sin modelo de lenguaje — reglas, así que no añade espera.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Picker("", selection: $cleanupLevel) {
+                    ForEach(CleanupLevel.allCases, id: \.self) { nivel in
+                        Text(nivel.titulo).tag(nivel)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 320)
+                .onChange(of: cleanupLevel) { _ in Config.shared.cleanupLevel = cleanupLevel }
+                Text(cleanupLevel.explicacion)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

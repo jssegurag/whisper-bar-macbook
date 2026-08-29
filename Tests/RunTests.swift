@@ -2610,6 +2610,42 @@ func testCleanupRulesResource() {
     assertEqual(CleanupLevel(rawValue: "full"), nil, "un valor inventado no cuela")
 }
 
+func testCleanupConfigLevel() {
+    suite("Cleaner — El nivel se configura y aplica sin reiniciar")
+
+    let defaults = UserDefaults.standard
+    let previo = defaults.string(forKey: "cleanupLevel")
+    defer {
+        if let previo { defaults.set(previo, forKey: "cleanupLevel") }
+        else { defaults.removeObject(forKey: "cleanupLevel") }
+    }
+
+    defaults.removeObject(forKey: "cleanupLevel")
+    assertEqual(Config.shared.cleanupLevel, .conservador,
+        "de fábrica: conservador — solo quita ruido, no reescribe estructura")
+
+    // Esto es exactamente lo que hace `defaults write com.user.WhisperBar cleanupLevel`.
+    defaults.set("completo", forKey: "cleanupLevel")
+    assertEqual(Config.shared.cleanupLevel, .completo, "el valor escrito fuera se lee dentro")
+
+    Config.shared.cleanupLevel = .desactivado
+    assertEqual(defaults.string(forKey: "cleanupLevel"), "desactivado",
+        "y lo que se elige en Preferencias se escribe con el mismo nombre")
+
+    defaults.set("loquesea", forKey: "cleanupLevel")
+    assertEqual(Config.shared.cleanupLevel, .conservador,
+        "un valor corrupto cae al por defecto, no rompe el dictado")
+
+    // Se lee en cada dictado, no se cachea al arrancar: por eso cambia sin reiniciar.
+    defaults.set("completo", forKey: "cleanupLevel")
+    assertEqual(Config.shared.cleanupLevel, .completo, "el cambio se ve en la lectura siguiente")
+
+    assert(CleanupLevel.conservador.quitaRuido, "conservador quita muletillas y repeticiones")
+    assert(!CleanupLevel.conservador.reescribeEstructura,
+        "pero no toca autocorrecciones ni listas")
+    assert(CleanupLevel.completo.reescribeEstructura, "completo sí")
+    assert(!CleanupLevel.desactivado.quitaRuido, "desactivado no hace nada")
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MARK: - Cleaner — Pares entrada/salida en español
@@ -2812,6 +2848,36 @@ func testCleanerNeverTouchesDictionary() {
         "este bueno, mándalo hoy", "un disparador de snippet no se limpia")
 }
 
+func testCleanerInPipeline() {
+    suite("Cleaner — La etapa va antes del diccionario")
+
+    let entradas = [DictionaryEntry(canonical: "DocFly", variants: ["doc fly"])]
+    var vistoPorElDiccionario: String?
+
+    // El diccionario recibe el texto YA limpio: si fuera al revés, la limpieza
+    // tendría que decidir sobre términos que el usuario no pronunció así.
+    let resultado = RewritePipeline.applyReporting(
+        to: "este, súbelo a doc fly",
+        cleanup: { texto in
+            let limpio = Cleaner.clean(texto, level: .completo,
+                                       rules: tablasDeLimpieza, protected: .none)
+            vistoPorElDiccionario = limpio
+            return limpio
+        },
+        dictionary: entradas,
+        snippetRules: [])
+
+    assertEqual(vistoPorElDiccionario, "Súbelo a doc fly",
+        "la limpieza corre primero, sobre el texto tal como se dictó")
+    assertEqual(resultado.text, "Súbelo a DocFly",
+        "y el diccionario corrige después")
+
+    // Sin etapa de limpieza el pipeline se comporta exactamente como antes.
+    let sinLimpieza = RewritePipeline.applyReporting(
+        to: "este, súbelo a doc fly", dictionary: entradas, snippetRules: [])
+    assertEqual(sinLimpieza.text, "este, súbelo a DocFly",
+        "la limpieza es opcional y su ausencia no cambia nada")
+}
 
 func testCleanerPerformance() {
     suite("Cleaner — Coste en el pipeline")
@@ -2918,10 +2984,12 @@ struct TestRunner {
         testPipelineWithSpellFix()
         testModelDownloaderFormatting()
         testCleanupRulesResource()
+        testCleanupConfigLevel()
         testCleanerPositiveCases()
         testCleanerNegativeCases()
         testCleanerDisabledIsByteIdentical()
         testCleanerNeverTouchesDictionary()
+        testCleanerInPipeline()
         testCleanerPerformance()
 
         // Summary
