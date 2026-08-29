@@ -120,6 +120,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
             as CFDictionary
         _ = AXIsProcessTrustedWithOptions(opts)
+
+        // El diálogo del sistema dice «concede el permiso en Ajustes», y ahí es
+        // donde el usuario se atasca: tras recompilar, Gluffi YA aparece marcada
+        // en la lista y el permiso sigue denegado, porque la entrada se ató al
+        // binario anterior. Volver a marcarla no arregla nada; hay que quitarla y
+        // añadirla otra vez. Sin este aviso, el síntoma es que se dicta y no se
+        // pega nada, sin explicación.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard !AXIsProcessTrusted() else { return }
+            self?.notifyAccessibilityStale()
+        }
+    }
+
+    private func notifyAccessibilityStale() {
+        Notifier.shared.post(AppNotification.Content(
+            title: "Gluffi no puede pegar el texto",
+            body: "Falta el permiso de Accesibilidad. Si ya aparece marcada en Ajustes, "
+                + "quítala de la lista con «−», vuelve a añadirla y reinicia Gluffi: "
+                + "el permiso se ató a la versión anterior de la app.",
+            actions: [.configure, .dismiss],
+            identifier: "accessibility"))
     }
 
     func applicationWillTerminate(_ notification: Notification) {

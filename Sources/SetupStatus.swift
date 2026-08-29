@@ -1,4 +1,5 @@
 import Foundation
+import ApplicationServices
 
 /// Resumen de si la app puede trabajar, y de qué le falta.
 ///
@@ -31,17 +32,27 @@ struct SetupStatus: Equatable {
     /// Orden de prioridad deliberado: sin motor no importa el modelo, así que se
     /// nombra primero el motor. Solo se reporta **una** cosa: la que hay que
     /// resolver ahora.
-    static func evaluate(hasEngine: Bool, hasModel: Bool) -> SetupStatus {
+    static func evaluate(hasEngine: Bool,
+                         hasModel: Bool,
+                         hasAccessibility: Bool = true) -> SetupStatus {
         if !hasEngine {
             return SetupStatus(level: .missingRequired, title: "Falta el motor de voz")
         }
         if !hasModel {
             return SetupStatus(level: .missingRequired, title: "Falta el modelo de voz")
         }
+        // Sin Accesibilidad la app transcribe y no pega en ningún sitio: el
+        // usuario dicta, ve que no pasa nada, y no tiene forma de saber por qué.
+        // Va después de motor y modelo porque sin ellos no hay nada que pegar.
+        if !hasAccessibility {
+            return SetupStatus(level: .missingRequired, title: "Falta el permiso de Accesibilidad")
+        }
         return SetupStatus(level: .ready, title: "Todo listo")
     }
 
     static func current(_ config: Config = .shared) -> SetupStatus {
-        evaluate(hasEngine: config.isWhisperCliValid, hasModel: config.isModelValid)
+        evaluate(hasEngine: config.isWhisperCliValid,
+                 hasModel: config.isModelValid,
+                 hasAccessibility: AXIsProcessTrusted())
     }
 }

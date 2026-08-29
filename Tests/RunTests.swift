@@ -1952,6 +1952,18 @@ func testSetupStatus() {
 
     // Solo se reporta UNA cosa: la que hay que resolver ahora. Sin motor da igual
     // el modelo, así que el motor gana.
+    // Sin Accesibilidad la app transcribe y no pega en ningún sitio: el menú
+    // tiene que decirlo, no dejar al usuario dictando contra el vacío.
+    let sinPermiso = SetupStatus.evaluate(hasEngine: true, hasModel: true, hasAccessibility: false)
+    assertEqual(sinPermiso.title, "Falta el permiso de Accesibilidad",
+        "el permiso ausente se nombra en el menú")
+    assert(sinPermiso.needsAttention, "y pide atención")
+
+    // Pero sin motor no hay nada que pegar: eso manda.
+    let sinMotorNiPermiso = SetupStatus.evaluate(hasEngine: false, hasModel: true, hasAccessibility: false)
+    assertEqual(sinMotorNiPermiso.title, "Falta el motor de voz",
+        "sin motor, el permiso no es lo primero que hay que resolver")
+
     let sinNada = SetupStatus.evaluate(hasEngine: false, hasModel: false)
     assertEqual(sinNada.title, "Falta el motor de voz",
         "sin motor ni modelo se nombra primero el motor, no los dos")
