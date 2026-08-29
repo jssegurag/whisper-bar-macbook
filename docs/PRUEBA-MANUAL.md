@@ -4,7 +4,7 @@
 |---|---|
 | **Para qué** | Verificar lo que los 459 tests automáticos **no** pueden cubrir. |
 | **Cuándo** | Antes de dar por buena una release, y tras cualquier cambio que toque permisos, atajos o el pegado. |
-| **Cuánto** | 25 pruebas. Unos 40 minutos la primera vez, 15 las siguientes. |
+| **Cuánto** | 26 pruebas. Unos 40 minutos la primera vez, 15 las siguientes. |
 
 ## Por qué existe
 
@@ -127,7 +127,8 @@ revocar los permisos en Ajustes del Sistema → Privacidad y seguridad.
 | H7 | | Intentar poner solo `⌘` | Se rechaza explicando que hacen falta dos teclas |
 | H8 | | Intentar poner la combinación que ya usa otro atajo | Se rechaza nombrando cuál la tiene |
 | H9 | | Poner «Dictar» en modo «Pulsar una vez» y dictar largo | Una pulsación empieza, otra termina. Sin sostener teclas |
-| H10 | | Sección Comandos con la corrección con IA apagada | Aviso ámbar con botón «Activarla», y el botón la activa |
+| H10 | | Sección Texto → apagar «Ortografía» y dictar una palabra con tilde faltante | Se pega sin corregir. Al reactivarla, se corrige |
+| H11 | | Sección Texto → «Reconocer mejor mis términos», con un término en el diccionario | Al dictarlo, whisper lo escribe bien **sin** que el diccionario tenga que corregirlo |
 
 ## I. Configuración
 

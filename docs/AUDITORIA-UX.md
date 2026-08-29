@@ -5,6 +5,7 @@
 | **Fecha** | 28 de agosto de 2026 |
 | **Propósito** | Insumo para la fase de interfaz y experiencia. Inventario y problemas medidos, **no** un diseño. |
 | **Alcance** | Solo documentación. Esta rama no toca una línea de código. |
+| **Vigencia** | **Retrato del estado ANTERIOR al rediseño.** Se conserva tal cual porque documenta qué problemas lo motivaron; no describe la app de hoy. Para eso está `INVENTARIO-COMPONENTES.md`. Los seis problemas están resueltos, y tres de las funcionalidades que menciona —corrección con IA, comandos por voz y traducción a otros idiomas— se retiraron después. |
 
 Se escribe antes de rediseñar por una razón: un rediseño guiado por gusto se
 discute sin salida, y uno guiado por problemas medidos se resuelve. Lo que sigue

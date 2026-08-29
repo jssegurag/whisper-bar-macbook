@@ -230,12 +230,14 @@ Cuando el PR del arnés entre a `main`, el problema desaparece.
 
 ## Propuestas no iniciadas
 
+Las de esta tabla siguen vivas. Lo que ya se hizo —CI, arnés de UI, partir
+PreferencesView, navegación de Preferencias— salió de aquí y está en `main`.
+
 Ramas acordadas pero sin código. Se mueven a "activas" al crearse.
 
 | Rama propuesta                     | Propósito                                                                 |
 |------------------------------------|---------------------------------------------------------------------------|
-| `chore/swiftpm-build`              | `Package.swift` en lugar de los 23 archivos listados a mano en `build.sh`; olvidar un archivo nuevo rompe el build. |
-| `refactor/split-preferences-view`  | `PreferencesView.swift` tiene 806 líneas y diez pantallas, y viola el "un archivo = una responsabilidad" del propio proyecto. Va **primero** en la secuencia de la fase de diseño: rediseñar la navegación encima de este archivo mezcla rediseño y refactor en un diff irrevisable. |
+| `chore/swiftpm-build`              | `Package.swift` en lugar de los 57 archivos listados a mano en `build.sh` y `run_tests.sh`; olvidar uno rompe el build. Con CI en verde el riesgo se detecta, pero sigue siendo trabajo manual en cada archivo nuevo. |
 | `refactor/shared-list-window`      | Historial, Diccionario y Snippets repiten 1.014 líneas de la misma estructura (búsqueda, estado vacío, lista, pie con importar/exportar) con **tres** modelos de interacción distintos. Cada mejora de usabilidad hay que aplicarla tres veces; ya pasó en esta ronda. Ver `docs/AUDITORIA-UX.md`, P2 y P3. |
 | `feat/dictionary-quick-add`        | **Agregar la variante desde donde se descubre.** Validando HU-001, whisper escribió `dotfly` y hubo que abrir el diccionario y teclear la variante a mano. La app ya sabe qué oyó y qué pegó: podría ofrecer «agregar `dotfly` como variante de…» desde el historial o desde una notificación tras pegar. Requiere un cambio de modelo: `TranscriptionEntry` hoy guarda solo el texto ya corregido, así que habría que conservar también el texto crudo. |
 | `feat/preferences-navigation`      | **La navegación de Preferencias se quedó sin espacio.** Con Diccionario y Snippets ya son 10 pestañas en un `TabView` de 580 pt, y hacen falta ~875: desborda un 51% (medido en `docs/AUDITORIA-UX.md`, P1). Es un problema de UX distinto al tamaño del archivo — se arregla cambiando el patrón de navegación (barra lateral tipo Ajustes del Sistema, o agrupar en menos pestañas), no partiendo el archivo. Pedido por Jesús al revisar la UI del diccionario el 2026-08-28. |
