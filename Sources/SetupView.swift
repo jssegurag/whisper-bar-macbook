@@ -291,8 +291,6 @@ struct SetupView: View {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.showsHiddenFiles = true
-        // El corrector solo entiende .gguf. Sin este filtro es fácil elegir el
-        // modelo de whisper, que está en la misma carpeta y también es un modelo.
         panel.message = {
             switch kind {
             case .engine:    return "Selecciona el binario whisper-cli"
