@@ -37,6 +37,8 @@ swiftc \
     "$DIR/Sources/Notifier.swift" \
     "$DIR/Sources/SetupComponent.swift" \
         "$DIR/Sources/VoiceModel.swift" \
+    "$DIR/Sources/Profile.swift" \
+    "$DIR/Sources/ProfileStore.swift" \
 "$DIR/Sources/ModelDownloader.swift" \
     "$DIR/Sources/SetupView.swift" \
     "$DIR/Sources/SetupWindowController.swift" \

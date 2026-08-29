@@ -3246,6 +3246,194 @@ func testModelDownloaderTargets() {
     assertContains(texto, "GB", "el botón dice GB, no bytes: «Descargar (\(texto))»")
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - Profile — Modelo y persistencia
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Un store apuntando a un archivo temporal, para no tocar el del usuario.
+func storeDePruebas() -> (ProfileStore, URL) {
+    let url = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("gluffi-perfiles-\(UUID().uuidString).json")
+    return (ProfileStore(storageURL: url), url)
+}
+
+func testProfileOverridesInherit() {
+    suite("ProfileOverrides — Heredar es la ausencia de valor")
+
+    let vacio = ProfileOverrides()
+    assert(vacio.isEmpty, "sin ninguna sobrescritura, el perfil no cambia nada")
+
+    // Los nueve campos, uno a uno: cada uno solo deja de heredar cuando tiene
+    // valor. Si alguno se olvidara en isEmpty, un perfil «vacío» sí cambiaría
+    // cosas y el criterio de salida idéntica se rompería en silencio.
+    var conUno = ProfileOverrides()
+    conUno.cleanupLevel = .completo
+    assert(!conUno.isEmpty, "cleanupLevel deja de heredar")
+
+    let campos: [(String, (inout ProfileOverrides) -> Void)] = [
+        ("cleanupLevel",   { $0.cleanupLevel = .completo }),
+        ("spellFix",       { $0.spellFix = false }),
+        ("initialCapital", { $0.initialCapital = false }),
+        ("trailingPeriod", { $0.trailingPeriod = false }),
+        ("dictionary",     { $0.dictionary = false }),
+        ("snippets",       { $0.snippets = false }),
+        ("language",       { $0.language = "en" }),
+        ("model",          { $0.model = "small" }),
+        ("systemPolish",   { $0.systemPolish = false }),
+    ]
+    assertEqual(campos.count, 9, "son nueve ajustes sobrescribibles")
+    for (nombre, poner) in campos {
+        var o = ProfileOverrides()
+        poner(&o)
+        assert(!o.isEmpty, "\(nombre) cuenta como sobrescritura")
+    }
+}
+
+func testProfileStoreRoundTrip() {
+    suite("ProfileStore — Ida y vuelta")
+
+    let (store, url) = storeDePruebas()
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    var overrides = ProfileOverrides()
+    overrides.initialCapital = false
+    overrides.trailingPeriod = false
+    overrides.model = "small"
+    let perfil = Profile(name: "Terminal e IDE", bundleIDs: ["com.apple.Terminal"],
+                         order: 0, overrides: overrides)
+    store.add(perfil)
+
+    let recargado = ProfileStore(storageURL: url)
+    assertEqual(recargado.profiles.count, 1, "el perfil sobrevive al reinicio")
+    assertEqual(recargado.profiles.first?.name, "Terminal e IDE", "con su nombre")
+    assertEqual(recargado.profiles.first?.id, perfil.id, "y con su id estable")
+    assertEqual(recargado.profiles.first?.bundleIDs, ["com.apple.Terminal"], "y sus apps")
+    assertEqual(recargado.profiles.first?.overrides.model, "small", "y sus sobrescrituras")
+    assertEqual(recargado.profiles.first?.overrides.spellFix, nil,
+        "lo que heredaba sigue heredando")
+}
+
+func testProfileStoreFileShape() {
+    suite("ProfileStore — Forma del archivo")
+
+    let (store, url) = storeDePruebas()
+    defer { try? FileManager.default.removeItem(at: url) }
+    store.add(Profile(name: "Uno", bundleIDs: [], order: 0))
+
+    guard let datos = try? Data(contentsOf: url),
+          let json = try? JSONSerialization.jsonObject(with: datos) as? [String: Any] else {
+        assert(false, "el archivo se escribe y es JSON válido")
+        return
+    }
+    assert(json["version"] != nil, "lleva campo version, para poder migrar mañana")
+    assertEqual(json["version"] as? Int, ProfileStore.currentVersion, "con la versión actual")
+    assert(json["profiles"] != nil, "y la lista de perfiles")
+}
+
+func testProfileStoreToleratesUnknownFields() {
+    suite("ProfileStore — Campos desconocidos")
+
+    let (_, url) = storeDePruebas()
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    // Un archivo escrito por una versión más nueva de la app. Ignorar lo que no
+    // se entiende es lo que permite ir y volver entre versiones sin perder datos.
+    let json = """
+    {
+      "version": 1,
+      "futuro": "algo que esta versión no conoce",
+      "profiles": [
+        {
+          "id": "\(UUID().uuidString)",
+          "name": "Mensajería",
+          "isActive": true,
+          "bundleIDs": ["net.whatsapp.WhatsApp"],
+          "order": 1,
+          "overrides": { "trailingPeriod": false, "inventado": 42 }
+        }
+      ]
+    }
+    """
+    try? json.write(to: url, atomically: true, encoding: .utf8)
+
+    let store = ProfileStore(storageURL: url)
+    assertEqual(store.profiles.count, 1, "el perfil se lee pese a los campos de más")
+    assertEqual(store.profiles.first?.name, "Mensajería", "con su nombre")
+    assertEqual(store.profiles.first?.overrides.trailingPeriod, false,
+        "y la sobrescritura que sí entiende")
+}
+
+func testProfileStoreSurvivesCorruption() {
+    suite("ProfileStore — Archivo corrupto")
+
+    let (_, url) = storeDePruebas()
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    // Lo que deja media escritura interrumpida.
+    try? "{ \"version\": 1, \"profiles\": [ { \"id\":".write(to: url, atomically: true,
+                                                             encoding: .utf8)
+    let store = ProfileStore(storageURL: url)
+    assertEqual(store.profiles.count, 0, "un archivo ilegible deja el store vacío, no revienta")
+    assert(FileManager.default.fileExists(atPath: url.path),
+        "y no se borra: sobrescribirlo a ciegas perdería los perfiles recuperables")
+
+    // Y a partir de ahí se puede volver a trabajar.
+    store.add(Profile(name: "Nuevo", bundleIDs: [], order: 0))
+    assertEqual(ProfileStore(storageURL: url).profiles.count, 1,
+        "guardar después del fallo repara el archivo")
+}
+
+func testProfileStoreOrdering() {
+    suite("ProfileStore — El orden es la prioridad")
+
+    let (store, url) = storeDePruebas()
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    store.add(Profile(name: "Tercero", bundleIDs: [], order: 2))
+    store.add(Profile(name: "Primero", bundleIDs: [], order: 0))
+    store.add(Profile(name: "Segundo", bundleIDs: [], order: 1))
+
+    assertEqual(store.profiles.map(\.name), ["Primero", "Segundo", "Tercero"],
+        "se leen en orden ascendente, que es el de prioridad")
+
+    // Reordenar por arrastre: mover el último al principio.
+    store.move(fromOffsets: IndexSet(integer: 2), toOffset: 0)
+    assertEqual(store.profiles.map(\.name), ["Tercero", "Primero", "Segundo"],
+        "mover reordena")
+    assertEqual(store.profiles.map(\.order), [0, 1, 2],
+        "y renumera, para que el orden no dependa de huecos")
+    assertEqual(ProfileStore(storageURL: url).profiles.map(\.name),
+                ["Tercero", "Primero", "Segundo"],
+        "el nuevo orden sobrevive al reinicio")
+}
+
+func testProfileStoreCRUD() {
+    suite("ProfileStore — Alta, cambio y baja")
+
+    let (store, url) = storeDePruebas()
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    var perfil = Profile(name: "Correo", bundleIDs: ["com.apple.mail"], order: 0)
+    store.add(perfil)
+
+    perfil.name = "Correo y documentos"
+    perfil.overrides.initialCapital = true
+    store.update(perfil)
+    assertEqual(store.profiles.first?.name, "Correo y documentos", "actualizar cambia el perfil")
+    assertEqual(store.profiles.count, 1, "y no duplica")
+    assertEqual(store.profiles.first?.overrides.initialCapital, true, "con su sobrescritura")
+
+    // Desactivar no es borrar: el criterio pide poder excluirlo sin perderlo.
+    perfil.isActive = false
+    store.update(perfil)
+    assertEqual(store.profiles.count, 1, "desactivar conserva el perfil")
+    assertEqual(store.activeProfiles.count, 0, "pero lo saca de los activos")
+
+    store.remove(perfil.id)
+    assertEqual(store.profiles.count, 0, "borrar sí lo quita")
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -3341,6 +3529,13 @@ struct TestRunner {
         testVoiceModelPathMatching()
         testVoiceModelInstalled()
         testModelDownloaderTargets()
+        testProfileOverridesInherit()
+        testProfileStoreRoundTrip()
+        testProfileStoreFileShape()
+        testProfileStoreToleratesUnknownFields()
+        testProfileStoreSurvivesCorruption()
+        testProfileStoreOrdering()
+        testProfileStoreCRUD()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")
