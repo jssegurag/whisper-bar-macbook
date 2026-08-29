@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import UserNotifications
 import UniformTypeIdentifiers
+import ApplicationServices
 
 /// Ventana de Configuración. Se hace una vez y no hace falta volver.
 ///
@@ -18,6 +19,7 @@ struct SetupView: View {
     @State private var keychainResult: String?
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var notificationResult: String?
+    @State private var accessibilityResult: String?
 
     var onDone: () -> Void = {}
 
@@ -214,8 +216,8 @@ struct SetupView: View {
 
             permissionRow(
                 title: "Accesibilidad",
-                purpose: "Para pegar el texto en la app donde estás escribiendo.",
-                action: ("Abrir Ajustes", { openPrivacyPane("Privacy_Accessibility") }))
+                purpose: accessibilityPurpose,
+                action: ("Comprobar", { checkAccessibility() }))
             permissionRow(
                 title: "Micrófono",
                 purpose: "Para grabar tu voz.",
@@ -343,6 +345,31 @@ struct SetupView: View {
             return "Están desactivadas. Sin ellas Gluffi no puede avisarte de un error: falla en silencio."
         default:
             return "Sin conceder todavía. Sin ellas Gluffi no puede avisarte de un error."
+        }
+    }
+
+    /// Estado real, no el de la casilla de Ajustes.
+    ///
+    /// Con firma ad-hoc la entrada de permisos sobrevive por bundle identifier
+    /// pero se ata al hash del binario. Tras recompilar, Ajustes puede seguir
+    /// mostrando Gluffi marcada mientras el sistema deniega el permiso. La casilla
+    /// miente; AXIsProcessTrusted() no.
+    private var accessibilityPurpose: String {
+        if let accessibilityResult { return accessibilityResult }
+        return AXIsProcessTrusted()
+            ? "Concedido. Para pegar el texto en la app donde estás escribiendo."
+            : "NO concedido. Sin esto el texto se transcribe pero no se pega en ningún sitio."
+    }
+
+    private func checkAccessibility() {
+        if AXIsProcessTrusted() {
+            let destino = PasteTargetTracker.shared.currentTargetName ?? "ninguna app externa todavía"
+            accessibilityResult = "Concedido. Ahora mismo pegaría en: \(destino)."
+        } else {
+            accessibilityResult = "NO concedido, aunque Ajustes muestre Gluffi marcada. "
+                + "Pasa tras recompilar: el permiso se ata al binario y el binario cambió. "
+                + "Quita Gluffi de la lista con el botón «−», vuelve a añadirla, y reinicia la app."
+            openPrivacyPane("Privacy_Accessibility")
         }
     }
 
