@@ -401,6 +401,36 @@ with conditional assertions on detected binaries simply skip those branches — 
 test total CI prints is lower than on a dev machine. **Never assert a test count**;
 the exit code is the contract.
 
+### Working on several branches at once
+
+`git checkout` handles one branch. This repo is worked with several open at a
+time, and switching branches with uncommitted work on top drags that work onto
+the new branch — it has already happened here: two features being edited in one
+tree ended up mixed into one feature's commits, and the branch had to be rebuilt.
+
+```bash
+bash worktree.sh nueva feat/51-whatever   # new branch off main + its own directory
+bash worktree.sh abre  feat/50-something  # directory for a branch that exists
+bash worktree.sh lista
+bash worktree.sh quita feat/51-whatever   # refuses if there is unsaved work
+```
+
+Directories live **outside** the repo, in `../Whisper-worktrees/`. Inside they
+would show up in every `grep -r`, `find` and build glob of the parent tree, with
+a full copy of `Sources/` per open branch.
+
+`build.sh` installs to `$GLUFFI_APP_PATH` when set, so a worktree can build
+without overwriting the main install:
+
+```bash
+GLUFFI_APP_PATH="$HOME/Applications/Gluffi-dev.app" bash build.sh
+```
+
+That separates binaries, **not data**. The bundle identifier is unchanged, so
+both apps share preferences, history, dictionary, snippets and Keychain — and
+must not run at the same time: they fight over the global hotkey and write to the
+same `UserDefaults` domain.
+
 ### Development Workflow
 
 1. **Edit source file** in `Sources/*.swift`

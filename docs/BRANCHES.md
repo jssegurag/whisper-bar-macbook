@@ -17,6 +17,34 @@ puede.
 
 ---
 
+## Varias ramas a la vez
+
+`git checkout` sirve para una rama. En este repo se trabajan varias a la vez, y
+cambiar de rama con trabajo sin commitear encima lo arrastra a la rama nueva o
+borra archivos que la otra sí tiene. Ha pasado: dos funcionalidades editándose
+en el mismo árbol terminaron mezcladas en los commits de una de ellas, y hubo
+que reconstruir la rama entera.
+
+```bash
+bash worktree.sh nueva feat/51-lo-que-sea      # rama nueva desde main + directorio
+bash worktree.sh abre  feat/50-auto-limpieza-determinista
+bash worktree.sh lista
+bash worktree.sh quita feat/51-lo-que-sea      # se niega si hay trabajo sin guardar
+```
+
+Cada rama en su directorio, bajo `../Whisper-worktrees/`, todas compartiendo el
+mismo `.git`. Para compilar desde uno sin pisar la instalación principal:
+
+```bash
+GLUFFI_APP_PATH="$HOME/Applications/Gluffi-dev.app" bash build.sh
+```
+
+Eso separa los binarios, **no los datos**: el bundle identifier no cambia, así
+que las dos apps comparten preferencias, historial, diccionario y Llavero. No
+las tengas abiertas a la vez. El detalle completo, en `CONTRIBUTING.md`.
+
+---
+
 ## Convención
 
 ```
@@ -183,6 +211,15 @@ bloque entrante. Tras resolver, `bash run_tests.sh` debe dar **151 tests** (118 
 - **Depende de:** `rename/gluffi`. Es el extremo de la cadena: mezclar al final de todo.
 - **Se revisa commit por commit.** Los pasos dependen entre sí y un diff plano de 15 commits no se puede leer.
 - **Estado:** PR #17, 446 tests en verde.
+
+### `chore/git-worktrees`
+
+- **Propósito:** poder trabajar varias ramas en paralelo sin que se pisen.
+- **Alcance:** `worktree.sh` (nuevo); `build.sh` (destino de instalación configurable); `CONTRIBUTING.md`, `docs/BRANCHES.md`, `CLAUDE.md`.
+- **Por qué ahora:** trabajando `feat/llm-local` y la limpieza determinista al mismo tiempo en un solo árbol, los cambios de una acabaron dentro de los commits de la otra. Se detectó y se reconstruyó la rama, pero el árbol compartido lo vuelve a provocar.
+- **No cambia** el bundle identifier: los builds paralelos separan binarios, no ajustes ni datos.
+- **Depende de:** — (sale de `main`).
+- **Estado:** implementada. `run_tests.sh` y `build.sh` verificados desde un worktree.
 
 ---
 
