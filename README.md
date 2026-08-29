@@ -152,7 +152,19 @@ curl -L "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3
 Las dos se instalan desde **Configuración**, con un botón, sin tocar la terminal. Lo
 que sigue es el detalle por si prefieres hacerlo a mano.
 
-Gluffi puede pasar la transcripción por un LLM local para corregir ortografía y puntuación automáticamente.
+Gluffi puede pasar la transcripción por un modelo de lenguaje local para corregir
+ortografía y puntuación.
+
+> **Son dos modelos distintos, y es el error más fácil de cometer.** El de voz
+> (`ggml-*.bin`) convierte audio en texto y lo ejecuta `whisper-cli`. El del corrector
+> (`*.gguf`) recibe texto y devuelve texto, y lo ejecuta `llama-completion`. Ninguno de
+> los dos programas puede cargar el modelo del otro, aunque los archivos vivan en la
+> misma carpeta y los dos se llamen «modelo».
+
+**¿Lo necesitas?** Con `large-v3`, whisper ya puntúa bastante bien. La corrección añade
+unos segundos a cada dictado y puede reescribir tus términos propios —por eso el
+diccionario se aplica **después**—. Si tus transcripciones ya salen bien, apagarla es
+una decisión válida, no una funcionalidad a medias.
 
 ```bash
 brew install llama.cpp
@@ -165,7 +177,7 @@ curl -L "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwe
      -o ~/.whisper-realtime/qwen2.5-1.5b-instruct-q4_k_m.gguf
 ```
 
-Actívalo desde Preferencias (menú → Preferencias → pestaña Modelos) o por terminal:
+Actívalo desde Preferencias → **Texto** → «Corregir con IA», o por terminal:
 
 ```bash
 defaults write com.user.WhisperBar llmEnabled -bool true
