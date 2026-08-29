@@ -33,7 +33,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Recuerda la última app externa activa. Nuestras ventanas roban el foco, así
     /// que sin esto el destino del paste se pierde en cuanto el usuario abre
     /// Preferencias, el Historial o los Snippets.
-    private let pasteTracker = PasteTargetTracker()
+    private let pasteTracker = PasteTargetTracker.shared
 
     /// Bandera de cancelación: impide el paste si el usuario canceló durante transcripción.
     private var isCancelled = false
@@ -591,8 +591,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // si el usuario tenía abierta una ventana nuestra, el texto se perdía.
         let target = pasteTargetApp ?? currentPasteTarget()
         if let target, !target.isActive {
-            target.activate(options: [])
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+            // Con opciones vacías, macOS moderno puede ignorar la petición de
+            // activación de una app en segundo plano. Pedirla explícitamente es
+            // lo que hace que el foco llegue de verdad.
+            target.activate(options: [.activateIgnoringOtherApps])
+            // 0.12 s no siempre alcanza para que la app destino termine de tomar
+            // el foco; si ⌘V llega antes, se pierde.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
                 self?.postPaste(text: text)
             }
             return
@@ -614,7 +619,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         down?.post(tap: .cghidEventTap)
         up?.post(tap: .cghidEventTap)
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+        // 0.6 s en vez de 0.3: si la app destino todavía no leyó el portapapeles
+        // cuando se restaura el contenido anterior, el usuario ve pegado el texto
+        // viejo, o nada.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
             if let previous {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(previous, forType: .string)

@@ -17,11 +17,22 @@ extension NSRunningApplication: PasteTargetCandidate {}
 /// guardaba, pero al editor del usuario no llegaba nada.
 final class PasteTargetTracker {
 
+    /// Compartido: AppDelegate lo alimenta y la ventana de Configuración lo
+    /// consulta para poder decir a dónde iría el texto ahora mismo.
+    static let shared = PasteTargetTracker()
+
+
     private let selfPid: pid_t
     private(set) weak var lastExternalApp: PasteTargetCandidate?
 
     init(selfPid: pid_t = getpid()) {
         self.selfPid = selfPid
+    }
+
+    /// Nombre de la app a la que se pegaría ahora. Para diagnóstico.
+    var currentTargetName: String? {
+        (target(frontmost: NSWorkspace.shared.frontmostApplication) as? NSRunningApplication)?
+            .localizedName
     }
 
     /// Registra una app que acaba de activarse. Ignora la nuestra.
