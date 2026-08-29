@@ -32,8 +32,13 @@ nobody adds them back by reflex:
   English. Reaching other languages meant routing the transcript through a language
   model.
 
-What is left needs **only the voice model**. No llama.cpp, no `.gguf`, no second
-download.
+**Dictation itself still needs only the voice model.** Nothing in the transcribe →
+paste path downloads a second model, and none of the three features above came back.
+
+`LocalLLM` (HU-004) adds an *optional* local model on top, for skills that cannot be
+written as rules. It is off unless a skill asks for it, and no skill ships enabled.
+What killed the old corrector was that it ran on **every** dictation whether the user
+wanted it or not; that is the part that must not return.
 
 ## SystemPolish — the model macOS already ships
 
@@ -61,6 +66,29 @@ with the newer SDK before pushing.
 `FoundationModels` is **weak-linked** (`-Xlinker -weak_framework`), so the app still
 launches on macOS 13 where the framework does not exist. `availability` reports why it
 cannot be used in words the user can act on.
+
+## LocalLLM — the optional downloaded model
+
+`LocalLLM` runs `llama-server` and talks to it over HTTP on `127.0.0.1`. Full story in
+`docs/historias/HU-004-modelo-de-lenguaje-local.md`.
+
+- **Server, not `llama-cli`.** Measured here: a one-shot call takes **24.9 s** because
+  it reloads the 2.5 GB GGUF every time, against **~1.5 s** with the model resident.
+  The whole design follows from that number.
+- **It costs ~3 GB of RAM while loaded**, so the server starts on first use and shuts
+  itself down after `llmIdleMinutes` of silence. The idle shutdown is what makes
+  keeping the model acceptable at all — it is not a cosmetic setting.
+- **The port is requested from the kernel, never fixed.** A fixed port collides with a
+  second copy of the app, or with a `llama-server` the user runs themselves.
+- **Any failure returns `nil`** and the caller keeps the original text — same rule as
+  `SystemPolish`, same reason.
+- **A language model rewrites the user's own terms.** In the acceptance run it got
+  "DocFly" and "Oriuno" right on its own, which is precisely the proof that it touches
+  them. Any skill returning text to the user must run the dictionary **after** it.
+
+Tests spawn a **fake** `llama-server` (a python HTTP server answering `/health` and
+`/v1/chat/completions`), so the whole lifecycle is covered without the 2.5 GB model —
+CI has neither the model nor `llama.cpp`.
 
 ## Naming
 
@@ -267,6 +295,9 @@ All settings stored in `com.user.WhisperBar` UserDefaults domain:
 - `audioFeedbackCustomPath` — path to user-supplied audio file (used when preset = `custom`)
 - `dictionaryEnabled` — apply the custom dictionary to transcriptions (default: true; inert when the dictionary is empty)
 - `snippetsEnabled` — expand voice snippets (default: true; inert with no snippets)
+- `llmModelPath`, `llamaServerPath` — modelo GGUF y binario; vacío = autodetectar
+- `llmContextSize` — ventana de contexto (default 4096; más contexto es más RAM)
+- `llmIdleMinutes` — minutos sin uso antes de apagar el servidor (default 5)
 
 ## Build & Development
 
