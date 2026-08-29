@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Fecha** | 28 de agosto de 2026 |
+| **Fecha** | 28 de agosto de 2026, actualizado tras el rediseño y las tres retiradas |
 | **Propósito** | Insumo para el diseño de componentes: qué superficies existen, qué información contiene cada una y de dónde sale ese dato. |
 | **Método** | Extraído del código, no de memoria. |
 
@@ -51,7 +51,6 @@ En orden, marcando qué es pulsable:
 | 10 | `LLM: llama-completion` / `LLM Modelo: …` / `LLM: desactivado` | no | 1 o 2 filas según configuración |
 | 11 | `whisper-stream: whisper-stream` | no | solo si existe |
 | 12 | `Idioma: es` | no | código, no nombre |
-| 13 | `⚡ Acciones por voz: activadas` / `desactivadas` | no | interruptor de otra pantalla |
 | 14 | `Insertar snippet ▸` | **sí** | submenú con un ítem por snippet activo |
 | 15 | `Preferencias…` | **sí** (`⌘,`) | — |
 | 16 | `Historial…` | **sí** (`⌘H`) | — |
@@ -103,19 +102,16 @@ conocidas y se silencian repeticiones tras dos apariciones.
 
 ## 5. Ventana de Preferencias
 
-Diez pestañas, 620×540. Ya desbordan la barra (ver `AUDITORIA-UX.md`, P1).
+Seis secciones con barra lateral, 760×552. Antes eran diez pestañas que desbordaban (ver `AUDITORIA-UX.md`, P1, ya resuelto).
 
 | Pestaña | Contenido |
 |---|---|
 | **General** | idioma de transcripción (7 opciones) · duración mínima de grabación (slider) · mostrar píldora flotante (toggle) |
 | **Modelos** | ruta de `whisper-cli` · ruta del modelo · fila de actualización de Homebrew |
-| **Corrección LLM** | activar (toggle) · ruta de `llama-completion` · ruta del modelo `.gguf` · prompt del sistema (editor) · advertencia si falta el modelo · fila de actualización |
-| **Traducción** | activar (toggle) · idioma destino (picker) · aviso de qué motor se usa · el atajo `⌘⌥⇧` |
-| **Acciones** | activar (toggle) · aviso de que requiere LLM · lista de comandos disponibles |
-| **Diccionario** | activar (toggle) · ayuda en popover (`?`) · conteo de términos y activos · botón al administrador |
-| **Snippets** | activar (toggle) · ayuda en popover (`?`) · conteo · botón al administrador |
+| **Idiomas** | traducir al inglés al dictar (toggle) · el atajo · nota de que el motor solo traduce hacia el inglés |
+| **Texto** | tres capas numeradas: sesgo de reconocimiento, diccionario, ortografía y snippets, con acceso a sus administradores |
 | **Audio** | activar sonido (toggle) · volumen (slider + %) · 6 presets por categoría con previsualización · archivo personalizado · «Dispositivo de entrada: Default del sistema (próximamente)» |
-| **Streaming** | ruta de `whisper-stream` · tres sliders: Step, Length, Keep (ms) · explicación de los tres |
+| **En vivo** | prioridad Rápido/Equilibrado/Preciso con su explicación · disclosure «Ajustar a mano» con los tres parámetros en español |
 | **Atajos** | los tres atajos, solo lectura: `⌘⌥`, `⌘⌥⇧`, `⌘⌥⌃` |
 
 **Para diseño:** cuatro pestañas piden **rutas de binarios**, que es configuración
@@ -167,7 +163,7 @@ whisper-stream. Y una anuncia una funcionalidad que no existe
 Siete mensajes, todos con título `Gluffi`:
 
 - `⚠️ Configuración incompleta — abre el menú para ver el estado`
-- `⬆ Hay actualizaciones disponibles — abre Preferencias → Modelos o Corrección LLM`
+- Aviso de nueva versión del motor de voz, con botón para actualizar
 - `Error al iniciar grabación: …`
 - `LLM error (usando texto original): …`
 - `Error: …`
@@ -212,3 +208,18 @@ momento: la primera vez.
    la marca.** El verde `#7ee800` del logo no aparece en ningún sitio de la app.
 2. **El menú carga trabajo que no le toca.** Diagnóstico de instalación,
    recordatorios de atajos y acciones, en la misma lista plana.
+
+---
+
+## Lo que ya no está
+
+Tres funcionalidades se retiraron **después** de este inventario, y con ellas su
+dependencia del modelo de lenguaje:
+
+| Retirada | Por qué |
+|---|---|
+| Corrección con IA | El corrector del sistema hace lo mismo gratis, sin descargar un gigabyte ni tardar segundos, y sin reescribir los términos propios del usuario |
+| Comandos por voz | Para eso está Siri. Y un falso positivo del clasificador no escribe mal una palabra: se come el dictado entero |
+| Traducción a idiomas ≠ inglés | whisper solo traduce hacia el inglés; el resto exigía el modelo de lenguaje |
+
+La app resultante necesita **solo el modelo de voz**.
