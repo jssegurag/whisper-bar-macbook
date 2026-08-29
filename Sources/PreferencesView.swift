@@ -12,7 +12,7 @@ import SwiftUI
 struct PreferencesView: View {
 
     enum Section: String, CaseIterable, Identifiable {
-        case general, text, languages, live, sound, shortcuts
+        case general, text, intelligence, languages, live, sound, shortcuts
 
         var id: String { rawValue }
 
@@ -20,6 +20,7 @@ struct PreferencesView: View {
             switch self {
             case .general:   return "General"
             case .text:      return "Texto"
+            case .intelligence: return "Inteligencia"
             case .languages: return "Idiomas"
             case .live:      return "En vivo"
             case .sound:     return "Sonido"
@@ -31,6 +32,7 @@ struct PreferencesView: View {
             switch self {
             case .general:   return "gearshape"
             case .text:      return "text.alignleft"
+            case .intelligence: return "sparkles"
             case .languages: return "globe"
             case .live:      return "waveform"
             case .sound:     return "speaker.wave.2"
@@ -45,6 +47,7 @@ struct PreferencesView: View {
             switch self {
             case .general, .shortcuts: return true
             case .text:      return config.dictionaryEnabled || config.snippetsEnabled
+            case .intelligence: return config.isLlmValid
             case .languages: return config.translationEnabled
             case .live:      return config.isWhisperStreamValid
             case .sound:     return config.audioFeedbackEnabled
@@ -141,6 +144,7 @@ struct PreferencesView: View {
                 switch selection {
                 case .general:   GeneralTab()
                 case .text:      TextSection()
+                case .intelligence: IntelligenceTab()
                 case .languages: TranslationTab()
                 case .live:      LiveSection()
                 case .sound:     AudioTab()

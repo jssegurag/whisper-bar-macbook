@@ -23,6 +23,7 @@ Suelta     →  ⏳ transcribe  →  📋 pega donde está el cursor
 - **Completamente offline** — usa whisper.cpp, sin APIs externas
 - **Ortografía automática** — con el corrector del sistema, sin instalar ningún modelo extra
 - **Repaso opcional con IA** — en macOS 26, usando el modelo que ya trae el sistema: cero descarga
+- **Modelo de lenguaje local (opcional)** — un `.gguf` en tu Mac para habilidades que no salen de reglas. Se configura en Preferencias → Inteligencia y se apaga solo cuando no se usa
 - **Reconoce tus términos** — le pasa tu diccionario a whisper antes de transcribir, para que los oiga bien desde el principio
 - **Panel de preferencias nativo** — configura todo desde una ventana SwiftUI (sin tocar terminal)
 - **Diccionario personalizado** — registra tus términos propios (marcas, clientes, siglas) y se escriben siempre con la forma correcta, aunque whisper los oiga mal

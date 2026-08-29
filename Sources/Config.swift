@@ -208,6 +208,63 @@ class Config {
         set { defaults.set(newValue, forKey: "spellFixEnabled") }
     }
 
+    // MARK: - Modelo de lenguaje local
+
+    /// Ruta del modelo GGUF. Vacía = autodetectar, para que cambiar de modelo sea
+    /// dejar el archivo en la carpeta y no editar ajustes.
+    var llmModelPath: String {
+        get {
+            if let saved = defaults.string(forKey: "llmModelPath"), !saved.isEmpty {
+                return saved
+            }
+            return Config.detectLlmModel() ?? ""
+        }
+        set { defaults.set(newValue, forKey: "llmModelPath") }
+    }
+
+    /// Ruta de llama-server. Se usa el servidor y no llama-cli a propósito:
+    /// medido en este proyecto, una llamada suelta tarda ~25 s porque recarga el
+    /// modelo entero, contra ~1,5 s con el modelo ya residente.
+    var llamaServerPath: String {
+        get {
+            if let saved = defaults.string(forKey: "llamaServerPath"), !saved.isEmpty {
+                return saved
+            }
+            return Config.detectLlamaServer() ?? ""
+        }
+        set { defaults.set(newValue, forKey: "llamaServerPath") }
+    }
+
+    /// Ventana de contexto. Más contexto es más RAM, no más calidad.
+    var llmContextSize: Int {
+        get {
+            let v = defaults.integer(forKey: "llmContextSize")
+            return v > 0 ? v : 4096
+        }
+        set { defaults.set(max(512, min(32768, newValue)), forKey: "llmContextSize") }
+    }
+
+    /// Minutos de inactividad antes de apagar el servidor. No es un adorno: el
+    /// modelo residente ocupa ~3 GB de RAM, que en un Air de 8 GB se nota.
+    var llmIdleMinutes: Int {
+        get {
+            let v = defaults.integer(forKey: "llmIdleMinutes")
+            return v > 0 ? v : 5
+        }
+        set { defaults.set(max(1, min(120, newValue)), forKey: "llmIdleMinutes") }
+    }
+
+    var isLlmModelValid: Bool {
+        !llmModelPath.isEmpty && FileManager.default.fileExists(atPath: llmModelPath)
+    }
+
+    var isLlamaServerValid: Bool {
+        !llamaServerPath.isEmpty
+            && FileManager.default.isExecutableFile(atPath: llamaServerPath)
+    }
+
+    var isLlmValid: Bool { isLlmModelValid && isLlamaServerValid }
+
     // MARK: - Snippets por voz
 
     // MARK: - Atajos
@@ -324,6 +381,34 @@ class Config {
     }
 
 
+
+    /// Busca llama-server en rutas comunes de Homebrew
+    static func detectLlamaServer() -> String? {
+        let candidates = [
+            "/opt/homebrew/bin/llama-server",   // Apple Silicon
+            "/usr/local/bin/llama-server",       // Intel
+        ]
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
+    /// Busca un GGUF en la carpeta de modelos. Se listan los nombres conocidos
+    /// primero y luego se acepta cualquier .gguf: el usuario puede cambiar de
+    /// modelo, y una lista fija dejaría de encontrarlo en cuanto lo hiciera.
+    static func detectLlmModel() -> String? {
+        let dir = "\(NSHomeDirectory())/.whisper-realtime"
+        let preferidos = [
+            "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+            "Qwen3-1.7B-Q4_K_M.gguf",
+        ]
+        for nombre in preferidos {
+            let ruta = "\(dir)/\(nombre)"
+            if FileManager.default.fileExists(atPath: ruta) { return ruta }
+        }
+        let sueltos = (try? FileManager.default.contentsOfDirectory(atPath: dir))?
+            .filter { $0.hasSuffix(".gguf") }
+            .sorted()
+        return sueltos?.first.map { "\(dir)/\($0)" }
+    }
 
     /// Busca whisper-stream en rutas comunes de Homebrew
     static func detectWhisperStream() -> String? {

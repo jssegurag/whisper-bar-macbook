@@ -2368,6 +2368,157 @@ func testPipelineWithSpellFix() {
 // MARK: - SystemPolish — El modelo que ya trae macOS
 // ══════════════════════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - LocalLLM — Motor del modelo local
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Instala un llama-server falso (un servidor HTTP en python que responde
+/// /health y /v1/chat/completions) y un .gguf falso, ejecuta `body` y restaura
+/// UserDefaults. Así se prueba el ciclo completo —arranque, espera a que esté
+/// sano, petición, apagado— sin los 2,5 GB del modelo real, que CI no tiene.
+private func withFakeLlamaServer(_ body: () -> Void) {
+    let fm = FileManager.default
+    let defaults = UserDefaults.standard
+    let savedServer = defaults.object(forKey: "llamaServerPath")
+    let savedModel  = defaults.object(forKey: "llmModelPath")
+
+    let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("gluffi_llm_\(UUID().uuidString)")
+    try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+
+    let server = dir.appendingPathComponent("fake-llama-server")
+    let model  = dir.appendingPathComponent("fake-model.gguf")
+
+    let script = """
+    #!/usr/bin/env python3
+    import sys, json
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    puerto = int(sys.argv[sys.argv.index('--port') + 1])
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def _send(self, obj):
+            b = json.dumps(obj).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(b)))
+            self.end_headers()
+            self.wfile.write(b)
+        def do_GET(self):
+            self._send({'status': 'ok'})
+        def do_POST(self):
+            n = int(self.headers.get('Content-Length', 0))
+            self.rfile.read(n)
+            self._send({'choices': [{'message': {'content': '  hola desde el falso  '}}]})
+    HTTPServer(('127.0.0.1', puerto), H).serve_forever()
+    """
+    try? script.write(to: server, atomically: true, encoding: .utf8)
+    try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: server.path)
+    try? Data("GGUF".utf8).write(to: model)
+
+    Config.shared.llamaServerPath = server.path
+    Config.shared.llmModelPath    = model.path
+
+    body()
+    LocalLLM.shutdown()
+
+    if let v = savedServer { defaults.set(v, forKey: "llamaServerPath") }
+    else { defaults.removeObject(forKey: "llamaServerPath") }
+    if let v = savedModel { defaults.set(v, forKey: "llmModelPath") }
+    else { defaults.removeObject(forKey: "llmModelPath") }
+    try? fm.removeItem(at: dir)
+}
+
+func testLocalLLM() {
+    suite("LocalLLM — motor del modelo local")
+
+    let defaults = UserDefaults.standard
+    let savedServer = defaults.object(forKey: "llamaServerPath")
+    let savedModel  = defaults.object(forKey: "llmModelPath")
+    let savedCtx    = defaults.object(forKey: "llmContextSize")
+    let savedIdle   = defaults.object(forKey: "llmIdleMinutes")
+
+    // — Disponibilidad: el mensaje tiene que decir qué hacer, no solo que falla
+    Config.shared.llamaServerPath = "/no/existe/llama-server"
+    Config.shared.llmModelPath    = "/no/existe/modelo.gguf"
+    assertEqual(LocalLLM.availability, .noServer,
+                "sin llama-server la disponibilidad es .noServer")
+    assertContains(LocalLLM.availability.message, "brew install llama.cpp",
+                   "el mensaje dice cómo instalar llama-server")
+    assert(!Config.shared.isLlmValid, "sin binario ni modelo, isLlmValid es false")
+
+    // Con servidor pero sin modelo, el diagnóstico cambia
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("gluffi_srv_\(UUID().uuidString)")
+    try? Data("#!/bin/sh\n".utf8).write(to: tmp)
+    try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tmp.path)
+    Config.shared.llamaServerPath = tmp.path
+    assertEqual(LocalLLM.availability, .noModel,
+                "con binario pero sin .gguf la disponibilidad es .noModel")
+    assertContains(LocalLLM.availability.message, ".gguf",
+                   "el mensaje nombra el archivo que falta")
+
+    // — Sin disponibilidad, ask() no arranca ningún proceso: devuelve nil y ya
+    assert(LocalLLM.ask(system: "s", user: "u") == nil,
+           "ask() devuelve nil cuando el modelo no está disponible")
+    assert(!LocalLLM.isRunning, "ask() fallido no deja un servidor colgando")
+    try? fm.removeItem(at: tmp)
+
+    // — Puerto libre: uno fijo chocaría con otra copia de la app
+    if let p1 = LocalLLM.freePort(), let p2 = LocalLLM.freePort() {
+        assert(p1 > 1024 && p1 < 65536, "freePort() devuelve un puerto de usuario")
+        assert(p2 > 1024 && p2 < 65536, "freePort() es repetible")
+    } else {
+        assert(false, "freePort() no devolvió puerto")
+    }
+
+    // — Parámetros: valores de fábrica y topes
+    defaults.removeObject(forKey: "llmContextSize")
+    defaults.removeObject(forKey: "llmIdleMinutes")
+    assertEqual(Config.shared.llmContextSize, 4096, "contexto de fábrica: 4096")
+    assertEqual(Config.shared.llmIdleMinutes, 5, "apagado de fábrica: 5 min")
+
+    Config.shared.llmContextSize = 99
+    assertEqual(Config.shared.llmContextSize, 512, "el contexto no baja de 512")
+    Config.shared.llmContextSize = 999_999
+    assertEqual(Config.shared.llmContextSize, 32768, "el contexto no pasa de 32768")
+    Config.shared.llmIdleMinutes = 0
+    assertEqual(Config.shared.llmIdleMinutes, 1, "el apagado no baja de 1 min")
+    Config.shared.llmIdleMinutes = 9999
+    assertEqual(Config.shared.llmIdleMinutes, 120, "el apagado no pasa de 120 min")
+
+    // — Ciclo completo contra un servidor falso
+    withFakeLlamaServer {
+        assert(LocalLLM.availability.isAvailable,
+               "con binario y .gguf presentes, el motor se declara disponible")
+
+        let respuesta = LocalLLM.ask(system: "sistema", user: "usuario")
+        assertEqual(respuesta, "hola desde el falso",
+                    "ask() devuelve el contenido ya recortado de espacios")
+        assert(LocalLLM.isRunning,
+               "el servidor queda residente para que la siguiente llamada no recargue")
+
+        // La segunda llamada reutiliza el mismo proceso: es toda la razón de ser
+        // del servidor frente a llama-cli.
+        let segunda = LocalLLM.ask(system: "sistema", user: "otra")
+        assertEqual(segunda, "hola desde el falso", "la segunda llamada reutiliza el servidor")
+
+        LocalLLM.shutdown()
+        assert(!LocalLLM.isRunning, "shutdown() libera la RAM del modelo")
+        LocalLLM.shutdown()
+        assert(!LocalLLM.isRunning, "shutdown() es idempotente")
+    }
+
+    if let v = savedServer { defaults.set(v, forKey: "llamaServerPath") }
+    else { defaults.removeObject(forKey: "llamaServerPath") }
+    if let v = savedModel { defaults.set(v, forKey: "llmModelPath") }
+    else { defaults.removeObject(forKey: "llmModelPath") }
+    if let v = savedCtx { defaults.set(v, forKey: "llmContextSize") }
+    else { defaults.removeObject(forKey: "llmContextSize") }
+    if let v = savedIdle { defaults.set(v, forKey: "llmIdleMinutes") }
+    else { defaults.removeObject(forKey: "llmIdleMinutes") }
+}
+
 func testSystemPolish() {
     suite("SystemPolish — Repaso opcional, sin descargar nada")
 
@@ -2490,6 +2641,7 @@ struct TestRunner {
         testWhisperPrompt()
         testSpellFixerPolicy()
         testSystemPolish()
+        testLocalLLM()
         testPipelineWithSpellFix()
         testModelDownloaderFormatting()
 
