@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Key capabilities:**
 - Offline transcription via whisper-cli (no external APIs)
-- Optional LLM post-processing for grammar/punctuation correction via llama.cpp
+- Spelling fixed by the system spell checker — no model to download
 - Voice action detection (web search, reminders, app launching)
 - Real-time streaming transcription with floating window (whisper-stream)
 - Hotkey-driven workflow: hold ⌘⌥ to record, release to transcribe
@@ -62,7 +62,7 @@ The app follows a **modular, single-responsibility** design:
 ### Core Modules
 
 **Config.swift** — Centralized configuration via UserDefaults
-- Auto-detects binary paths (whisper-cli, llama-cli, whisper-stream) in Homebrew locations
+- Auto-detects binary paths (whisper-cli, whisper-stream) in Homebrew locations
 - Falls back to `which` command if not found in standard paths
 - Validates executable/model file existence before use
 - Manages user preferences: language, LLM enable/disable, streaming parameters, floating pill position
@@ -119,7 +119,7 @@ The app follows a **modular, single-responsibility** design:
 - Positioned to not interfere with user's active app
 
 **PreferencesView.swift & PreferencesWindowController.swift** — Settings UI
-- `PreferencesView` is only the TabView shell. Each tab lives in its own file: `PreferencesGeneralTab.swift`, `PreferencesModelsTab.swift`, `PreferencesLLMTab.swift`, `PreferencesTranslationTab.swift`, `PreferencesVoiceActionsTab.swift`, `PreferencesAudioTab.swift`, `PreferencesStreamingTab.swift`, `PreferencesShortcutsTab.swift`
+- `PreferencesView` is the sidebar shell with six sections. Each lives in its own file: `PreferencesGeneralTab.swift`, `PreferencesTextSection.swift`, `PreferencesTranslationTab.swift`, `PreferencesLiveSection.swift`, `PreferencesAudioTab.swift`, `PreferencesShortcutsTab.swift`
 - `PreferencesComponents.swift` holds what several tabs share: `UpdateRow` and `PathField`
 - The Dictionary and Snippets tabs live with their feature instead, in `DictionaryView.swift` and `SnippetsView.swift`
 - Why: the ten screens used to sit in one 806-line file, so changing one tab risked the other nine and two people editing different tabs always conflicted. Splitting it is step 1 of the sequence in `docs/AUDITORIA-UX.md` — make the change easy, then make the easy change
@@ -249,7 +249,6 @@ All settings stored in `com.user.WhisperBar` UserDefaults domain:
 - Xcode Command Line Tools: `xcode-select --install`
 - Homebrew packages:
   - `whisper-cpp` (for whisper-cli binary)
-  - `llama.cpp` (optional, for LLM correction)
 - Whisper model: download to `~/.whisper-realtime/` (e.g., `ggml-large-v3.bin`)
 - LLM model: optional GGUF file in `~/.whisper-realtime/` (e.g., `qwen2.5-1.5b-instruct-q4_k_m.gguf`)
 
@@ -322,7 +321,6 @@ bash run_tests.sh
 
 Comprehensive integration test suite covering:
 - StreamingTranscriber: ANSI stripping, hallucination filtering, text extraction
-- VoiceActionDetector: intent parsing, parameter extraction
 - FloatingTranscriptionViewModel: text appending, deduplication, rolling buffer, partial updates
 - Config: language names, path validation, auto-detection
 - PillViewModel: state transitions
@@ -436,8 +434,8 @@ whisper transcribes phonetically and knows nobody's vocabulary: "Oriuno" comes b
 
 Order in the pipeline matters and is deliberate:
 
-- **After the LLM.** The LLM is asked to fix spelling, so it "corrects" the user's own terms back to standard Spanish. Running the dictionary first would let the LLM undo it.
-- **Before VoiceActionDetector.** So "abre Oriuno" resolves to the app.
+- **Fed to whisper as an initial prompt** (`WhisperPrompt`), so the terms are heard correctly in the first place instead of being repaired afterwards. The dictionary stays as the safety net for whatever is still misheard.
+- **Before the spell checker**, so it finds the user's terms already in canonical form and leaves them alone.
 - **Only on finalized streaming text**, never on the partial text — whisper-stream rewrites the partial on every update, so correcting it would make the floating window flicker.
 
 Insertion points: `AppDelegate.applyDictionary(_:)` called from `stopAndTranscribe()` and `stopAndTranslate()` (proper nouns are not translated), and `FloatingTranscriptionViewModel.appendFinalizedText(_:)`. The ViewModel takes its entries through an injectable `dictionaryEntries` closure so tests don't write to the user's real dictionary.

@@ -30,7 +30,7 @@ Suelta     →  ⏳ transcribe  →  📋 pega donde está el cursor
 - **Preserva el clipboard** — restaura lo que tenías copiado tras pegar
 - **Feedback sonoro personalizable** — elige entre 6 presets por categoría (relajante, concentración, energético, neutro) o sube tu propio archivo de audio; control de volumen y previsualización integrada
 - **Cancelación en cualquier momento** — pulsa `Esc` o el botón `✕` del pill para cancelar sin pegar
-- **Auto-detección de rutas** — encuentra whisper-cli, modelos y llama-cli automáticamente
+- **Auto-detección de rutas** — encuentra whisper-cli y los modelos automáticamente
 - **Apple Silicon e Intel** — el script de build detecta la arquitectura
 - **Open source** — código modular, fácil de extender y contribuir
 
@@ -251,9 +251,13 @@ Detalles que ahorran trabajo:
 - **Las variantes se descubren dictando.** Anticiparlas en frío no funciona: la
   primera prueba real produjo `dotfly`, que nadie había previsto.
 
-Se aplica **después** de la corrección con LLM —si corriera antes, el LLM
-«corregiría» tus términos hacia el español estándar— y antes de las acciones por
-voz, para que «abre Oriuno» reconozca la app.
+Se aplica **antes** de la corrección ortográfica, para que el corrector encuentre
+tus términos ya en su forma correcta y los deje en paz. Y antes de los snippets, cuyo
+contenido es literal y nadie debe reescribir.
+
+Además, tus términos se le pasan a whisper **antes** de transcribir: así los oye bien
+desde el principio, en lugar de que haya que corregirlos después. El diccionario queda
+como red de seguridad para lo que aun así se oiga mal.
 
 Importar y exportar permite que un equipo comparta su lista de términos internos.
 El archivo vive en `~/Library/Application Support/WhisperBar/dictionary.json`.
@@ -310,14 +314,17 @@ El archivo vive en `~/Library/Application Support/WhisperBar/snippets.json`.
 
 Desde el menú de Gluffi → **Preferencias…** (`⌘,`):
 
-| Pestaña  | Opciones |
-|----------|----------|
-| General  | Idioma de transcripción, duración mínima de grabación |
-| Modelos  | Rutas de whisper-cli y modelo, activar/configurar LLM |
-| Audio    | Activar/desactivar · Volumen · Selector de preset por categoría · Archivo personalizado · Previsualización |
-| Diccionario | Activar/desactivar · acceso al administrador de términos |
-| Snippets | Activar/desactivar · acceso al administrador de snippets |
-| Atajos   | Atajo de grabación actual |
+| Sección | Opciones |
+|---------|----------|
+| General | Idioma · ignorar grabaciones muy cortas · píldora flotante · abrir al iniciar sesión |
+| Texto | Las tres capas, numeradas por el orden en que se aplican: reconocer tus términos, diccionario, ortografía y snippets |
+| Idiomas | Traducir al inglés al dictar |
+| En vivo | Prioridad Rápido / Equilibrado / Preciso, y los parámetros a mano si hace falta |
+| Sonido | Activar · volumen · seis presets con previsualización · archivo propio |
+| Atajos | Los tres atajos, **editables**, con modo «Mantener pulsado» o «Pulsar una vez» |
+
+Las rutas de los binarios ya no están aquí: viven en **Configuración**, que es
+instalación y no preferencia de uso.
 
 ### Terminal (alternativa)
 
@@ -389,20 +396,20 @@ Los datos se almacenan en `~/Library/Application Support/WhisperBar/history.json
 
 ```
 Gluffi/
-├── Sources/
-│   ├── main.swift                      # Punto de entrada
-│   ├── AppDelegate.swift               # Coordinador: menú, grabación, paste
-│   ├── Config.swift                    # Configuración via UserDefaults + auto-detección
-│   ├── AudioRecorder.swift             # Grabación de audio (AVAudioRecorder, 16kHz mono)
-│   ├── Transcriber.swift               # Invocación de whisper-cli con timeout
-│   ├── LLMProcessor.swift              # Post-procesamiento con llama-cli
-│   ├── HotkeyManager.swift             # Atajo global ⌘⌥ (flagsChanged)
-│   ├── AudioFeedback.swift             # Sonido binaural durante transcripción
-│   ├── TranscriptionHistory.swift      # Modelo + persistencia JSON del historial
-│   ├── HistoryView.swift               # Vista SwiftUI del historial
-│   ├── HistoryWindowController.swift   # NSWindow host para historial
-│   ├── PreferencesView.swift           # Vista SwiftUI de preferencias
-│   └── PreferencesWindowController.swift # NSWindow host para preferencias
+├── Sources/                          # 57 archivos Swift, uno por responsabilidad
+│   ├── AppDelegate.swift             # Coordinador: menú, grabación, pegado
+│   ├── Config.swift                  # Preferencias y auto-detección de rutas
+│   ├── AudioRecorder.swift           # Grabación 16 kHz mono, con medidor de nivel
+│   ├── Transcriber.swift             # whisper-cli, con sesgo por --prompt
+│   ├── WhisperPrompt.swift           # Construye ese sesgo desde el diccionario
+│   ├── PhraseRewriter.swift          # Motor compartido: frase → reemplazo
+│   ├── RewritePipeline.swift         # El orden: diccionario → ortografía → snippets
+│   ├── SpellFixer.swift              # Corrector del sistema, conservador
+│   ├── CustomDictionary.swift        # Términos propios y su persistencia
+│   ├── SnippetStore.swift            # Snippets, con cifrado de los sensibles
+│   ├── HotkeyManager.swift           # Atajos globales, editables
+│   ├── MenuBarIcon.swift             # Icono: tres tratamientos, un solo marco
+│   └── …                             # Vistas, ventanas y componentes del rediseño
 ├── Info.plist
 ├── AppIcon.icns
 ├── build.sh
@@ -414,11 +421,13 @@ Gluffi/
 ### Pipeline de transcripción
 
 ```
-⌘⌥ (mantener)  →  AudioRecorder (16kHz mono WAV)
-⌘⌥ (soltar)    →  whisper-cli (transcripción)
-               →  llama-cli (corrección, opcional)
-               →  Historial (guardar)
-               →  Clipboard + ⌘V (pegar)
+⌘⌥ (mantener)  →  AudioRecorder (16 kHz mono WAV)
+⌘⌥ (soltar)    →  whisper-cli  ← recibe tus términos como sesgo (--prompt)
+               →  Diccionario  (lo que aun así se oyó mal)
+               →  Ortografía   (corrector del sistema)
+               →  Snippets     (texto literal, nada lo reescribe)
+               →  Historial
+               →  Portapapeles + ⌘V en la app donde estabas
 ```
 
 ---
@@ -436,12 +445,17 @@ brew install whisper-cpp
 ls ~/.whisper-realtime/*.bin
 ```
 
-**❌ LLM no encontrado**
-```bash
-which llama-cli         # si no imprime nada:
-brew install llama.cpp
-ls ~/.whisper-realtime/*.gguf
-```
+**El texto se transcribe pero no se pega en ningún sitio**
+
+Casi siempre es el permiso de Accesibilidad, y la casilla de Ajustes puede mentir:
+tras recompilar, Gluffi sigue marcada pero el permiso está denegado, porque se ató al
+binario anterior.
+
+Compruébalo en **Configuración → Permisos → Accesibilidad → Comprobar**: te dice el
+estado real y a qué app pegaría. Si falta, **quita Gluffi de la lista con «−», vuelve a
+añadirla y reinicia la app** — volver a marcarla no sirve.
+
+Para que deje de pasar en cada build: `bash signing.sh`.
 
 **El atajo ⌘⌥ no responde**
 > Configuración del Sistema → Privacidad y Seguridad → Accesibilidad → verificar que Gluffi está activado
