@@ -24,9 +24,10 @@ struct RewritePipeline {
     static func apply(to text: String,
                       cleanup: ((String) -> String)? = nil,
                       dictionary: [DictionaryEntry],
-                      snippetRules: [PhraseRewriter.Rule]) -> String {
-        applyReporting(to: text, cleanup: cleanup,
-                       dictionary: dictionary, snippetRules: snippetRules).text
+                      snippetRules: [PhraseRewriter.Rule],
+                      finish: ((String) -> String)? = nil) -> String {
+        applyReporting(to: text, cleanup: cleanup, dictionary: dictionary,
+                       snippetRules: snippetRules, finish: finish).text
     }
 
     /// Igual, pero dice qué términos del diccionario aplicaron, para el contador
@@ -35,7 +36,8 @@ struct RewritePipeline {
                                cleanup: ((String) -> String)? = nil,
                                dictionary: [DictionaryEntry],
                                snippetRules: [PhraseRewriter.Rule],
-                               spellFix: ((String) -> String)? = nil)
+                               spellFix: ((String) -> String)? = nil,
+                               finish: ((String) -> String)? = nil)
         -> (text: String, dictionaryUsed: Set<String>) {
 
         // La limpieza va primero, sobre el texto tal como se dictó.
@@ -46,9 +48,14 @@ struct RewritePipeline {
         // están en su forma canónica —con mayúsculas— y el corrector los deja en
         // paz. Al revés, intentaría «arreglar» palabras que no conoce.
         let spelled = spellFix.map { $0(corrected.text) } ?? corrected.text
+        // El acabado —mayúscula inicial y punto final— es la última compuerta
+        // determinista. Va aquí y no antes porque el repaso con el modelo del
+        // sistema arregla puntuación por diseño y desharía lo que se acaba de
+        // decidir. Ver TextFinish.
+        let finished = finish.map { $0(spelled) } ?? spelled
         // Y los snippets al final: su contenido es literal y nada debe tocarlo,
-        // ni el diccionario ni el corrector ortográfico.
-        let expanded = PhraseRewriter.apply(to: spelled, rules: snippetRules)
+        // ni el diccionario, ni el corrector, ni el acabado.
+        let expanded = PhraseRewriter.apply(to: finished, rules: snippetRules)
         return (expanded, corrected.used)
     }
 }

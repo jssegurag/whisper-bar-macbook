@@ -75,8 +75,7 @@ imperativo, ≤ 72 caracteres. El cuerpo explica el *por qué*, no el *qué*.
 
 | Rama | Propósito | Estado |
 |---|---|---|
-| `feat/50-auto-limpieza-determinista` | HU-003: quitar del dictado muletillas, repeticiones y autocorrecciones, sin modelo de lenguaje. | PR #50, CI en verde |
-| `chore/higiene-de-ramas` | `worktree.sh`, destino de build configurable, y la limpieza de ramas de este documento. | implementada |
+| `feat/51-perfiles-por-app` | HU-005: qué cambia Gluffi según la aplicación donde dictas. Depende de #50, ya mezclado. | implementada |
 
 Esta tabla es corta a propósito. Antes vivía aquí una ficha por rama —propósito,
 alcance, bugs que cerraba, orden de mezcla— y para el 29-08-2026 doce de esas

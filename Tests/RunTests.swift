@@ -842,7 +842,11 @@ func testAudioRecorderStartFailure() {
 /// Doble de una app en ejecución: NSRunningApplication no se puede instanciar.
 private final class FakeApp: PasteTargetCandidate {
     let processIdentifier: pid_t
-    init(_ pid: pid_t) { self.processIdentifier = pid }
+    let bundleIdentifier: String?
+    init(_ pid: pid_t, bundleIdentifier: String? = nil) {
+        self.processIdentifier = pid
+        self.bundleIdentifier = bundleIdentifier
+    }
 }
 
 func testPasteTargetTracker() {
@@ -1920,7 +1924,7 @@ func testSetupSummary() {
 func testModelDownloaderFormatting() {
     suite("ModelDownloader — Tamaño legible en el botón")
 
-    let texto = ModelDownloader.humanSize(ModelDownloader.defaultModel.bytes)
+    let texto = ModelDownloader.humanSize(VoiceModel.default.bytes)
     assert(texto.contains("GB"), "el botón dice GB, no bytes: «Descargar (\(texto))»")
     assertEqual(ModelDownloader.State.idle.progress, nil, "sin descarga no hay progreso")
     assertEqual(ModelDownloader.State.downloading(received: 50, total: 200).progress, 0.25,
@@ -2945,6 +2949,1157 @@ func testCleanerPerformance() {
         "300 palabras se limpian en \(String(format: "%.2f", mejor)) ms (límite: 15 ms)")
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - TextFinish — Mayúscula inicial y punto final
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testTextFinishDefaultsAreInert() {
+    suite("TextFinish — Los valores por defecto no tocan nada")
+
+    // El criterio de aceptación más importante de esta etapa: quien actualiza y
+    // no configura nada tiene que recibir exactamente el texto de siempre.
+    // Salida realista de whisper: ya viene con la inicial en mayúscula y su
+    // punto. Sobre eso, los valores por defecto no tienen nada que hacer.
+    let textos = [
+        "Hola mundo.",
+        "Hola mundo",
+        "¿Qué tal?",
+        "Primera línea\nsegunda línea",
+        "  Espacios raros \t y tabuladores  ",
+        "Espera...",
+        "",
+        "   ",
+    ]
+    for texto in textos {
+        assertEqual(TextFinish.apply(texto, initialCapital: true, trailingPeriod: true),
+                    texto, "por defecto «\(texto.prefix(20))» sale byte a byte igual")
+    }
+}
+
+func testTextFinishTrailingPeriod() {
+    suite("TextFinish — Punto final")
+
+    func quita(_ t: String) -> String {
+        TextFinish.apply(t, initialCapital: true, trailingPeriod: false)
+    }
+
+    assertEqual(quita("Hola mundo."), "Hola mundo",
+        "quita el punto final")
+    assertEqual(quita("Uno. Dos."), "Uno. Dos",
+        "solo el último punto, no los internos")
+    assertEqual(quita("Hola mundo"), "Hola mundo",
+        "sin punto final no cambia nada")
+
+    // Los puntos suspensivos son un signo, no un punto final. Quitarles uno los
+    // convierte en otra cosa: es el falso positivo que la regla de seguridad
+    // del proyecto prohíbe.
+    assertEqual(quita("Espera..."), "Espera...",
+        "los puntos suspensivos se respetan")
+    assertEqual(quita("Espera…"), "Espera…",
+        "y el carácter de elipsis también")
+
+    // «Punto final» es el punto. La exclamación y la interrogación son otra cosa
+    // y el usuario no pidió quitarlas.
+    assertEqual(quita("¿Qué tal?"), "¿Qué tal?",
+        "la interrogación no es un punto final")
+    assertEqual(quita("¡Vamos!"), "¡Vamos!",
+        "la exclamación tampoco")
+
+    // El espacio final es formato del usuario, no del punto.
+    assertEqual(quita("Hola.\n"), "Hola\n",
+        "el salto de línea final sobrevive")
+    assertEqual(quita("Hola.  "), "Hola  ",
+        "los espacios finales sobreviven")
+
+    assertEqual(quita("."), "",
+        "un texto que es solo un punto se queda vacío")
+    assertEqual(quita(""), "",
+        "texto vacío no rompe nada")
+}
+
+func testTextFinishInitialCapital() {
+    suite("TextFinish — Mayúscula inicial")
+
+    func baja(_ t: String) -> String {
+        TextFinish.apply(t, initialCapital: false, trailingPeriod: true)
+    }
+    func sube(_ t: String) -> String {
+        TextFinish.apply(t, initialCapital: true, trailingPeriod: true)
+    }
+
+    assertEqual(baja("Git status"), "git status",
+        "fuerza minúscula inicial")
+    assertEqual(baja("git status"), "git status",
+        "y no toca lo que ya está en minúscula")
+    assertEqual(sube("hola mundo"), "Hola mundo",
+        "capitaliza cuando se pide")
+    // La semántica es simétrica a propósito: «sí» garantiza mayúscula y «no»
+    // garantiza minúscula. Si «sí» solo significara «no tocar», el campo del
+    // perfil «Correo y documentos» sería decorativo.
+    assertEqual(sube("Hola mundo"), "Hola mundo",
+        "y no toca lo que ya está capitalizado")
+
+    // La primera letra, no el primer carácter: el español abre con signos.
+    assertEqual(baja("¿Qué tal?"), "¿qué tal?",
+        "encuentra la primera letra tras el signo de apertura")
+    assertEqual(sube("«hola»"), "«Hola»",
+        "y tras las comillas")
+
+    assertEqual(baja("123 archivos"), "123 archivos",
+        "sin letras al principio no cambia nada")
+    assertEqual(baja(""), "",
+        "texto vacío no rompe nada")
+    assertEqual(baja("   "), "   ",
+        "solo espacios no rompe nada")
+}
+
+func testTextFinishNeverTouchesProtectedTerms() {
+    suite("TextFinish — Regla de seguridad: lo del usuario no se toca")
+
+    // Misma protección que Cleaner, y por la misma razón: «iPhone» no puede
+    // convertirse en «IPhone», y «DocFly» no puede bajar a «docFly».
+    let protegidas = Cleaner.Guard.from(
+        dictionary: [
+            DictionaryEntry(canonical: "iPhone", variants: []),
+            DictionaryEntry(canonical: "DocFly", variants: ["doc fly"]),
+        ],
+        snippetRules: [])
+
+    assertEqual(TextFinish.apply("iPhone nuevo", initialCapital: true,
+                                 trailingPeriod: true, protected: protegidas),
+                "iPhone nuevo",
+        "capitalizar no estropea un término que empieza en minúscula")
+    assertEqual(TextFinish.apply("DocFly está caído", initialCapital: false,
+                                 trailingPeriod: true, protected: protegidas),
+                "DocFly está caído",
+        "bajar a minúscula no estropea un término propio")
+
+    // Sin protección sí actúa: la salvaguarda es la lista, no un caso especial.
+    assertEqual(TextFinish.apply("iPhone nuevo", initialCapital: true,
+                                 trailingPeriod: true),
+                "IPhone nuevo",
+        "sin lista de protegidos la regla se aplica igual")
+}
+
+func testTextFinishIdempotence() {
+    suite("TextFinish — Idempotencia")
+
+    let casos = [
+        ("Git status.", false, false),
+        ("hola mundo", true, true),
+        ("Uno. Dos.", true, false),
+        ("¿Qué tal?", false, true),
+    ]
+    for (texto, capital, punto) in casos {
+        let una = TextFinish.apply(texto, initialCapital: capital, trailingPeriod: punto)
+        let dos = TextFinish.apply(una, initialCapital: capital, trailingPeriod: punto)
+        assertEqual(dos, una, "aplicar dos veces a «\(texto)» da lo mismo")
+    }
+}
+
+func testTextFinishTerminalCase() {
+    suite("TextFinish — El caso que motiva la etapa")
+
+    // Lo que el perfil «Terminal e IDE» necesita: ni mayúscula que rompa el
+    // comando ni punto final que se cuele en la línea.
+    assertEqual(TextFinish.apply("Git status.", initialCapital: false, trailingPeriod: false),
+                "git status",
+        "un comando dictado sale listo para pegar en la terminal")
+    assertEqual(TextFinish.apply("Npm run build.", initialCapital: false, trailingPeriod: false),
+                "npm run build",
+        "y otro igual")
+}
+
+func testTextFinishInPipeline() {
+    suite("TextFinish — La etapa va tras la ortografía y antes de los snippets")
+
+    var vistoPorLosSnippets: String?
+    let reglas = [PhraseRewriter.Rule(phrases: ["mi correo"], replacement: "jesus@ejemplo.com")]
+
+    // El acabado tiene que correr antes de los snippets: su cuerpo es texto
+    // literal y bajarle la inicial reescribiría lo que el usuario escribió.
+    let resultado = RewritePipeline.applyReporting(
+        to: "Escribe a mi correo.",
+        dictionary: [],
+        snippetRules: reglas,
+        finish: { texto in
+            vistoPorLosSnippets = texto
+            return TextFinish.apply(texto, initialCapital: false, trailingPeriod: false)
+        })
+
+    assertEqual(vistoPorLosSnippets, "Escribe a mi correo.",
+        "el acabado recibe el texto con el disparador todavía sin expandir")
+    assertEqual(resultado.text, "escribe a jesus@ejemplo.com",
+        "y el snippet se inserta después, literal")
+
+    // Sin etapa de acabado el pipeline se comporta exactamente como antes.
+    let sinAcabado = RewritePipeline.applyReporting(
+        to: "Escribe a mi correo.", dictionary: [], snippetRules: reglas)
+    assertEqual(sinAcabado.text, "Escribe a jesus@ejemplo.com.",
+        "el acabado es opcional: sin él, la inicial y el punto quedan como venían")
+}
+
+func testTextFinishConfigDefaults() {
+    suite("TextFinish — Ajustes globales")
+
+    let defaults = UserDefaults.standard
+    let capitalPrevio = defaults.object(forKey: "initialCapitalEnabled")
+    let puntoPrevio = defaults.object(forKey: "trailingPeriodEnabled")
+    defaults.removeObject(forKey: "initialCapitalEnabled")
+    defaults.removeObject(forKey: "trailingPeriodEnabled")
+
+    assert(Config.shared.initialCapitalEnabled,
+        "la mayúscula inicial viene activada: es lo que la app hace hoy")
+    assert(Config.shared.trailingPeriodEnabled,
+        "el punto final viene conservado: es lo que la app hace hoy")
+
+    Config.shared.initialCapitalEnabled = false
+    Config.shared.trailingPeriodEnabled = false
+    assert(!Config.shared.initialCapitalEnabled, "la mayúscula inicial se persiste")
+    assert(!Config.shared.trailingPeriodEnabled, "el punto final se persiste")
+
+    if let capitalPrevio { defaults.set(capitalPrevio, forKey: "initialCapitalEnabled") }
+    else { defaults.removeObject(forKey: "initialCapitalEnabled") }
+    if let puntoPrevio { defaults.set(puntoPrevio, forKey: "trailingPeriodEnabled") }
+    else { defaults.removeObject(forKey: "trailingPeriodEnabled") }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - VoiceModel — Catálogo de modelos de voz
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testVoiceModelCatalogue() {
+    suite("VoiceModel — El catálogo")
+
+    let catalogo = VoiceModel.catalogue
+    assertEqual(catalogo.count, 5, "cinco modelos: tiny, base, small, medium y large-v3")
+
+    // Ordenado de más liviano a más pesado: es el eje por el que se elige.
+    let pesos = catalogo.map(\.bytes)
+    assertEqual(pesos, pesos.sorted(), "el catálogo va de más liviano a más pesado")
+
+    assertEqual(VoiceModel.default.id, "large-v3",
+        "el de fábrica sigue siendo large-v3, como documenta el README")
+
+    for modelo in catalogo {
+        assertEqual(modelo.filename, "ggml-\(modelo.id).bin",
+            "\(modelo.id) se guarda como ggml-\(modelo.id).bin")
+        assert(modelo.url.absoluteString.hasSuffix(modelo.filename),
+            "la URL de \(modelo.id) apunta a su propio archivo")
+        assert(modelo.bytes > 0, "\(modelo.id) declara su tamaño")
+        assert(!modelo.note.isEmpty, "\(modelo.id) explica qué gana y qué pierde")
+    }
+
+    assertEqual(VoiceModel.named("small")?.id, "small", "se busca por identificador")
+    assertEqual(VoiceModel.named("inventado")?.id, nil, "y un identificador que no existe da nil")
+}
+
+func testVoiceModelPathMatching() {
+    suite("VoiceModel — Reconocer un modelo por su ruta")
+
+    assertEqual(VoiceModel.matching(path: "/Users/x/.whisper-realtime/ggml-small.bin")?.id,
+                "small", "reconoce el modelo desde una ruta absoluta")
+    assertEqual(VoiceModel.matching(path: "/otro/sitio/ggml-large-v3.bin")?.id,
+                "large-v3", "la carpeta da igual, lo que manda es el archivo")
+    assertEqual(VoiceModel.matching(path: "/Users/x/.whisper-realtime/ggml-custom.bin")?.id,
+                nil, "un modelo que no está en el catálogo no se reconoce")
+    assertEqual(VoiceModel.matching(path: "")?.id, nil, "una ruta vacía tampoco")
+}
+
+func testVoiceModelInstalled() {
+    suite("VoiceModel — Cuáles están descargados")
+
+    let temporal = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("gluffi-modelos-\(UUID().uuidString)", isDirectory: true)
+    try? FileManager.default.createDirectory(at: temporal, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: temporal) }
+
+    assertEqual(VoiceModel.installed(in: temporal).count, 0,
+        "una carpeta vacía no tiene modelos")
+
+    // Solo el nombre importa: el contenido no se valida aquí.
+    for nombre in ["ggml-small.bin", "ggml-base.bin", "ruido.txt"] {
+        FileManager.default.createFile(atPath: temporal.appendingPathComponent(nombre).path,
+                                       contents: Data("x".utf8))
+    }
+    let encontrados = VoiceModel.installed(in: temporal).map(\.id)
+    assertEqual(encontrados, ["base", "small"],
+        "lista solo los del catálogo que existen, de más liviano a más pesado")
+
+    assertEqual(VoiceModel.named("small")?.path(in: temporal),
+                temporal.appendingPathComponent("ggml-small.bin").path,
+        "la ruta de un modelo dentro de una carpeta es su nombre de archivo")
+}
+
+func testModelDownloaderTargets() {
+    suite("ModelDownloader — Descarga el modelo que se le pida")
+
+    // El destino se calcula a partir del modelo, no de una constante: es lo que
+    // permite bajar `small` para un perfil sin tocar el modelo global.
+    let carpeta = ModelDownloader.destinationDirectory
+    assertEqual(ModelDownloader.destination(for: VoiceModel.named("small")!).path,
+                carpeta.appendingPathComponent("ggml-small.bin").path,
+        "small aterriza en su propio archivo")
+    assertEqual(ModelDownloader.destination(for: VoiceModel.default).path,
+                carpeta.appendingPathComponent("ggml-large-v3.bin").path,
+        "y large-v3 en el suyo")
+
+    let texto = ModelDownloader.humanSize(VoiceModel.default.bytes)
+    assertContains(texto, "GB", "el botón dice GB, no bytes: «Descargar (\(texto))»")
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - Profile — Modelo y persistencia
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Un store apuntando a un archivo temporal, para no tocar el del usuario.
+func storeDePruebas() -> (ProfileStore, URL) {
+    let url = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("gluffi-perfiles-\(UUID().uuidString).json")
+    return (ProfileStore(storageURL: url), url)
+}
+
+func testProfileOverridesInherit() {
+    suite("ProfileOverrides — Heredar es la ausencia de valor")
+
+    let vacio = ProfileOverrides()
+    assert(vacio.isEmpty, "sin ninguna sobrescritura, el perfil no cambia nada")
+
+    // Los nueve campos, uno a uno: cada uno solo deja de heredar cuando tiene
+    // valor. Si alguno se olvidara en isEmpty, un perfil «vacío» sí cambiaría
+    // cosas y el criterio de salida idéntica se rompería en silencio.
+    var conUno = ProfileOverrides()
+    conUno.cleanupLevel = .completo
+    assert(!conUno.isEmpty, "cleanupLevel deja de heredar")
+
+    let campos: [(String, (inout ProfileOverrides) -> Void)] = [
+        ("cleanupLevel",   { $0.cleanupLevel = .completo }),
+        ("spellFix",       { $0.spellFix = false }),
+        ("initialCapital", { $0.initialCapital = false }),
+        ("trailingPeriod", { $0.trailingPeriod = false }),
+        ("dictionary",     { $0.dictionary = false }),
+        ("snippets",       { $0.snippets = false }),
+        ("language",       { $0.language = "en" }),
+        ("model",          { $0.model = "small" }),
+        ("systemPolish",   { $0.systemPolish = false }),
+    ]
+    assertEqual(campos.count, 9, "son nueve ajustes sobrescribibles")
+    for (nombre, poner) in campos {
+        var o = ProfileOverrides()
+        poner(&o)
+        assert(!o.isEmpty, "\(nombre) cuenta como sobrescritura")
+    }
+}
+
+func testProfileStoreRoundTrip() {
+    suite("ProfileStore — Ida y vuelta")
+
+    let (store, url) = storeDePruebas()
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    var overrides = ProfileOverrides()
+    overrides.initialCapital = false
+    overrides.trailingPeriod = false
+    overrides.model = "small"
+    let perfil = Profile(name: "Terminal e IDE", bundleIDs: ["com.apple.Terminal"],
+                         order: 0, overrides: overrides)
+    store.add(perfil)
+
+    let recargado = ProfileStore(storageURL: url)
+    assertEqual(recargado.profiles.count, 1, "el perfil sobrevive al reinicio")
+    assertEqual(recargado.profiles.first?.name, "Terminal e IDE", "con su nombre")
+    assertEqual(recargado.profiles.first?.id, perfil.id, "y con su id estable")
+    assertEqual(recargado.profiles.first?.bundleIDs, ["com.apple.Terminal"], "y sus apps")
+    assertEqual(recargado.profiles.first?.overrides.model, "small", "y sus sobrescrituras")
+    assertEqual(recargado.profiles.first?.overrides.spellFix, nil,
+        "lo que heredaba sigue heredando")
+}
+
+func testProfileStoreFileShape() {
+    suite("ProfileStore — Forma del archivo")
+
+    let (store, url) = storeDePruebas()
+    defer { try? FileManager.default.removeItem(at: url) }
+    store.add(Profile(name: "Uno", bundleIDs: [], order: 0))
+
+    guard let datos = try? Data(contentsOf: url),
+          let json = try? JSONSerialization.jsonObject(with: datos) as? [String: Any] else {
+        assert(false, "el archivo se escribe y es JSON válido")
+        return
+    }
+    assert(json["version"] != nil, "lleva campo version, para poder migrar mañana")
+    assertEqual(json["version"] as? Int, ProfileStore.currentVersion, "con la versión actual")
+    assert(json["profiles"] != nil, "y la lista de perfiles")
+}
+
+func testProfileStoreToleratesUnknownFields() {
+    suite("ProfileStore — Campos desconocidos")
+
+    let (_, url) = storeDePruebas()
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    // Un archivo escrito por una versión más nueva de la app. Ignorar lo que no
+    // se entiende es lo que permite ir y volver entre versiones sin perder datos.
+    let json = """
+    {
+      "version": 1,
+      "futuro": "algo que esta versión no conoce",
+      "profiles": [
+        {
+          "id": "\(UUID().uuidString)",
+          "name": "Mensajería",
+          "isActive": true,
+          "bundleIDs": ["net.whatsapp.WhatsApp"],
+          "order": 1,
+          "overrides": { "trailingPeriod": false, "inventado": 42 }
+        }
+      ]
+    }
+    """
+    try? json.write(to: url, atomically: true, encoding: .utf8)
+
+    let store = ProfileStore(storageURL: url)
+    assertEqual(store.profiles.count, 1, "el perfil se lee pese a los campos de más")
+    assertEqual(store.profiles.first?.name, "Mensajería", "con su nombre")
+    assertEqual(store.profiles.first?.overrides.trailingPeriod, false,
+        "y la sobrescritura que sí entiende")
+}
+
+func testProfileStoreSurvivesCorruption() {
+    suite("ProfileStore — Archivo corrupto")
+
+    let (_, url) = storeDePruebas()
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    // Lo que deja media escritura interrumpida.
+    try? "{ \"version\": 1, \"profiles\": [ { \"id\":".write(to: url, atomically: true,
+                                                             encoding: .utf8)
+    let store = ProfileStore(storageURL: url)
+    assertEqual(store.profiles.count, 0, "un archivo ilegible deja el store vacío, no revienta")
+    assert(FileManager.default.fileExists(atPath: url.path),
+        "y no se borra: sobrescribirlo a ciegas perdería los perfiles recuperables")
+
+    // Y a partir de ahí se puede volver a trabajar.
+    store.add(Profile(name: "Nuevo", bundleIDs: [], order: 0))
+    assertEqual(ProfileStore(storageURL: url).profiles.count, 1,
+        "guardar después del fallo repara el archivo")
+}
+
+func testProfileStoreOrdering() {
+    suite("ProfileStore — El orden es la prioridad")
+
+    let (store, url) = storeDePruebas()
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    store.add(Profile(name: "Tercero", bundleIDs: [], order: 2))
+    store.add(Profile(name: "Primero", bundleIDs: [], order: 0))
+    store.add(Profile(name: "Segundo", bundleIDs: [], order: 1))
+
+    assertEqual(store.profiles.map(\.name), ["Primero", "Segundo", "Tercero"],
+        "se leen en orden ascendente, que es el de prioridad")
+
+    // Reordenar por arrastre: mover el último al principio.
+    store.move(fromOffsets: IndexSet(integer: 2), toOffset: 0)
+    assertEqual(store.profiles.map(\.name), ["Tercero", "Primero", "Segundo"],
+        "mover reordena")
+    assertEqual(store.profiles.map(\.order), [0, 1, 2],
+        "y renumera, para que el orden no dependa de huecos")
+    assertEqual(ProfileStore(storageURL: url).profiles.map(\.name),
+                ["Tercero", "Primero", "Segundo"],
+        "el nuevo orden sobrevive al reinicio")
+}
+
+func testProfileStoreCRUD() {
+    suite("ProfileStore — Alta, cambio y baja")
+
+    let (store, url) = storeDePruebas()
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    var perfil = Profile(name: "Correo", bundleIDs: ["com.apple.mail"], order: 0)
+    store.add(perfil)
+
+    perfil.name = "Correo y documentos"
+    perfil.overrides.initialCapital = true
+    store.update(perfil)
+    assertEqual(store.profiles.first?.name, "Correo y documentos", "actualizar cambia el perfil")
+    assertEqual(store.profiles.count, 1, "y no duplica")
+    assertEqual(store.profiles.first?.overrides.initialCapital, true, "con su sobrescritura")
+
+    // Desactivar no es borrar: el criterio pide poder excluirlo sin perderlo.
+    perfil.isActive = false
+    store.update(perfil)
+    assertEqual(store.profiles.count, 1, "desactivar conserva el perfil")
+    assertEqual(store.activeProfiles.count, 0, "pero lo saca de los activos")
+
+    store.remove(perfil.id)
+    assertEqual(store.profiles.count, 0, "borrar sí lo quita")
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - ProfileResolver — Qué perfil aplica
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testProfileResolverMatching() {
+    suite("ProfileResolver — Coincidencia")
+
+    let terminal = Profile(name: "Terminal e IDE",
+                           bundleIDs: ["com.apple.Terminal", "com.microsoft.VSCode"],
+                           order: 0)
+    let mensajeria = Profile(name: "Mensajería",
+                             bundleIDs: ["net.whatsapp.WhatsApp"], order: 1)
+    let perfiles = [terminal, mensajeria]
+
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal", among: perfiles)?.id,
+                terminal.id, "coincidencia simple")
+    assertEqual(ProfileResolver.resolve(bundleID: "com.microsoft.VSCode", among: perfiles)?.id,
+                terminal.id, "cualquier app de la lista sirve")
+    assertEqual(ProfileResolver.resolve(bundleID: "net.whatsapp.WhatsApp", among: perfiles)?.id,
+                mensajeria.id, "y cada perfil responde por las suyas")
+
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Safari", among: perfiles)?.id,
+                nil, "sin coincidencia se cae a las preferencias globales")
+    assertEqual(ProfileResolver.resolve(bundleID: nil, among: perfiles)?.id,
+                nil, "sin app destino, también")
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal", among: [])?.id,
+                nil, "sin perfiles no hay nada que resolver")
+}
+
+func testProfileResolverExactMatch() {
+    suite("ProfileResolver — Coincidencia exacta, sin comodines")
+
+    let perfiles = [Profile(name: "Terminal", bundleIDs: ["com.apple.Terminal"], order: 0)]
+
+    // Un comodín que empareje de más aplicaría el perfil equivocado sin que el
+    // usuario sepa por qué. Es peor que pedirle que añada la app desde la lista.
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Term", among: perfiles)?.id,
+                nil, "un prefijo no coincide")
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal.helper",
+                                        among: perfiles)?.id,
+                nil, "un sufijo tampoco")
+    assertEqual(ProfileResolver.resolve(bundleID: "COM.APPLE.TERMINAL", among: perfiles)?.id,
+                nil, "y distingue mayúsculas: los bundle ID son sensibles a ellas")
+    assertEqual(ProfileResolver.resolve(bundleID: "", among: perfiles)?.id,
+                nil, "un identificador vacío no coincide con nada")
+}
+
+func testProfileResolverPriority() {
+    suite("ProfileResolver — Empates y prioridad")
+
+    // La misma app en dos perfiles activos: gana el de orden menor.
+    let primero = Profile(name: "Primero", bundleIDs: ["com.apple.Terminal"], order: 0)
+    let segundo = Profile(name: "Segundo", bundleIDs: ["com.apple.Terminal"], order: 1)
+
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal",
+                                        among: [segundo, primero])?.id,
+                primero.id, "gana el de orden menor, llegue como llegue la lista")
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal",
+                                        among: [primero, segundo])?.id,
+                primero.id, "y el resultado no depende del orden del arreglo")
+
+    // Reproducible con órdenes iguales: desempata por id, no por posición.
+    let a = Profile(id: UUID(uuidString: "00000000-0000-0000-0000-0000000000AA")!,
+                    name: "A", bundleIDs: ["com.apple.Terminal"], order: 5)
+    let b = Profile(id: UUID(uuidString: "00000000-0000-0000-0000-0000000000BB")!,
+                    name: "B", bundleIDs: ["com.apple.Terminal"], order: 5)
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal", among: [b, a])?.id,
+                a.id, "con el mismo orden desempata por id, de forma reproducible")
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal", among: [a, b])?.id,
+                a.id, "y da lo mismo en las dos direcciones")
+}
+
+func testProfileResolverInactive() {
+    suite("ProfileResolver — Perfiles desactivados y listas vacías")
+
+    var apagado = Profile(name: "Apagado", bundleIDs: ["com.apple.Terminal"], order: 0)
+    apagado.isActive = false
+    let encendido = Profile(name: "Encendido", bundleIDs: ["com.apple.Terminal"], order: 1)
+
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal",
+                                        among: [apagado])?.id,
+                nil, "un perfil desactivado no participa, aunque siga existiendo")
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal",
+                                        among: [apagado, encendido])?.id,
+                encendido.id, "y le cede el turno al siguiente activo")
+
+    let sinApps = Profile(name: "Sin apps", bundleIDs: [], order: 0)
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal", among: [sinApps])?.id,
+                nil, "un perfil sin apps no coincide con ninguna")
+}
+
+func testProfileResolverIgnoresGluffi() {
+    suite("ProfileResolver — Gluffi nunca se aplica a sí misma")
+
+    // Alguien podría añadir Gluffi a un perfil desde el selector de apps. Aplicar
+    // un perfil al dictado que va a nuestra propia ventana no significa nada.
+    let perfiles = [Profile(name: "Raro", bundleIDs: [ProfileResolver.ownBundleID],
+                            order: 0)]
+    assertEqual(ProfileResolver.resolve(bundleID: ProfileResolver.ownBundleID,
+                                        among: perfiles)?.id,
+                nil, "con Gluffi como destino se aplican las preferencias globales")
+}
+
+func testProfileResolverFromPasteTarget() {
+    suite("ProfileResolver — Sale del destino del paste, no del frontmost")
+
+    // El perfil se resuelve sobre la app a la que se va a pegar, que es la que
+    // PasteTargetTracker ya calcula. Si saliera del frontmost al terminar la
+    // transcripción, cambiar de ventana mientras whisper corre aplicaría medio
+    // perfil de una app y medio de otra.
+    let tracker = PasteTargetTracker(selfPid: 1)
+    let terminal = FakeApp(2, bundleIdentifier: "com.apple.Terminal")
+    tracker.record(terminal)
+
+    let destino = tracker.target(frontmost: FakeApp(1, bundleIdentifier: ProfileResolver.ownBundleID))
+    assertEqual(destino?.bundleIdentifier, "com.apple.Terminal",
+        "con una ventana nuestra al frente, el destino sigue siendo la última app externa")
+
+    let perfiles = [Profile(name: "Terminal", bundleIDs: ["com.apple.Terminal"], order: 0)]
+    assertEqual(ProfileResolver.resolve(bundleID: destino?.bundleIdentifier,
+                                        among: perfiles)?.name,
+                "Terminal",
+        "y el perfil que aplica es el de esa app, no el global")
+
+    // Sin ninguna app externa vista, no hay a quién pegar ni perfil que aplicar.
+    let virgen = PasteTargetTracker(selfPid: 1)
+    assertEqual(virgen.target(frontmost: FakeApp(1, bundleIdentifier: ProfileResolver.ownBundleID))?
+                    .bundleIdentifier,
+                nil, "sin app externa conocida no hay destino")
+    assertEqual(ProfileResolver.resolve(bundleID: nil, among: perfiles)?.id,
+                nil, "y entonces mandan las preferencias globales")
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - DictationSession — El perfil resuelto viaja como parámetro
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Deja Config en un estado conocido y lo devuelve como estaba al terminar.
+func conConfigDePruebas(_ cuerpo: () -> Void) {
+    let defaults = UserDefaults.standard
+    let claves = ["language", "cleanupLevel", "spellFixEnabled", "initialCapitalEnabled",
+                  "trailingPeriodEnabled", "dictionaryEnabled", "snippetsEnabled",
+                  "systemPolishEnabled", "modelPath"]
+    let previos = claves.map { ($0, defaults.object(forKey: $0)) }
+    defer {
+        for (clave, valor) in previos {
+            if let valor { defaults.set(valor, forKey: clave) }
+            else { defaults.removeObject(forKey: clave) }
+        }
+    }
+    Config.shared.language = "es"
+    Config.shared.cleanupLevel = .conservador
+    Config.shared.spellFixEnabled = true
+    Config.shared.initialCapitalEnabled = true
+    Config.shared.trailingPeriodEnabled = true
+    Config.shared.dictionaryEnabled = true
+    Config.shared.snippetsEnabled = true
+    Config.shared.systemPolishEnabled = false
+    cuerpo()
+}
+
+func testDictationSessionInheritsGlobals() {
+    suite("DictationSession — Sin perfil manda lo global")
+
+    conConfigDePruebas {
+        let global = DictationSession.make(profile: nil, bundleID: nil)
+
+        assertEqual(global.profileID, nil, "sin perfil no hay id que registrar")
+        assertEqual(global.profileName, nil, "ni nombre que enseñar en la píldora")
+        assertEqual(global.language, "es", "el idioma sale de las preferencias")
+        assertEqual(global.cleanupLevel, .conservador, "y el nivel de limpieza")
+        assertEqual(global.spellFix, true, "y el corrector")
+        assertEqual(global.initialCapital, true, "y la mayúscula inicial")
+        assertEqual(global.trailingPeriod, true, "y el punto final")
+        assertEqual(global.dictionary, true, "y el diccionario")
+        assertEqual(global.snippets, true, "y los snippets")
+        assertEqual(global.systemPolish, false, "y el repaso del sistema")
+        assertEqual(global.modelPath, Config.shared.modelPath, "y el modelo de voz")
+    }
+}
+
+func testDictationSessionEmptyProfileIsIdentical() {
+    suite("DictationSession — Un perfil vacío no cambia nada")
+
+    conConfigDePruebas {
+        // El criterio de aceptación central: los nueve campos en «heredar» tienen
+        // que producir exactamente la misma sesión que no tener perfil.
+        let vacio = Profile(name: "Vacío", bundleIDs: ["com.apple.Terminal"], order: 0)
+        let global = DictationSession.make(profile: nil, bundleID: nil)
+        let conPerfil = DictationSession.make(profile: vacio, bundleID: "com.apple.Terminal")
+
+        assert(vacio.overrides.isEmpty, "el perfil no sobrescribe nada")
+        assertEqual(conPerfil.language, global.language, "mismo idioma")
+        assertEqual(conPerfil.cleanupLevel, global.cleanupLevel, "mismo nivel de limpieza")
+        assertEqual(conPerfil.spellFix, global.spellFix, "mismo corrector")
+        assertEqual(conPerfil.initialCapital, global.initialCapital, "misma mayúscula inicial")
+        assertEqual(conPerfil.trailingPeriod, global.trailingPeriod, "mismo punto final")
+        assertEqual(conPerfil.dictionary, global.dictionary, "mismo diccionario")
+        assertEqual(conPerfil.snippets, global.snippets, "mismos snippets")
+        assertEqual(conPerfil.systemPolish, global.systemPolish, "mismo repaso del sistema")
+        assertEqual(conPerfil.modelPath, global.modelPath, "mismo modelo")
+
+        // Lo único que sí cambia: el perfil queda registrado, para el historial
+        // y para que la píldora pueda decir cuál se aplicó.
+        assertEqual(conPerfil.profileID, vacio.id, "pero el perfil queda identificado")
+        assertEqual(conPerfil.profileName, "Vacío", "con su nombre")
+    }
+}
+
+func testDictationSessionEachOverride() {
+    suite("DictationSession — Cada sobrescritura hace lo suyo, y solo lo suyo")
+
+    conConfigDePruebas {
+        let global = DictationSession.make(profile: nil, bundleID: nil)
+
+        func conUno(_ poner: (inout ProfileOverrides) -> Void) -> DictationSession {
+            var o = ProfileOverrides()
+            poner(&o)
+            let p = Profile(name: "P", bundleIDs: ["x"], order: 0, overrides: o)
+            return DictationSession.make(profile: p, bundleID: "x")
+        }
+
+        let idioma = conUno { $0.language = "en" }
+        assertEqual(idioma.language, "en", "el idioma se sobrescribe")
+        assertEqual(idioma.cleanupLevel, global.cleanupLevel, "y el resto sigue heredando")
+
+        let limpieza = conUno { $0.cleanupLevel = .completo }
+        assertEqual(limpieza.cleanupLevel, .completo, "el nivel de limpieza se sobrescribe")
+        assertEqual(limpieza.language, global.language, "y el resto sigue heredando")
+
+        let corrector = conUno { $0.spellFix = false }
+        assertEqual(corrector.spellFix, false, "el corrector se sobrescribe")
+        assertEqual(corrector.snippets, global.snippets, "y el resto sigue heredando")
+
+        let mayuscula = conUno { $0.initialCapital = false }
+        assertEqual(mayuscula.initialCapital, false, "la mayúscula inicial se sobrescribe")
+        assertEqual(mayuscula.trailingPeriod, global.trailingPeriod, "y el punto no se toca")
+
+        let punto = conUno { $0.trailingPeriod = false }
+        assertEqual(punto.trailingPeriod, false, "el punto final se sobrescribe")
+        assertEqual(punto.initialCapital, global.initialCapital, "y la mayúscula no se toca")
+
+        let diccionario = conUno { $0.dictionary = false }
+        assertEqual(diccionario.dictionary, false, "el diccionario se sobrescribe")
+        assertEqual(diccionario.spellFix, global.spellFix, "y el resto sigue heredando")
+
+        let snippets = conUno { $0.snippets = false }
+        assertEqual(snippets.snippets, false, "los snippets se sobrescriben")
+        assertEqual(snippets.dictionary, global.dictionary, "y el resto sigue heredando")
+
+        let repaso = conUno { $0.systemPolish = true }
+        assertEqual(repaso.systemPolish, true, "el repaso del sistema se sobrescribe")
+        assertEqual(repaso.cleanupLevel, global.cleanupLevel, "y el resto sigue heredando")
+    }
+}
+
+func testDictationSessionModelFallback() {
+    suite("DictationSession — Modelo de voz y su red de seguridad")
+
+    conConfigDePruebas {
+        let carpeta = ModelDownloader.destinationDirectory
+        let instalados = VoiceModel.installed(in: carpeta)
+
+        // Un modelo que no está descargado NO puede costarle el dictado al
+        // usuario: se ignora la sobrescritura y manda el global.
+        var ausente = ProfileOverrides()
+        ausente.model = "tiny"
+        let conAusente = DictationSession.make(
+            profile: Profile(name: "P", bundleIDs: ["x"], order: 0, overrides: ausente),
+            bundleID: "x")
+        if VoiceModel.named("tiny").map({ !instalados.contains($0) }) == true {
+            assertEqual(conAusente.modelPath, Config.shared.modelPath,
+                "un modelo sin descargar cae al global en vez de perder el dictado")
+        }
+
+        // Uno inventado tampoco rompe nada.
+        var inventado = ProfileOverrides()
+        inventado.model = "no-existe"
+        let conInventado = DictationSession.make(
+            profile: Profile(name: "P", bundleIDs: ["x"], order: 0, overrides: inventado),
+            bundleID: "x")
+        assertEqual(conInventado.modelPath, Config.shared.modelPath,
+            "un identificador que no está en el catálogo cae al global")
+
+        // Y uno que sí está se usa.
+        if let presente = instalados.first {
+            var valido = ProfileOverrides()
+            valido.model = presente.id
+            let conValido = DictationSession.make(
+                profile: Profile(name: "P", bundleIDs: ["x"], order: 0, overrides: valido),
+                bundleID: "x")
+            assertEqual(conValido.modelPath, presente.path(in: carpeta),
+                "un modelo descargado sí se usa")
+        }
+    }
+}
+
+func testDictationSessionReachesWhisper() {
+    suite("DictationSession — El idioma y el modelo llegan a whisper-cli")
+
+    // El criterio pide que lleguen a la invocación, no después. Se comprueba
+    // sobre los argumentos que se construyen, sin lanzar el binario.
+    var overrides = ProfileOverrides()
+    overrides.language = "en"
+    let sesion = DictationSession(
+        profileID: nil, profileName: nil, bundleID: nil, appName: nil,
+        whisperCliPath: "/bin/echo", modelPath: "/modelos/ggml-small.bin",
+        language: "en", recognitionBias: true, systemPolish: false,
+        cleanupLevel: .conservador,
+        dictionary: true, spellFix: true, initialCapital: true,
+        trailingPeriod: true, snippets: true)
+
+    let args = Transcriber.arguments(audio: URL(fileURLWithPath: "/tmp/a.wav"),
+                                     prompt: nil, session: sesion)
+    assert(args.contains("-l"), "se le pasa el idioma")
+    assertEqual(args[(args.firstIndex(of: "-l") ?? 0) + 1], "en",
+        "y es el del perfil, no el global")
+    assert(args.contains("-m"), "se le pasa el modelo")
+    assertEqual(args[(args.firstIndex(of: "-m") ?? 0) + 1], "/modelos/ggml-small.bin",
+        "y es el del perfil")
+
+    let conPrompt = Transcriber.arguments(audio: URL(fileURLWithPath: "/tmp/a.wav"),
+                                          prompt: "DocFly", session: sesion)
+    assert(conPrompt.contains("--carry-initial-prompt"),
+        "el sesgo del diccionario sigue reinyectándose en cada ventana")
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - Historial — El perfil aplicado
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testHistoryRecordsProfile() {
+    suite("Historial — Cada entrada guarda su perfil")
+
+    let id = UUID()
+    let entrada = TranscriptionEntry(text: "git status", duration: 1.2,
+                                     sourceApp: "Terminal", profileID: id)
+    assertEqual(entrada.profileID, id, "la entrada recuerda qué perfil se aplicó")
+    assertEqual(entrada.sourceApp, "Terminal", "y en qué app se pegó")
+
+    // Sin perfil —preferencias globales— el campo queda vacío, no inventado.
+    let global = TranscriptionEntry(text: "hola", duration: 1, sourceApp: "Safari")
+    assertEqual(global.profileID, nil, "sin perfil no se registra ninguno")
+}
+
+func testHistoryReadsOldEntries() {
+    suite("Historial — Las entradas antiguas se leen sin error")
+
+    // Exactamente la forma que escribían las versiones anteriores: sin profileID.
+    let json = """
+    [
+      {
+        "id": "\(UUID().uuidString)",
+        "timestamp": "2026-08-01T10:00:00Z",
+        "text": "una transcripción de antes",
+        "duration": 2.5,
+        "sourceApp": "Mail"
+      }
+    ]
+    """
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let entradas = try? decoder.decode([TranscriptionEntry].self,
+                                       from: Data(json.utf8))
+    assertEqual(entradas?.count, 1, "una entrada sin profileID se decodifica")
+    assertEqual(entradas?.first?.text, "una transcripción de antes", "con su texto")
+    assertEqual(entradas?.first?.profileID, nil, "y el perfil queda vacío")
+
+    // Y al volver a escribirlas no se pierde nada de lo que ya tenían.
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    let vuelta = (try? encoder.encode(entradas ?? []))
+        .flatMap { try? decoder.decode([TranscriptionEntry].self, from: $0) }
+    assertEqual(vuelta?.first?.sourceApp, "Mail", "la app se conserva en la ida y vuelta")
+}
+
+func testHistoryProfileLabel() {
+    suite("Historial — Cómo se enseña el perfil")
+
+    // El nombre se busca al pintar, no se copia en la entrada: renombrar un
+    // perfil tiene que renombrarlo también en el historial.
+    let (store, url) = storeDePruebas()
+    defer { try? FileManager.default.removeItem(at: url) }
+    let perfil = Profile(name: "Terminal e IDE", bundleIDs: ["com.apple.Terminal"], order: 0)
+    store.add(perfil)
+
+    assertEqual(HistoryPresentation.profileLabel(perfil.id, in: store), "Terminal e IDE",
+        "la entrada enseña el nombre actual del perfil")
+    assertEqual(HistoryPresentation.profileLabel(nil, in: store), nil,
+        "sin perfil no se enseña nada: las globales no son un perfil")
+    assertEqual(HistoryPresentation.profileLabel(UUID(), in: store), nil,
+        "y un perfil borrado deja de nombrarse, en vez de mentir")
+}
+
+func testDictationSessionCarriesAppName() {
+    suite("DictationSession — El nombre de la app viaja con la sesión")
+
+    // El historial guardaba el frontmost AL TERMINAR la transcripción. Si el
+    // usuario cambiaba de ventana mientras whisper corría, atribuía el dictado a
+    // la app equivocada. Ahora sale de la misma captura que el perfil.
+    let sesion = DictationSession.make(profile: nil, bundleID: "com.apple.Terminal",
+                                       appName: "Terminal")
+    assertEqual(sesion.appName, "Terminal", "la sesión recuerda dónde va a caer el texto")
+    assertEqual(sesion.bundleID, "com.apple.Terminal", "junto a su identificador")
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - Píldora — El perfil activo
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testPillShowsProfile() {
+    suite("Píldora — Enseña el perfil que se está aplicando")
+
+    let model = PillViewModel()
+    assertEqual(model.profileName, nil, "en reposo no hay perfil que enseñar")
+
+    model.profileName = "Terminal e IDE"
+    model.state = .recording
+    assertEqual(model.profileName, "Terminal e IDE",
+        "grabando, la píldora dice qué perfil manda")
+
+    // Sin esto la funcionalidad es magia que falla en silencio: el usuario ve un
+    // dictado raro y no tiene forma de saber que se le aplicó otro perfil.
+    model.profileName = nil
+    assertEqual(model.profileName, nil,
+        "con las preferencias globales no se enseña nada: no hay perfil que nombrar")
+
+    let controller = PillWindowController.shared
+    controller.setProfileName("Mensajería")
+    assertEqual(controller.currentProfileName, "Mensajería",
+        "el controlador lo publica en el view model")
+    controller.setProfileName(nil)
+    assertEqual(controller.currentProfileName, nil, "y sabe volver a no enseñar nada")
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - SeedProfiles — Los tres perfiles de fábrica
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Catálogo de apps instaladas, fingido: preguntarle a NSWorkspace haría que la
+/// prueba dependiera de qué haya en la máquina que la corre.
+struct FakeInstalled: InstalledApps {
+    let presentes: Set<String>
+    func isInstalled(_ bundleID: String) -> Bool { presentes.contains(bundleID) }
+}
+
+func testSeedProfilesContent() {
+    suite("SeedProfiles — Qué trae cada uno")
+
+    let perfiles = SeedProfiles.build()
+    assertEqual(perfiles.count, 3, "son tres perfiles")
+    assertEqual(perfiles.map(\.name),
+                ["Terminal e IDE", "Mensajería", "Correo y documentos"],
+        "en el orden en que se declaran, que es el de prioridad")
+    assertEqual(perfiles.map(\.order), [0, 1, 2], "numerados desde cero")
+    assert(perfiles.allSatisfy(\.isActive), "activos, o no servirían de nada al actualizar")
+
+    let terminal = perfiles[0]
+    assertEqual(terminal.overrides.initialCapital, false, "Terminal: sin mayúscula inicial")
+    assertEqual(terminal.overrides.trailingPeriod, false, "Terminal: sin punto final")
+    assertEqual(terminal.overrides.spellFix, false, "Terminal: corrector apagado")
+    assertEqual(terminal.overrides.cleanupLevel, .conservador, "Terminal: limpieza conservadora")
+    assertEqual(terminal.overrides.dictionary, true, "Terminal: diccionario activo")
+    assertEqual(terminal.overrides.snippets, true, "Terminal: snippets activos")
+    // El repaso del sistema cuesta segundos y no le aporta nada a un comando.
+    assertEqual(terminal.overrides.systemPolish, false, "Terminal: sin repaso del sistema")
+
+    let mensajeria = perfiles[1]
+    assertEqual(mensajeria.overrides.trailingPeriod, false, "Mensajería: sin punto final")
+    assertEqual(mensajeria.overrides.cleanupLevel, .completo, "Mensajería: limpieza completa")
+    assertEqual(mensajeria.overrides.spellFix, nil, "Mensajería: el resto hereda")
+    assertEqual(mensajeria.overrides.initialCapital, nil, "y la mayúscula también")
+
+    let correo = perfiles[2]
+    assertEqual(correo.overrides.spellFix, true, "Correo: corrector activo")
+    assertEqual(correo.overrides.initialCapital, true, "Correo: con mayúscula inicial")
+    assertEqual(correo.overrides.trailingPeriod, true, "Correo: conserva el punto")
+    assertEqual(correo.overrides.cleanupLevel, .completo, "Correo: limpieza completa")
+
+    // Ningún perfil sobrescribe el modelo: elegirlo por el usuario exige que lo
+    // haya descargado, y sembrar uno ausente sería sembrar una sobrescritura
+    // inerte.
+    assert(perfiles.allSatisfy { $0.overrides.model == nil },
+        "ninguno fija modelo de voz: sembrarlo sin descargarlo no haría nada")
+}
+
+func testSeedProfilesShipsWholeCatalogue() {
+    suite("SeedProfiles — Se siembra el catálogo entero, no solo lo instalado")
+
+    let perfiles = SeedProfiles.build()
+
+    // Filtrar por lo instalado en el primer arranque dejaba la funcionalidad
+    // coja: quien instalaba Slack al día siguiente no lo veía aparecer nunca.
+    // Un identificador que no casa con nada es inofensivo.
+    let mensajeria = perfiles[1]
+    assert(mensajeria.bundleIDs.contains("com.tinyspeck.slackmacgap"),
+        "Slack está en Mensajería aunque no esté instalada en esta máquina")
+    assert(perfiles[0].bundleIDs.contains("com.googlecode.iterm2"),
+        "y iTerm en Terminal e IDE")
+
+    assertEqual(perfiles[0].bundleIDs, KnownApps.terminal.map(\.bundleID),
+        "cada perfil trae su categoría entera del catálogo")
+    assertEqual(perfiles[1].bundleIDs, KnownApps.messaging.map(\.bundleID),
+        "sin filtrar")
+    assertEqual(perfiles[2].bundleIDs, KnownApps.writing.map(\.bundleID),
+        "ni recortar")
+
+    // El nombre viaja con el identificador: es lo que permite enseñar «Slack» y
+    // no com.tinyspeck.slackmacgap para una app que el sistema no conoce.
+    assertEqual(KnownApps.name(for: "com.tinyspeck.slackmacgap"), "Slack",
+        "el catálogo sabe cómo se llama cada una")
+    assertEqual(KnownApps.name(for: "com.inventada.App"), nil,
+        "y admite no saberlo")
+
+    // Ningún identificador repetido entre categorías: dos perfiles compitiendo
+    // por la misma app en la siembra sería un empate que nadie pidió.
+    let todos = KnownApps.all.map(\.bundleID)
+    assertEqual(todos.count, Set(todos).count,
+        "ninguna aplicación aparece en dos categorías")
+}
+
+func testProfileStoreSeedsItself() {
+    suite("ProfileStore — La siembra es suya, no de AppDelegate")
+
+    let defaults = UserDefaults.standard
+    let previo = defaults.object(forKey: SeedProfiles.doneKey)
+    defer {
+        if let previo { defaults.set(previo, forKey: SeedProfiles.doneKey) }
+        else { defaults.removeObject(forKey: SeedProfiles.doneKey) }
+    }
+    defaults.removeObject(forKey: SeedProfiles.doneKey)
+
+    let url = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("gluffi-siembra-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    // Colgada de AppDelegate, cualquier entrada que no fuera la app completa
+    // —el arnés de preview_ui.sh, por ejemplo— abría la pestaña de Perfiles
+    // vacía, y ahí la funcionalidad no se entiende.
+    let conSiembra = ProfileStore(storageURL: url, seeds: true)
+    assertEqual(conSiembra.profiles.count, 3,
+        "un store que siembra trae los tres perfiles sin que nadie se lo pida")
+
+    // Y uno de pruebas no, o cada suite se encontraría tres perfiles dentro.
+    let otra = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("gluffi-siembra-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: otra) }
+    defaults.removeObject(forKey: SeedProfiles.doneKey)
+    assertEqual(ProfileStore(storageURL: otra).profiles.count, 0,
+        "y uno normal no siembra nada")
+}
+
+func testSeedProfilesRunsOnce() {
+    suite("SeedProfiles — Se siembra una vez y no vuelve")
+
+    let defaults = UserDefaults.standard
+    let previo = defaults.object(forKey: SeedProfiles.doneKey)
+    defer {
+        if let previo { defaults.set(previo, forKey: SeedProfiles.doneKey) }
+        else { defaults.removeObject(forKey: SeedProfiles.doneKey) }
+    }
+    defaults.removeObject(forKey: SeedProfiles.doneKey)
+
+    let (store, url) = storeDePruebas()
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    SeedProfiles.seedIfNeeded(into: store)
+    assertEqual(store.profiles.count, 3, "la primera vez siembra los tres")
+
+    // Y si el usuario los borra, no vuelven: borrarlos es una decisión suya.
+    for perfil in store.profiles { store.remove(perfil.id) }
+    SeedProfiles.seedIfNeeded(into: store)
+    assertEqual(store.profiles.count, 0,
+        "borrados por el usuario, no se recrean")
+
+    // Tampoco pisa perfiles que ya existan.
+    defaults.removeObject(forKey: SeedProfiles.doneKey)
+    store.add(Profile(name: "Mío", bundleIDs: ["com.apple.Safari"], order: 0))
+    SeedProfiles.seedIfNeeded(into: store)
+    assertEqual(store.profiles.map(\.name), ["Mío"],
+        "con perfiles ya creados no siembra: el archivo es de quien lo tenga")
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - AppCatalog — El selector de aplicaciones
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testAppCatalogMerge() {
+    suite("AppCatalog — Mezcla de instaladas y en ejecución")
+
+    let terminal = AppEntry(bundleID: "com.apple.Terminal", name: "Terminal",
+                            url: URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"))
+    let safari = AppEntry(bundleID: "com.apple.Safari", name: "Safari",
+                          url: URL(fileURLWithPath: "/Applications/Safari.app"))
+    let cursor = AppEntry(bundleID: "com.todesktop.230313mzl4w4u92", name: "Cursor",
+                          url: URL(fileURLWithPath: "/Applications/Cursor.app"))
+
+    let mezcla = AppCatalog.merge(running: [safari], installed: [terminal, safari, cursor])
+    assertEqual(mezcla.count, 3, "una app en ejecución e instalada aparece una sola vez")
+    assertEqual(mezcla.filter { $0.bundleID == "com.apple.Safari" }.count, 1,
+        "sin duplicar")
+    assert(mezcla.first { $0.bundleID == "com.apple.Safari" }?.isRunning == true,
+        "y marcada como en ejecución")
+    assert(mezcla.first { $0.bundleID == "com.apple.Terminal" }?.isRunning == false,
+        "las que solo están instaladas, no")
+
+    // Alfabético y sin distinguir mayúsculas: el usuario busca por nombre.
+    assertEqual(mezcla.map(\.name), ["Cursor", "Safari", "Terminal"],
+        "ordenadas por nombre")
+
+    // Una app en ejecución que no aparece en las carpetas —lanzada desde otro
+    // sitio— tiene que salir igual, o el usuario no podría añadirla.
+    let suelta = AppEntry(bundleID: "com.ejemplo.Suelta", name: "Suelta",
+                          url: URL(fileURLWithPath: "/tmp/Suelta.app"))
+    let conSuelta = AppCatalog.merge(running: [suelta], installed: [terminal])
+    assertEqual(conSuelta.map(\.name), ["Suelta", "Terminal"],
+        "una app en ejecución fuera de las carpetas conocidas también se ofrece")
+}
+
+func testAppCatalogExcludesSelf() {
+    suite("AppCatalog — Gluffi no se ofrece a sí misma")
+
+    let gluffi = AppEntry(bundleID: ProfileResolver.ownBundleID, name: "Gluffi",
+                          url: URL(fileURLWithPath: "/Applications/Gluffi.app"))
+    let mail = AppEntry(bundleID: "com.apple.mail", name: "Mail",
+                        url: URL(fileURLWithPath: "/System/Applications/Mail.app"))
+
+    // Un perfil para Gluffi no significa nada: el dictado nunca se pega ahí.
+    // Ofrecerla es invitar a crear una regla que jamás se aplicará.
+    assertEqual(AppCatalog.merge(running: [gluffi], installed: [gluffi, mail]).map(\.bundleID),
+                ["com.apple.mail"],
+        "no aparece en la lista, ni corriendo ni instalada")
+}
+
+func testAppCatalogSearch() {
+    suite("AppCatalog — Búsqueda")
+
+    let apps = [
+        AppEntry(bundleID: "com.apple.Terminal", name: "Terminal",
+                 url: URL(fileURLWithPath: "/a")),
+        AppEntry(bundleID: "com.microsoft.VSCode", name: "Visual Studio Code",
+                 url: URL(fileURLWithPath: "/b")),
+    ]
+    assertEqual(AppCatalog.filter(apps, query: "").count, 2, "sin búsqueda salen todas")
+    assertEqual(AppCatalog.filter(apps, query: "term").map(\.name), ["Terminal"],
+        "busca por nombre, sin distinguir mayúsculas")
+    assertEqual(AppCatalog.filter(apps, query: "STUDIO").map(\.name), ["Visual Studio Code"],
+        "y por cualquier parte del nombre")
+    // El usuario nunca escribe un bundle ID, pero pegarlo desde algún sitio y que
+    // encuentre la app es mejor que devolver nada.
+    assertEqual(AppCatalog.filter(apps, query: "com.microsoft").map(\.name),
+                ["Visual Studio Code"], "también encuentra por identificador")
+    assertEqual(AppCatalog.filter(apps, query: "  ").count, 2,
+        "una búsqueda de solo espacios no filtra nada")
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -3028,6 +4183,48 @@ struct TestRunner {
         testCleanerNeverTouchesDictionary()
         testCleanerInPipeline()
         testCleanerPerformance()
+        testTextFinishDefaultsAreInert()
+        testTextFinishTrailingPeriod()
+        testTextFinishInitialCapital()
+        testTextFinishNeverTouchesProtectedTerms()
+        testTextFinishIdempotence()
+        testTextFinishTerminalCase()
+        testTextFinishInPipeline()
+        testTextFinishConfigDefaults()
+        testVoiceModelCatalogue()
+        testVoiceModelPathMatching()
+        testVoiceModelInstalled()
+        testModelDownloaderTargets()
+        testProfileOverridesInherit()
+        testProfileStoreRoundTrip()
+        testProfileStoreFileShape()
+        testProfileStoreToleratesUnknownFields()
+        testProfileStoreSurvivesCorruption()
+        testProfileStoreOrdering()
+        testProfileStoreCRUD()
+        testProfileResolverMatching()
+        testProfileResolverExactMatch()
+        testProfileResolverPriority()
+        testProfileResolverInactive()
+        testProfileResolverIgnoresGluffi()
+        testProfileResolverFromPasteTarget()
+        testDictationSessionInheritsGlobals()
+        testDictationSessionEmptyProfileIsIdentical()
+        testDictationSessionEachOverride()
+        testDictationSessionModelFallback()
+        testDictationSessionReachesWhisper()
+        testHistoryRecordsProfile()
+        testHistoryReadsOldEntries()
+        testHistoryProfileLabel()
+        testDictationSessionCarriesAppName()
+        testPillShowsProfile()
+        testSeedProfilesContent()
+        testSeedProfilesShipsWholeCatalogue()
+        testProfileStoreSeedsItself()
+        testSeedProfilesRunsOnce()
+        testAppCatalogMerge()
+        testAppCatalogExcludesSelf()
+        testAppCatalogSearch()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")

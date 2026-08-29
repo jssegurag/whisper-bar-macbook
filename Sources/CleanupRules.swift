@@ -3,7 +3,7 @@ import Foundation
 /// Cuánto se limpia el dictado. El `rawValue` es lo que se escribe en
 /// `defaults write com.user.WhisperBar cleanupLevel`, por eso está en español:
 /// el usuario que abre la terminal no debería tener que traducir.
-enum CleanupLevel: String, CaseIterable {
+enum CleanupLevel: String, CaseIterable, Codable {
     case desactivado
     case conservador
     case completo

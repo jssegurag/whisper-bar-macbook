@@ -87,6 +87,14 @@ struct HistoryView: View {
                     Text("·")
                     Text(app)
                 }
+                // Junto a la app, y no en su lugar: saber que un dictado usó el
+                // perfil «Terminal e IDE» es lo que permite entender por qué
+                // salió sin mayúscula, en vez de creer que la app falló.
+                if let perfil = HistoryPresentation.profileLabel(entry.profileID,
+                                                                 in: ProfileStore.shared) {
+                    Text("·")
+                    Text(perfil).foregroundStyle(Theme.brand)
+                }
                 Spacer(minLength: 0)
                 if copied {
                     Label("Copiado", systemImage: "checkmark")

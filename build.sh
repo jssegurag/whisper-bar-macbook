@@ -41,7 +41,17 @@ swiftc \
     "$DIR/Sources/AppNotification.swift" \
     "$DIR/Sources/Notifier.swift" \
     "$DIR/Sources/SetupComponent.swift" \
-    "$DIR/Sources/ModelDownloader.swift" \
+        "$DIR/Sources/VoiceModel.swift" \
+    "$DIR/Sources/Profile.swift" \
+    "$DIR/Sources/ProfileStore.swift" \
+    "$DIR/Sources/ProfileResolver.swift" \
+    "$DIR/Sources/DictationSession.swift" \
+    "$DIR/Sources/KnownApps.swift" \
+    "$DIR/Sources/SeedProfiles.swift" \
+    "$DIR/Sources/AppCatalog.swift" \
+    "$DIR/Sources/ProfilesAppPicker.swift" \
+    "$DIR/Sources/ProfilesView.swift" \
+"$DIR/Sources/ModelDownloader.swift" \
     "$DIR/Sources/SetupView.swift" \
     "$DIR/Sources/SetupWindowController.swift" \
     "$DIR/Sources/MenuBarIcon.swift" \
@@ -57,6 +67,7 @@ swiftc \
     "$DIR/Sources/Cleaner.swift" \
     "$DIR/Sources/WhisperPrompt.swift" \
     "$DIR/Sources/SpellFixer.swift" \
+    "$DIR/Sources/TextFinish.swift" \
     "$DIR/Sources/SystemPolish.swift" \
     "$DIR/Sources/LocalLLM.swift" \
     "$DIR/Sources/PreferencesIntelligenceTab.swift" \

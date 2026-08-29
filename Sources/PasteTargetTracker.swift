@@ -4,6 +4,10 @@ import AppKit
 /// probar sin fabricar NSRunningApplication, que no se puede instanciar a mano.
 protocol PasteTargetCandidate: AnyObject {
     var processIdentifier: pid_t { get }
+    /// Quién es la app, para poder resolverle su perfil. `NSRunningApplication`
+    /// ya lo publica; el protocolo lo declara para que la resolución se pueda
+    /// probar sin cambiar de aplicación de verdad.
+    var bundleIdentifier: String? { get }
 }
 
 extension NSRunningApplication: PasteTargetCandidate {}

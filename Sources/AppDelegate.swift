@@ -32,6 +32,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Preferencias, el Historial o los Snippets.
     private let pasteTracker = PasteTargetTracker.shared
 
+    /// Ajustes del dictado en curso, resueltos al presionar el atajo.
+    ///
+    /// Se resuelve una sola vez y viaja: ninguna etapa vuelve a consultar Config.
+    /// Si lo hiciera, cambiar de aplicación mientras corre una transcripción
+    /// larga aplicaría medio perfil de una app y medio de otra.
+    private var session: DictationSession = .global()
+
     /// Bandera de cancelación: impide el paste si el usuario canceló durante transcripción.
     private var isCancelled = false
 
@@ -332,6 +339,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // PasteTargetTracker ya resuelve el caso que motivó el guard original: si
         // el frontmost es una ventana nuestra, devuelve la última app externa.
         pasteTargetApp = currentPasteTarget()
+        // El perfil sale de la app a la que se va a pegar, y se congela aquí.
+        session = resolvedSession()
+        PillWindowController.shared.setProfileName(session.profileName)
         isCancelled = false
         registerEscMonitor()
         do {
@@ -347,6 +357,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             PillWindowController.shared.setState(.idle)
             pasteTargetApp = nil
         }
+    }
+
+    /// El perfil que aplica a este dictado, resuelto sobre la app destino.
+    private func resolvedSession() -> DictationSession {
+        let bundleID = pasteTargetApp?.bundleIdentifier
+        let perfil = ProfileResolver.resolve(bundleID: bundleID,
+                                             among: ProfileStore.shared.profiles)
+        return DictationSession.make(profile: perfil, bundleID: bundleID,
+                                     appName: pasteTargetApp?.localizedName)
     }
 
     /// Cancela la grabación o transcripción en curso sin pegar nada.
@@ -373,35 +392,45 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Devuelve el texto intacto si ambos están apagados o vacíos.
     /// Términos del diccionario para sesgar el reconocimiento, o nil si está
     /// apagado o no hay ninguno.
-    private func recognitionPrompt() -> String? {
-        guard config.recognitionBiasEnabled, config.dictionaryEnabled else { return nil }
+    private func recognitionPrompt(_ session: DictationSession) -> String? {
+        guard session.recognitionBias, session.dictionary else { return nil }
         return WhisperPrompt.build(from: CustomDictionary.shared.activeEntries)
     }
 
-    private func applyRewrites(_ text: String) -> String {
-        let entries = config.dictionaryEnabled ? CustomDictionary.shared.activeEntries : []
-        let rules   = config.snippetsEnabled ? SnippetStore.shared.rules() : []
+    private func applyRewrites(_ text: String, session: DictationSession) -> String {
+        let entries = session.dictionary ? CustomDictionary.shared.activeEntries : []
+        let rules   = session.snippets ? SnippetStore.shared.rules() : []
         // Los términos del usuario y las frases de sus snippets no se corrigen:
         // el corrector no los conoce y los «arreglaría».
         let protegidas = Set(entries.flatMap(\.allForms)
                              + SnippetStore.shared.activeSnippets.flatMap(\.triggers))
-        let spellFix: ((String) -> String)? = config.spellFixEnabled
-            ? { SpellFixer.fix($0, language: self.config.language, protected: protegidas) }
+        let spellFix: ((String) -> String)? = session.spellFix
+            ? { SpellFixer.fix($0, language: session.language, protected: protegidas) }
             : nil
         // La limpieza se protege con el diccionario COMPLETO, no solo con el
         // activo: una entrada desactivada sigue siendo vocabulario del usuario, y
         // borrársela sería el falso positivo que la regla de seguridad prohíbe.
-        let nivel = config.cleanupLevel
+        let nivel = session.cleanupLevel
+        let guardas = Cleaner.Guard.from(
+            dictionary: CustomDictionary.shared.entries,
+            snippetRules: SnippetStore.shared.rules())
         let cleanup: ((String) -> String)? = nivel == .desactivado ? nil : {
             Cleaner.clean($0, level: nivel, rules: CleanupRules.current(),
-                          protected: Cleaner.Guard.from(
-                              dictionary: CustomDictionary.shared.entries,
-                              snippetRules: SnippetStore.shared.rules()))
+                          protected: guardas)
+        }
+        // El acabado solo se monta si hay algo que hacer: con los dos ajustes en
+        // su valor por defecto la etapa es inerte y sale del pipeline entera.
+        let mayuscula = session.initialCapital
+        let punto = session.trailingPeriod
+        let finish: ((String) -> String)? = (mayuscula && punto) ? nil : {
+            TextFinish.apply($0, initialCapital: mayuscula,
+                             trailingPeriod: punto, protected: guardas)
         }
         let result = RewritePipeline.applyReporting(to: text, cleanup: cleanup,
                                                   dictionary: entries,
                                                   snippetRules: rules,
-                                                  spellFix: spellFix)
+                                                  spellFix: spellFix,
+                                                  finish: finish)
         // Solo cuenta lo que corrigió un dictado real: el campo de prueba de la
         // ventana del diccionario no debe inflar el contador.
         CustomDictionary.shared.recordUsage(of: result.dictionaryUsed)
@@ -449,6 +478,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         removeEscMonitor()
         setIconState(.idle)
         PillWindowController.shared.setState(.idle)
+        // El perfil pertenece al dictado, no a la píldora: en reposo no hay
+        // ninguno aplicándose y enseñar el último sería mentir.
+        PillWindowController.shared.setProfileName(nil)
         pasteTargetApp = nil
     }
 
@@ -469,10 +501,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         audioFeedback.start()
 
         let audioURL = recorder.outputURL
+        // Copia local: si se leyera de self, empezar otro dictado a mitad de
+        // este cambiaría el perfil bajo los pies del que está corriendo.
+        let session = self.session
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
-            switch self.transcriber.transcribe(url: audioURL, prompt: self.recognitionPrompt()) {
+            switch self.transcriber.transcribe(url: audioURL,
+                                               prompt: self.recognitionPrompt(session),
+                                               session: session) {
             case .success(let text) where !text.isEmpty:
                 guard !self.isCancelled else {
                     DispatchQueue.main.async { self.audioFeedback.stop() }
@@ -491,15 +528,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 // el español estándar, y el diccionario los devuelve después a su
                 // forma correcta. Si falla o tarda, se sigue con el texto original.
                 var textoBase = text
-                if self.config.systemPolishEnabled {
+                if session.systemPolish {
                     self.setIconState(.transcribing)
                     PillWindowController.shared.setProcessingLabel("Repasando")
                     if let repasado = SystemPolish.polish(text) { textoBase = repasado }
                 }
-                let correctedText = self.applyRewrites(textoBase)
+                let correctedText = self.applyRewrites(textoBase, session: session)
 
-                let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
-                let entry = TranscriptionEntry(text: correctedText, duration: duration, sourceApp: sourceApp)
+                // La app sale de la sesión, capturada al presionar el atajo.
+                // Leerla del frontmost aquí atribuía el dictado a donde estuviera
+                // el usuario cuando whisper terminaba, que no es donde se pegó.
+                let entry = TranscriptionEntry(text: correctedText, duration: duration,
+                                               sourceApp: session.appName,
+                                               profileID: session.profileID)
                 self.history.add(entry)
                 self.paste(text: correctedText)
 
@@ -536,16 +577,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         audioFeedback.start()
 
         let audioURL = recorder.outputURL
+        let session = self.session
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
-            switch self.translator.translate(audioURL: audioURL) {
+            switch self.translator.translate(audioURL: audioURL, session: session) {
             case .success(let text) where !text.isEmpty:
                 DispatchQueue.main.async { self.audioFeedback.stop() }
                 guard !self.isCancelled else { return }
-                let correctedText = self.applyRewrites(text)
-                let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
-                let entry = TranscriptionEntry(text: correctedText, duration: duration, sourceApp: sourceApp)
+                let correctedText = self.applyRewrites(text, session: session)
+                // La app sale de la sesión, capturada al presionar el atajo.
+                // Leerla del frontmost aquí atribuía el dictado a donde estuviera
+                // el usuario cuando whisper terminaba, que no es donde se pegó.
+                let entry = TranscriptionEntry(text: correctedText, duration: duration,
+                                               sourceApp: session.appName,
+                                               profileID: session.profileID)
                 self.history.add(entry)
                 self.paste(text: correctedText)
             case .failure(let error):

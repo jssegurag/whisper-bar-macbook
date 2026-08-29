@@ -1,11 +1,15 @@
 import Foundation
 
-/// Descarga el modelo de voz desde Hugging Face.
+/// Descarga un modelo de voz desde Hugging Face.
 ///
 /// Existe porque el botón «Descargar» de la ventana de Configuración tiene que
 /// hacer el trabajo, no mandar al usuario a buscar un archivo de 3 GB con
 /// instrucciones. Es la diferencia entre una app que se instala y una que se
 /// explica.
+///
+/// Bajaba solo `large-v3`, cableado en una constante. Ahora recibe qué modelo
+/// traer, porque con el modelo elegible por aplicación hace falta poder tener
+/// varios descargados a la vez. Ver `VoiceModel`.
 final class ModelDownloader: NSObject, ObservableObject {
 
     enum State: Equatable {
@@ -28,18 +32,22 @@ final class ModelDownloader: NSObject, ObservableObject {
 
     @Published private(set) var state: State = .idle
 
-    /// Modelo por defecto: el mismo que documenta el README.
-    static let defaultModel = (
-        name: "ggml-large-v3.bin",
-        bytes: Int64(3_095_033_483),
-        url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin")!
-    )
-
     /// Carpeta donde Config busca modelos por defecto.
     static var destinationDirectory: URL {
         URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".whisper-realtime",
                                                                       isDirectory: true)
     }
+
+    /// Qué se está bajando ahora. Hace falta porque el destino y el tamaño ya
+    /// no son constantes: dependen del modelo que pidió quien llamó.
+    private var current: VoiceModel = .default
+    /// Si al terminar hay que adoptar el modelo como el global.
+    ///
+    /// Lo decide quien llama, y no se deduce: desde Configuración el usuario está
+    /// eligiendo con qué transcribe, y ahí sí; desde la pestaña de perfiles solo
+    /// está trayendo un modelo para una app concreta, y cambiarle el global por
+    /// eso sería decidir por él.
+    private var adopts = true
 
     private var task: URLSessionDownloadTask?
     private lazy var session: URLSession = {
@@ -54,12 +62,20 @@ final class ModelDownloader: NSObject, ObservableObject {
         return formatter.string(fromByteCount: bytes)
     }
 
-    func start() {
+    /// Dónde aterriza un modelo. Se calcula a partir del modelo y no de una
+    /// constante: es lo que permite tener varios descargados a la vez.
+    static func destination(for model: VoiceModel) -> URL {
+        destinationDirectory.appendingPathComponent(model.filename)
+    }
+
+    func start(_ model: VoiceModel = .default, adoptAsDefault: Bool = true) {
         guard !state.isBusy else { return }
+        current = model
+        adopts = adoptAsDefault
         try? FileManager.default.createDirectory(at: Self.destinationDirectory,
                                                 withIntermediateDirectories: true)
-        state = .downloading(received: 0, total: Self.defaultModel.bytes)
-        let download = session.downloadTask(with: Self.defaultModel.url)
+        state = .downloading(received: 0, total: model.bytes)
+        let download = session.downloadTask(with: model.url)
         task = download
         download.resume()
     }
@@ -77,7 +93,7 @@ extension ModelDownloader: URLSessionDownloadDelegate {
                     didWriteData bytesWritten: Int64,
                     totalBytesWritten: Int64,
                     totalBytesExpectedToWrite: Int64) {
-        let total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : Self.defaultModel.bytes
+        let total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : current.bytes
         DispatchQueue.main.async {
             self.state = .downloading(received: totalBytesWritten, total: total)
         }
@@ -85,8 +101,7 @@ extension ModelDownloader: URLSessionDownloadDelegate {
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                     didFinishDownloadingTo location: URL) {
-        let destination = Self.destinationDirectory
-            .appendingPathComponent(Self.defaultModel.name)
+        let destination = Self.destination(for: current)
         // Se mueve dentro del callback: el archivo temporal deja de existir al
         // volver de este método.
         do {
@@ -99,7 +114,7 @@ extension ModelDownloader: URLSessionDownloadDelegate {
             return
         }
         DispatchQueue.main.async {
-            Config.shared.modelPath = destination.path
+            if self.adopts { Config.shared.modelPath = destination.path }
             self.state = .finished(destination)
         }
     }

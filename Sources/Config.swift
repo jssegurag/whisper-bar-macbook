@@ -221,6 +221,26 @@ class Config {
         set { defaults.set(newValue, forKey: "systemPolishEnabled") }
     }
 
+    /// Mayúscula en la primera letra del dictado.
+    ///
+    /// Activado por defecto porque es lo que whisper ya entrega: el ajuste no
+    /// cambia nada hasta que alguien lo apaga. Apagarlo fuerza la minúscula, que
+    /// es lo que hace falta al dictar en una terminal.
+    var initialCapitalEnabled: Bool {
+        get { defaults.object(forKey: "initialCapitalEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "initialCapitalEnabled") }
+    }
+
+    /// Conservar el punto final del dictado.
+    ///
+    /// Activado por defecto: conservar es no tocar nada. Apagarlo lo quita, que
+    /// es lo que evita que el punto se cuele en un comando o en un mensaje de
+    /// chat.
+    var trailingPeriodEnabled: Bool {
+        get { defaults.object(forKey: "trailingPeriodEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "trailingPeriodEnabled") }
+    }
+
     /// Corrección ortográfica con el corrector del sistema.
     var spellFixEnabled: Bool {
         get { defaults.object(forKey: "spellFixEnabled") as? Bool ?? true }

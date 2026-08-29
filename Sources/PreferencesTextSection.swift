@@ -16,6 +16,8 @@ struct TextSection: View {
     @State private var recognitionBias: Bool
     @State private var spellFix: Bool
     @State private var cleanupLevel: CleanupLevel
+    @State private var initialCapital: Bool
+    @State private var trailingPeriod: Bool
     @State private var systemPolish: Bool
     private let polishAvailability = SystemPolish.availability
 
@@ -28,6 +30,8 @@ struct TextSection: View {
         _spellFix          = State(initialValue: Config.shared.spellFixEnabled)
         _systemPolish      = State(initialValue: Config.shared.systemPolishEnabled)
         _cleanupLevel      = State(initialValue: Config.shared.cleanupLevel)
+        _initialCapital    = State(initialValue: Config.shared.initialCapitalEnabled)
+        _trailingPeriod    = State(initialValue: Config.shared.trailingPeriodEnabled)
     }
 
     var body: some View {
@@ -86,7 +90,9 @@ struct TextSection: View {
                 Config.shared.spellFixEnabled = spellFix
             } extra: { EmptyView() }
 
-            layer(number: 5, title: "Snippets",
+            finishLayer
+
+            layer(number: 6, title: "Snippets",
                   purpose: "Inserta textos preconfigurados al pronunciar su frase. Va al final: su contenido es literal y nada debe reescribirlo.",
                   isOn: $snippetsEnabled) {
                 Config.shared.snippetsEnabled = snippetsEnabled
@@ -100,6 +106,43 @@ struct TextSection: View {
         .onAppear {
             dictionaryCount = CustomDictionary.shared.entries.count
             snippetCount = SnippetStore.shared.snippets.count
+        }
+    }
+
+    /// El acabado son dos decisiones de formato, no una, así que no cabe en
+    /// `layer`. Van juntas porque se toman juntas: quien dicta en una terminal
+    /// quiere las dos apagadas, y quien dicta un correo las dos encendidas.
+    private var finishLayer: some View {
+        let activo = !initialCapital || !trailingPeriod
+        return HStack(alignment: .top, spacing: 12) {
+            Text("5")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(activo ? Theme.onBrand : .secondary)
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(activo ? Theme.brand
+                                                 : Color.white.opacity(0.12)))
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Acabado")
+                    .font(.system(size: 13))
+                Text("Cómo empieza y cómo termina lo que se pega. Dictar un comando en la terminal no quiere ni mayúscula inicial ni punto final; un correo, las dos cosas.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Toggle("Mayúscula en la primera letra", isOn: $initialCapital)
+                    .font(.system(size: 12))
+                    .onChange(of: initialCapital) { _ in
+                        Config.shared.initialCapitalEnabled = initialCapital
+                    }
+                Toggle("Conservar el punto final", isOn: $trailingPeriod)
+                    .font(.system(size: 12))
+                    .onChange(of: trailingPeriod) { _ in
+                        Config.shared.trailingPeriodEnabled = trailingPeriod
+                    }
+                Text("Nunca añade un punto que no dijiste: conservarlo es dejarlo como venga. Y no toca tus propios términos — «iPhone» no se convierte en «IPhone».")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

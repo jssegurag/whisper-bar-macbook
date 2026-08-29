@@ -17,6 +17,13 @@ final class PillViewModel: ObservableObject {
     @Published var micLevel: CGFloat = 0
     /// Palabra en reposo. Solo cambia al volver a reposo tras un dictado.
     @Published var idleWord: String = IdleWord.word(at: Config.shared.idleWordIndex)
+    /// Perfil que se está aplicando, o `nil` con las preferencias globales.
+    ///
+    /// No es decoración. Un perfil cambia en silencio cómo sale el dictado, así
+    /// que sin verlo el usuario no puede diagnosticar por qué le salió raro:
+    /// creería que falla la app, cuando lo que pasa es que estaba en otra
+    /// aplicación. Se enseña mientras graba, que es cuando aún puede cancelar.
+    @Published var profileName: String?
 }
 
 /// Píldora flotante.
@@ -122,6 +129,13 @@ struct PillView: View {
                 .opacity(0.45 + 0.55 * pulse)
                 .scaleEffect(0.82 + 0.18 * pulse)
             VoiceWaveView(time: time, level: model.micLevel)
+            if let perfil = model.profileName {
+                Text(perfil)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Theme.brand)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
             cancelButton
         }
     }
