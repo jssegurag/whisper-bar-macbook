@@ -34,6 +34,10 @@ jobs:
       # Los tests con asserts condicionales sobre binarios detectados simplemente
       # los omiten, así que el total impreso es menor que en una máquina de
       # desarrollo. Lo que importa es el código de salida, no el conteo.
+      # Aviso de cobertura: el runner usa un SDK anterior a macOS 26, así que el
+      # código de SystemPolish queda fuera de la compilación (canImport lo da por
+      # ausente). CI no puede verificar esa ruta; se comprueba en local, en una
+      # máquina con el SDK que la incluye.
       - name: Tests
         run: bash run_tests.sh
 

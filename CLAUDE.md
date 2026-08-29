@@ -53,6 +53,11 @@ Three things worth knowing before touching it:
 - **`clean(_:original:)` rejects answers that stopped correcting and started writing**,
   by comparing length against the original. Small models add preambles and quotes.
 
+**CI cannot compile this file.** The GitHub runner uses an SDK older than macOS 26,
+so `canImport(FoundationModels)` is false there and the whole implementation is
+excluded — a syntax error inside it would pass CI. Typecheck it locally on a machine
+with the newer SDK before pushing.
+
 `FoundationModels` is **weak-linked** (`-Xlinker -weak_framework`), so the app still
 launches on macOS 13 where the framework does not exist. `availability` reports why it
 cannot be used in words the user can act on.

@@ -4,6 +4,15 @@ set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Detectar arquitectura
+# El modelo del sistema solo existe desde el SDK de macOS 26. Enlazarlo en débil
+# no basta: el enlazador exige que el framework exista al compilar, así que en un
+# SDK anterior hay que no pasarlo. Sin la bandera, canImport lo da por ausente y no
+# se referencia ningún símbolo.
+FOUNDATION_MODELS=()
+if [ -d "$(xcrun --show-sdk-path)/System/Library/Frameworks/FoundationModels.framework" ]; then
+    FOUNDATION_MODELS=(-Xlinker -weak_framework -Xlinker FoundationModels)
+fi
+
 ARCH=$(uname -m)
 if [ "$ARCH" = "arm64" ]; then
     TARGET="arm64-apple-macosx13.0"
@@ -83,7 +92,7 @@ swiftc \
     -framework UserNotifications \
     -framework CryptoKit \
     -framework LocalAuthentication \
-    -Xlinker -weak_framework -Xlinker FoundationModels \
+    "${FOUNDATION_MODELS[@]}" \
     -target "$TARGET"
 
 echo "→ Compilación exitosa"
