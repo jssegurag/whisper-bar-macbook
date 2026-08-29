@@ -2379,6 +2379,39 @@ func testDictionaryUsageCount() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MARK: - Modelo del LLM — un .bin de whisper no sirve
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testLlmModelValidation() {
+    suite("Config — El corrector solo acepta .gguf")
+
+    assert(Config.isGGUF("/x/modelo.gguf"), "un .gguf vale")
+    assert(Config.isGGUF("/x/MODELO.GGUF"), "la extensión no distingue mayúsculas")
+    assert(!Config.isGGUF("/x/ggml-large-v3.bin"),
+        "el modelo de whisper NO vale como modelo del corrector, aunque exista")
+    assert(!Config.isGGUF(""), "una ruta vacía no vale")
+    assert(!Config.isGGUF("/x/modelo.gguf.txt"), "tiene que terminar en .gguf")
+
+    let defaults = UserDefaults.standard
+    let guardado = defaults.object(forKey: "llmModelPath")
+
+    // Sanea solo: quien ya eligió el modelo equivocado no se queda con un
+    // corrector que falla en cada dictado.
+    defaults.set("/Users/quien/.whisper-realtime/ggml-large-v3.bin", forKey: "llmModelPath")
+    assert(!Config.shared.llmModelPath.hasSuffix(".bin"),
+        "una ruta .bin guardada se ignora en lugar de devolverse")
+    assert(!Config.shared.isLlmModelValid, "y no se considera configurado")
+
+    defaults.set("/ruta/que/no/existe/modelo.gguf", forKey: "llmModelPath")
+    assertEqual(Config.shared.llmModelPath, "/ruta/que/no/existe/modelo.gguf",
+        "una ruta .gguf guardada sí se respeta")
+    assert(!Config.shared.isLlmModelValid, "pero si no existe, no está configurado")
+
+    if let v = guardado { defaults.set(v, forKey: "llmModelPath") }
+    else { defaults.removeObject(forKey: "llmModelPath") }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -2447,6 +2480,7 @@ struct TestRunner {
         testSetupStatus()
         testMenuBarIcon()
         testSetupSummary()
+        testLlmModelValidation()
         testIdleWord()
         testAppNotificationContent()
         testStreamingPriority()

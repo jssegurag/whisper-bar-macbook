@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UserNotifications
+import UniformTypeIdentifiers
 
 /// Ventana de Configuración. Se hace una vez y no hace falta volver.
 ///
@@ -303,6 +304,11 @@ struct SetupView: View {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.showsHiddenFiles = true
+        // El corrector solo entiende .gguf. Sin este filtro es fácil elegir el
+        // modelo de whisper, que está en la misma carpeta y también es un modelo.
+        if kind == .llm, let gguf = UTType(filenameExtension: "gguf") {
+            panel.allowedContentTypes = [gguf]
+        }
         panel.message = {
             switch kind {
             case .engine:    return "Selecciona el binario whisper-cli"

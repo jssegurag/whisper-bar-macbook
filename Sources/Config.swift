@@ -68,7 +68,11 @@ class Config {
     /// Ruta al modelo LLM (.gguf)
     var llmModelPath: String {
         get {
-            if let saved = defaults.string(forKey: "llmModelPath"), !saved.isEmpty {
+            // Una ruta guardada que no es .gguf se ignora: sanea solo la
+            // configuración de quien ya eligió el modelo equivocado, en vez de
+            // dejarlo con un corrector que falla en cada dictado.
+            if let saved = defaults.string(forKey: "llmModelPath"),
+               Config.isGGUF(saved) {
                 return saved
             }
             return Config.detectLlmModel() ?? ""
@@ -304,8 +308,15 @@ class Config {
         FileManager.default.isExecutableFile(atPath: llmCliPath)
     }
 
+    /// Un `.bin` de whisper existe y se deja elegir, pero llama-completion no lo
+    /// puede cargar. Sin comprobar la extensión, la app se creía configurada y
+    /// fallaba en cada dictado con «se pegó el texto sin corregir».
     var isLlmModelValid: Bool {
-        !llmModelPath.isEmpty && FileManager.default.fileExists(atPath: llmModelPath)
+        Config.isGGUF(llmModelPath) && FileManager.default.fileExists(atPath: llmModelPath)
+    }
+
+    static func isGGUF(_ path: String) -> Bool {
+        !path.isEmpty && path.lowercased().hasSuffix(".gguf")
     }
 
     // MARK: - Auto-detección
