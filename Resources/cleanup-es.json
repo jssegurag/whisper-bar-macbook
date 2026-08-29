@@ -1,0 +1,104 @@
+{
+  "_comentario": [
+    "Tablas de la limpieza automática del dictado (Cleaner.swift). Editable a mano:",
+    "la app lee este archivo, no una copia incrustada en el código.",
+    "",
+    "Para cambiarlas sin recompilar, copia este archivo a",
+    "~/Library/Application Support/WhisperBar/cleanup-es.json — esa copia gana.",
+    "",
+    "muletillasDeArranque: se quitan cuando ABREN una frase o un inciso (inicio de",
+    "  oración, después de coma, o justo después de otra muletilla ya quitada).",
+    "  Solo van aquí las que casi nunca son contenido.",
+    "muletillasConPausa: se quitan solo cuando están ENTRE PAUSAS — coma antes y",
+    "  coma (o fin de oración) después. Son palabras que también son contenido:",
+    "  «este informe» no se toca, «este, necesito el informe» sí.",
+    "autocorreccionLocal: el hablante se corrige. Se borra hacia atrás solo hasta",
+    "  donde empieza la parte que repite después. Sin ese anclaje no se toca nada.",
+    "autocorreccionTotal: orden explícita de borrar lo dicho antes en la oración.",
+    "listaRechazaSiguiente: si un marcador («uno», «primero») va seguido de una de",
+    "  estas, no es una lista: «uno de los problemas» no se numera."
+  ],
+  "idioma": "es",
+  "version": 1,
+
+  "muletillasDeArranque": [
+    "o sea",
+    "osea",
+    "digamos",
+    "eh",
+    "ehh",
+    "eeh",
+    "ehm",
+    "em",
+    "mmm",
+    "hmm",
+    "ajá"
+  ],
+
+  "muletillasConPausa": [
+    "este",
+    "esto",
+    "entonces",
+    "bueno",
+    "pues",
+    "o sea",
+    "digamos",
+    "como que",
+    "en plan",
+    "a ver",
+    "mira",
+    "vale",
+    "sabes",
+    "no sé",
+    "verdad",
+    "claro",
+    "total",
+    "tipo",
+    "es decir",
+    "por así decirlo",
+    "como te digo"
+  ],
+
+  "autocorreccionLocal": [
+    "mejor dicho",
+    "perdón",
+    "perdona",
+    "perdóname",
+    "disculpa",
+    "corrijo",
+    "me corrijo",
+    "digo",
+    "quise decir",
+    "no, quise decir",
+    "quería decir",
+    "más bien",
+    "o más bien"
+  ],
+
+  "autocorreccionTotal": [
+    "olvida lo anterior",
+    "olvida todo lo anterior",
+    "borra lo anterior",
+    "borra todo lo anterior",
+    "olvídalo",
+    "olvidalo"
+  ],
+
+  "listaCardinales": [
+    "uno", "dos", "tres", "cuatro", "cinco",
+    "seis", "siete", "ocho", "nueve", "diez"
+  ],
+
+  "listaOrdinales": [
+    "primero", "segundo", "tercero", "cuarto", "quinto",
+    "sexto", "séptimo", "octavo", "noveno", "décimo"
+  ],
+
+  "listaRechazaSiguiente": [
+    "de", "del", "que", "y", "o", "u", "en", "a", "al", "con", "con la", "por",
+    "para", "es", "son", "era", "eran", "como", "más", "menos", "mil",
+    "millones", "punto", "coma", "veces", "hora", "horas", "día", "días",
+    "semana", "semanas", "mes", "meses", "año", "años", "euros", "pesos",
+    "dólares", "por ciento"
+  ]
+}

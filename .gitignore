@@ -11,3 +11,6 @@ PreviewUI
 *.xcodeproj/
 xcuserdata/
 DerivedData/
+
+# Binario de los tests (run_tests.sh lo borra al terminar; queda si el build falla)
+WhisperBar_tests

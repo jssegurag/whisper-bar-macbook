@@ -185,6 +185,25 @@ class Config {
         set { defaults.set(newValue, forKey: "dictionaryEnabled") }
     }
 
+    // MARK: - Limpieza automática del dictado
+
+    /// Cuánto se limpia lo dictado antes de tocar el diccionario.
+    /// El valor vive en `cleanupLevel` para que se pueda cambiar con
+    /// `defaults write com.user.WhisperBar cleanupLevel completo`.
+    ///
+    /// Por defecto `conservador`: quita muletillas entre pausas y repeticiones
+    /// seguidas, que es lo que el usuario borraría a mano de todos modos. Las
+    /// reglas que reescriben estructura —autocorrecciones y listas— exigen
+    /// pedirlas: se equivocan de forma más cara.
+    var cleanupLevel: CleanupLevel {
+        get {
+            guard let raw = defaults.string(forKey: "cleanupLevel"),
+                  let level = CleanupLevel(rawValue: raw) else { return .conservador }
+            return level
+        }
+        set { defaults.set(newValue.rawValue, forKey: "cleanupLevel") }
+    }
+
     // MARK: - Reconocimiento y ortografía
 
     /// Pasarle los términos del diccionario a whisper antes de transcribir, para

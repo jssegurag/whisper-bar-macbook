@@ -368,7 +368,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Reescritura del texto transcrito
 
-    /// Aplica diccionario y snippets en ese orden (ver RewritePipeline).
+    /// Aplica limpieza, diccionario, ortografía y snippets en ese orden
+    /// (ver RewritePipeline).
     /// Devuelve el texto intacto si ambos están apagados o vacíos.
     /// Términos del diccionario para sesgar el reconocimiento, o nil si está
     /// apagado o no hay ninguno.
@@ -387,7 +388,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let spellFix: ((String) -> String)? = config.spellFixEnabled
             ? { SpellFixer.fix($0, language: self.config.language, protected: protegidas) }
             : nil
-        let result = RewritePipeline.applyReporting(to: text, dictionary: entries,
+        // La limpieza se protege con el diccionario COMPLETO, no solo con el
+        // activo: una entrada desactivada sigue siendo vocabulario del usuario, y
+        // borrársela sería el falso positivo que la regla de seguridad prohíbe.
+        let nivel = config.cleanupLevel
+        let cleanup: ((String) -> String)? = nivel == .desactivado ? nil : {
+            Cleaner.clean($0, level: nivel, rules: CleanupRules.current(),
+                          protected: Cleaner.Guard.from(
+                              dictionary: CustomDictionary.shared.entries,
+                              snippetRules: SnippetStore.shared.rules()))
+        }
+        let result = RewritePipeline.applyReporting(to: text, cleanup: cleanup,
+                                                  dictionary: entries,
                                                   snippetRules: rules,
                                                   spellFix: spellFix)
         // Solo cuenta lo que corrigió un dictado real: el campo de prueba de la
