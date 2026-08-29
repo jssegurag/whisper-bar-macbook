@@ -8,19 +8,14 @@ import SwiftUI
 /// puede deshacer lo que hizo el LLM y no al revés.
 struct TextSection: View {
 
-    @State private var llmEnabled: Bool
-    @State private var llmPrompt: String
     @State private var dictionaryEnabled: Bool
     @State private var snippetsEnabled: Bool
     @State private var dictionaryCount: Int
     @State private var snippetCount: Int
-    @State private var showPrompt = false
     @State private var recognitionBias: Bool
     @State private var spellFix: Bool
 
     init() {
-        _llmEnabled        = State(initialValue: Config.shared.llmEnabled)
-        _llmPrompt         = State(initialValue: Config.shared.llmPrompt)
         _dictionaryEnabled = State(initialValue: Config.shared.dictionaryEnabled)
         _snippetsEnabled   = State(initialValue: Config.shared.snippetsEnabled)
         _dictionaryCount   = State(initialValue: CustomDictionary.shared.entries.count)
@@ -41,46 +36,8 @@ struct TextSection: View {
                 Config.shared.recognitionBiasEnabled = recognitionBias
             } extra: { EmptyView() }
 
-            layer(number: 1, title: "Corregir con IA",
-                  purpose: "Arregla ortografía y puntuación. Si no está configurada, el texto se pega tal como lo oyó Gluffi.",
-                  isOn: $llmEnabled) {
-                Config.shared.llmEnabled = llmEnabled
-            } extra: {
-                if llmEnabled && !Config.shared.isLlmModelValid {
-                    // El interruptor encendido sin modelo miente: dice que corrige
-                    // y no corrige. El aviso va aquí, junto al interruptor que lo
-                    // causó, no escondido en otra ventana.
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(Theme.warn)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Falta el modelo: no está corrigiendo nada")
-                                .font(.system(size: 12, weight: .semibold))
-                            Text("Necesita un archivo .gguf. El de whisper no sirve: es el modelo de voz.")
-                                .font(.system(size: 11.5))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Button("Configurar…") { SetupWindowController.shared.showWindow() }
-                                .controlSize(.small)
-                        }
-                    }
-                    .padding(10)
-                    .background(Theme.warn.opacity(0.10))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                if llmEnabled {
-                    DisclosureGroup("Instrucción al modelo", isExpanded: $showPrompt) {
-                        TextEditor(text: $llmPrompt)
-                            .font(.system(size: 11.5, design: .monospaced))
-                            .frame(height: 90)
-                            .onChange(of: llmPrompt) { Config.shared.llmPrompt = $0 }
-                    }
-                    .font(.system(size: 12))
-                }
-            }
-
-            layer(number: 2, title: "Diccionario",
-                  purpose: "Reescribe tus términos propios a la forma correcta. Va después de la IA porque la IA los «corregiría» al español estándar.",
+            layer(number: 1, title: "Diccionario",
+                  purpose: "Reescribe tus términos propios a la forma correcta, aunque whisper los haya oído mal.",
                   isOn: $dictionaryEnabled) {
                 Config.shared.dictionaryEnabled = dictionaryEnabled
             } extra: {
@@ -89,13 +46,13 @@ struct TextSection: View {
                 }
             }
 
-            layer(number: 3, title: "Ortografía",
+            layer(number: 2, title: "Ortografía",
                   purpose: "Arregla tildes y erratas con el corrector del sistema, sin instalar nada. Deja en paz tus términos y las frases de tus snippets. Va después del diccionario para no tocar lo que ya quedó en su forma correcta.",
                   isOn: $spellFix) {
                 Config.shared.spellFixEnabled = spellFix
             } extra: { EmptyView() }
 
-            layer(number: 4, title: "Snippets",
+            layer(number: 3, title: "Snippets",
                   purpose: "Inserta textos preconfigurados al pronunciar su frase. Va al final: su contenido es literal y nada debe reescribirlo.",
                   isOn: $snippetsEnabled) {
                 Config.shared.snippetsEnabled = snippetsEnabled

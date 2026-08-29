@@ -21,7 +21,8 @@ Suelta     →  ⏳ transcribe  →  📋 pega donde está el cursor
 ## Características
 
 - **Completamente offline** — usa whisper.cpp, sin APIs externas
-- **Corrección con LLM local** — post-procesamiento opcional con llama.cpp para corregir ortografía y puntuación
+- **Ortografía automática** — con el corrector del sistema, sin instalar ningún modelo extra
+- **Reconoce tus términos** — le pasa tu diccionario a whisper antes de transcribir, para que los oiga bien desde el principio
 - **Panel de preferencias nativo** — configura todo desde una ventana SwiftUI (sin tocar terminal)
 - **Diccionario personalizado** — registra tus términos propios (marcas, clientes, siglas) y se escriben siempre con la forma correcta, aunque whisper los oiga mal
 - **Snippets por voz** — di «agrega mi correo» y se inserta el texto que definiste; los datos sensibles se guardan cifrados y piden Touch ID para verse
@@ -129,6 +130,11 @@ mkdir -p ~/.whisper-realtime
 ```
 
 y elige según tu necesidad:
+
+> **¿Poco espacio en disco?** El modelo de voz es lo que ocupa, no la app.
+> `large-v3` son 2.9 GB; `small` son 500 MB y `base` 150 MB. En un MacBook Air con
+> el disco justo, `small` transcribe español muy dignamente y la app va igual de
+> rápida. El diccionario y la ortografía automática funcionan con cualquiera.
 
 | Modelo   | Tamaño | Velocidad | Precisión | Descarga |
 |----------|--------|-----------|-----------|----------|

@@ -27,14 +27,14 @@ struct VoiceActionsTab: View {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(Theme.warn)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Los comandos necesitan la corrección con IA")
+                                Text("Los comandos necesitan el modelo de lenguaje")
                                     .font(.system(size: 12.5, weight: .semibold))
-                                Text("Es la que interpreta lo que pides. Sin ella, lo que dictes se pega tal cual.")
+                                Text("Es lo que interpreta lo que pides. Sin él, lo que dictes se pega tal cual.")
                                     .font(.system(size: 11.5))
                                     .foregroundStyle(.secondary)
                                 // Un aviso sin acción obliga a ir a buscar el
                                 // interruptor a otra sección.
-                                Button("Activarla") {
+                                Button("Activarlo") {
                                     Config.shared.llmEnabled = true
                                 }
                                 .controlSize(.small)
