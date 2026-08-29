@@ -2945,6 +2945,222 @@ func testCleanerPerformance() {
         "300 palabras se limpian en \(String(format: "%.2f", mejor)) ms (límite: 15 ms)")
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - TextFinish — Mayúscula inicial y punto final
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testTextFinishDefaultsAreInert() {
+    suite("TextFinish — Los valores por defecto no tocan nada")
+
+    // El criterio de aceptación más importante de esta etapa: quien actualiza y
+    // no configura nada tiene que recibir exactamente el texto de siempre.
+    // Salida realista de whisper: ya viene con la inicial en mayúscula y su
+    // punto. Sobre eso, los valores por defecto no tienen nada que hacer.
+    let textos = [
+        "Hola mundo.",
+        "Hola mundo",
+        "¿Qué tal?",
+        "Primera línea\nsegunda línea",
+        "  Espacios raros \t y tabuladores  ",
+        "Espera...",
+        "",
+        "   ",
+    ]
+    for texto in textos {
+        assertEqual(TextFinish.apply(texto, initialCapital: true, trailingPeriod: true),
+                    texto, "por defecto «\(texto.prefix(20))» sale byte a byte igual")
+    }
+}
+
+func testTextFinishTrailingPeriod() {
+    suite("TextFinish — Punto final")
+
+    func quita(_ t: String) -> String {
+        TextFinish.apply(t, initialCapital: true, trailingPeriod: false)
+    }
+
+    assertEqual(quita("Hola mundo."), "Hola mundo",
+        "quita el punto final")
+    assertEqual(quita("Uno. Dos."), "Uno. Dos",
+        "solo el último punto, no los internos")
+    assertEqual(quita("Hola mundo"), "Hola mundo",
+        "sin punto final no cambia nada")
+
+    // Los puntos suspensivos son un signo, no un punto final. Quitarles uno los
+    // convierte en otra cosa: es el falso positivo que la regla de seguridad
+    // del proyecto prohíbe.
+    assertEqual(quita("Espera..."), "Espera...",
+        "los puntos suspensivos se respetan")
+    assertEqual(quita("Espera…"), "Espera…",
+        "y el carácter de elipsis también")
+
+    // «Punto final» es el punto. La exclamación y la interrogación son otra cosa
+    // y el usuario no pidió quitarlas.
+    assertEqual(quita("¿Qué tal?"), "¿Qué tal?",
+        "la interrogación no es un punto final")
+    assertEqual(quita("¡Vamos!"), "¡Vamos!",
+        "la exclamación tampoco")
+
+    // El espacio final es formato del usuario, no del punto.
+    assertEqual(quita("Hola.\n"), "Hola\n",
+        "el salto de línea final sobrevive")
+    assertEqual(quita("Hola.  "), "Hola  ",
+        "los espacios finales sobreviven")
+
+    assertEqual(quita("."), "",
+        "un texto que es solo un punto se queda vacío")
+    assertEqual(quita(""), "",
+        "texto vacío no rompe nada")
+}
+
+func testTextFinishInitialCapital() {
+    suite("TextFinish — Mayúscula inicial")
+
+    func baja(_ t: String) -> String {
+        TextFinish.apply(t, initialCapital: false, trailingPeriod: true)
+    }
+    func sube(_ t: String) -> String {
+        TextFinish.apply(t, initialCapital: true, trailingPeriod: true)
+    }
+
+    assertEqual(baja("Git status"), "git status",
+        "fuerza minúscula inicial")
+    assertEqual(baja("git status"), "git status",
+        "y no toca lo que ya está en minúscula")
+    assertEqual(sube("hola mundo"), "Hola mundo",
+        "capitaliza cuando se pide")
+    // La semántica es simétrica a propósito: «sí» garantiza mayúscula y «no»
+    // garantiza minúscula. Si «sí» solo significara «no tocar», el campo del
+    // perfil «Correo y documentos» sería decorativo.
+    assertEqual(sube("Hola mundo"), "Hola mundo",
+        "y no toca lo que ya está capitalizado")
+
+    // La primera letra, no el primer carácter: el español abre con signos.
+    assertEqual(baja("¿Qué tal?"), "¿qué tal?",
+        "encuentra la primera letra tras el signo de apertura")
+    assertEqual(sube("«hola»"), "«Hola»",
+        "y tras las comillas")
+
+    assertEqual(baja("123 archivos"), "123 archivos",
+        "sin letras al principio no cambia nada")
+    assertEqual(baja(""), "",
+        "texto vacío no rompe nada")
+    assertEqual(baja("   "), "   ",
+        "solo espacios no rompe nada")
+}
+
+func testTextFinishNeverTouchesProtectedTerms() {
+    suite("TextFinish — Regla de seguridad: lo del usuario no se toca")
+
+    // Misma protección que Cleaner, y por la misma razón: «iPhone» no puede
+    // convertirse en «IPhone», y «DocFly» no puede bajar a «docFly».
+    let protegidas = Cleaner.Guard.from(
+        dictionary: [
+            DictionaryEntry(canonical: "iPhone", variants: []),
+            DictionaryEntry(canonical: "DocFly", variants: ["doc fly"]),
+        ],
+        snippetRules: [])
+
+    assertEqual(TextFinish.apply("iPhone nuevo", initialCapital: true,
+                                 trailingPeriod: true, protected: protegidas),
+                "iPhone nuevo",
+        "capitalizar no estropea un término que empieza en minúscula")
+    assertEqual(TextFinish.apply("DocFly está caído", initialCapital: false,
+                                 trailingPeriod: true, protected: protegidas),
+                "DocFly está caído",
+        "bajar a minúscula no estropea un término propio")
+
+    // Sin protección sí actúa: la salvaguarda es la lista, no un caso especial.
+    assertEqual(TextFinish.apply("iPhone nuevo", initialCapital: true,
+                                 trailingPeriod: true),
+                "IPhone nuevo",
+        "sin lista de protegidos la regla se aplica igual")
+}
+
+func testTextFinishIdempotence() {
+    suite("TextFinish — Idempotencia")
+
+    let casos = [
+        ("Git status.", false, false),
+        ("hola mundo", true, true),
+        ("Uno. Dos.", true, false),
+        ("¿Qué tal?", false, true),
+    ]
+    for (texto, capital, punto) in casos {
+        let una = TextFinish.apply(texto, initialCapital: capital, trailingPeriod: punto)
+        let dos = TextFinish.apply(una, initialCapital: capital, trailingPeriod: punto)
+        assertEqual(dos, una, "aplicar dos veces a «\(texto)» da lo mismo")
+    }
+}
+
+func testTextFinishTerminalCase() {
+    suite("TextFinish — El caso que motiva la etapa")
+
+    // Lo que el perfil «Terminal e IDE» necesita: ni mayúscula que rompa el
+    // comando ni punto final que se cuele en la línea.
+    assertEqual(TextFinish.apply("Git status.", initialCapital: false, trailingPeriod: false),
+                "git status",
+        "un comando dictado sale listo para pegar en la terminal")
+    assertEqual(TextFinish.apply("Npm run build.", initialCapital: false, trailingPeriod: false),
+                "npm run build",
+        "y otro igual")
+}
+
+func testTextFinishInPipeline() {
+    suite("TextFinish — La etapa va tras la ortografía y antes de los snippets")
+
+    var vistoPorLosSnippets: String?
+    let reglas = [PhraseRewriter.Rule(phrases: ["mi correo"], replacement: "jesus@ejemplo.com")]
+
+    // El acabado tiene que correr antes de los snippets: su cuerpo es texto
+    // literal y bajarle la inicial reescribiría lo que el usuario escribió.
+    let resultado = RewritePipeline.applyReporting(
+        to: "Escribe a mi correo.",
+        dictionary: [],
+        snippetRules: reglas,
+        finish: { texto in
+            vistoPorLosSnippets = texto
+            return TextFinish.apply(texto, initialCapital: false, trailingPeriod: false)
+        })
+
+    assertEqual(vistoPorLosSnippets, "Escribe a mi correo.",
+        "el acabado recibe el texto con el disparador todavía sin expandir")
+    assertEqual(resultado.text, "escribe a jesus@ejemplo.com",
+        "y el snippet se inserta después, literal")
+
+    // Sin etapa de acabado el pipeline se comporta exactamente como antes.
+    let sinAcabado = RewritePipeline.applyReporting(
+        to: "Escribe a mi correo.", dictionary: [], snippetRules: reglas)
+    assertEqual(sinAcabado.text, "Escribe a jesus@ejemplo.com.",
+        "el acabado es opcional: sin él, la inicial y el punto quedan como venían")
+}
+
+func testTextFinishConfigDefaults() {
+    suite("TextFinish — Ajustes globales")
+
+    let defaults = UserDefaults.standard
+    let capitalPrevio = defaults.object(forKey: "initialCapitalEnabled")
+    let puntoPrevio = defaults.object(forKey: "trailingPeriodEnabled")
+    defaults.removeObject(forKey: "initialCapitalEnabled")
+    defaults.removeObject(forKey: "trailingPeriodEnabled")
+
+    assert(Config.shared.initialCapitalEnabled,
+        "la mayúscula inicial viene activada: es lo que la app hace hoy")
+    assert(Config.shared.trailingPeriodEnabled,
+        "el punto final viene conservado: es lo que la app hace hoy")
+
+    Config.shared.initialCapitalEnabled = false
+    Config.shared.trailingPeriodEnabled = false
+    assert(!Config.shared.initialCapitalEnabled, "la mayúscula inicial se persiste")
+    assert(!Config.shared.trailingPeriodEnabled, "el punto final se persiste")
+
+    if let capitalPrevio { defaults.set(capitalPrevio, forKey: "initialCapitalEnabled") }
+    else { defaults.removeObject(forKey: "initialCapitalEnabled") }
+    if let puntoPrevio { defaults.set(puntoPrevio, forKey: "trailingPeriodEnabled") }
+    else { defaults.removeObject(forKey: "trailingPeriodEnabled") }
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -3028,6 +3244,14 @@ struct TestRunner {
         testCleanerNeverTouchesDictionary()
         testCleanerInPipeline()
         testCleanerPerformance()
+        testTextFinishDefaultsAreInert()
+        testTextFinishTrailingPeriod()
+        testTextFinishInitialCapital()
+        testTextFinishNeverTouchesProtectedTerms()
+        testTextFinishIdempotence()
+        testTextFinishTerminalCase()
+        testTextFinishInPipeline()
+        testTextFinishConfigDefaults()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")

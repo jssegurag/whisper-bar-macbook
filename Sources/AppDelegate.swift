@@ -392,16 +392,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // activo: una entrada desactivada sigue siendo vocabulario del usuario, y
         // borrársela sería el falso positivo que la regla de seguridad prohíbe.
         let nivel = config.cleanupLevel
+        let guardas = Cleaner.Guard.from(
+            dictionary: CustomDictionary.shared.entries,
+            snippetRules: SnippetStore.shared.rules())
         let cleanup: ((String) -> String)? = nivel == .desactivado ? nil : {
             Cleaner.clean($0, level: nivel, rules: CleanupRules.current(),
-                          protected: Cleaner.Guard.from(
-                              dictionary: CustomDictionary.shared.entries,
-                              snippetRules: SnippetStore.shared.rules()))
+                          protected: guardas)
+        }
+        // El acabado solo se monta si hay algo que hacer: con los dos ajustes en
+        // su valor por defecto la etapa es inerte y sale del pipeline entera.
+        let mayuscula = config.initialCapitalEnabled
+        let punto = config.trailingPeriodEnabled
+        let finish: ((String) -> String)? = (mayuscula && punto) ? nil : {
+            TextFinish.apply($0, initialCapital: mayuscula,
+                             trailingPeriod: punto, protected: guardas)
         }
         let result = RewritePipeline.applyReporting(to: text, cleanup: cleanup,
                                                   dictionary: entries,
                                                   snippetRules: rules,
-                                                  spellFix: spellFix)
+                                                  spellFix: spellFix,
+                                                  finish: finish)
         // Solo cuenta lo que corrigió un dictado real: el campo de prueba de la
         // ventana del diccionario no debe inflar el contador.
         CustomDictionary.shared.recordUsage(of: result.dictionaryUsed)

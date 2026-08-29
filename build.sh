@@ -57,6 +57,7 @@ swiftc \
     "$DIR/Sources/Cleaner.swift" \
     "$DIR/Sources/WhisperPrompt.swift" \
     "$DIR/Sources/SpellFixer.swift" \
+    "$DIR/Sources/TextFinish.swift" \
     "$DIR/Sources/SystemPolish.swift" \
     "$DIR/Sources/LocalLLM.swift" \
     "$DIR/Sources/PreferencesIntelligenceTab.swift" \
