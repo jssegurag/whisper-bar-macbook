@@ -56,7 +56,7 @@ comandos y un clic:
 ```bash
 brew install whisper-cpp
 git clone git@github.com:jssegurag/whisper-bar-macbook.git && cd whisper-bar-macbook
-bash signing.sh    # una vez por máquina, ver paso 7
+bash signing.sh    # una vez por máquina, ver paso 6
 bash build.sh
 ```
 
@@ -153,45 +153,8 @@ curl -L "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3
 
 > Gluffi detecta automáticamente el modelo disponible en `~/.whisper-realtime/`, priorizando los más precisos.
 
-### 6. Corrección con IA y transcripción en vivo (opcional)
 
-Las dos se instalan desde **Configuración**, con un botón, sin tocar la terminal. Lo
-que sigue es el detalle por si prefieres hacerlo a mano.
-
-Gluffi puede pasar la transcripción por un modelo de lenguaje local para corregir
-ortografía y puntuación.
-
-> **Son dos modelos distintos, y es el error más fácil de cometer.** El de voz
-> (`ggml-*.bin`) convierte audio en texto y lo ejecuta `whisper-cli`. El del corrector
-> (`*.gguf`) recibe texto y devuelve texto, y lo ejecuta `llama-completion`. Ninguno de
-> los dos programas puede cargar el modelo del otro, aunque los archivos vivan en la
-> misma carpeta y los dos se llamen «modelo».
-
-**¿Lo necesitas?** Con `large-v3`, whisper ya puntúa bastante bien. La corrección añade
-unos segundos a cada dictado y puede reescribir tus términos propios —por eso el
-diccionario se aplica **después**—. Si tus transcripciones ya salen bien, apagarla es
-una decisión válida, no una funcionalidad a medias.
-
-```bash
-brew install llama.cpp
-```
-
-Descarga un modelo ligero (recomendado: Qwen2.5-1.5B-Instruct, ~1GB, <2s en Apple Silicon):
-
-```bash
-curl -L "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf" \
-     -o ~/.whisper-realtime/qwen2.5-1.5b-instruct-q4_k_m.gguf
-```
-
-Actívalo desde Preferencias → **Texto** → «Corregir con IA», o por terminal:
-
-```bash
-defaults write com.user.WhisperBar llmEnabled -bool true
-```
-
-> Gluffi auto-detecta `llama-cli` y modelos `.gguf` en `~/.whisper-realtime/`.
-
-### 7. Firma de código (una vez por máquina)
+### 6. Firma de código (una vez por máquina)
 
 ```bash
 bash signing.sh
@@ -208,7 +171,7 @@ a Llaveros. Es gratis y se hace una sola vez.
 Si prefieres saltártelo, la app funciona igual — solo pagarás ese peaje cada vez que
 compiles.
 
-### 8. Clonar y compilar
+### 7. Clonar y compilar
 
 ```bash
 git clone git@github.com:jssegurag/whisper-bar-macbook.git
@@ -218,7 +181,7 @@ bash build.sh
 
 El script detecta la arquitectura (Apple Silicon / Intel) y crea la app en `~/Applications/Gluffi.app`.
 
-### 9. Permisos (primera vez)
+### 8. Permisos (primera vez)
 
 Gluffi usa cuatro permisos del sistema. **Configuración → Permisos del sistema**
 explica para qué sirve cada uno y deja probarlos:
@@ -233,7 +196,7 @@ explica para qué sirve cada uno y deja probarlos:
 Si Accesibilidad no aparece o quedó desactivada:
 > Configuración del Sistema → Privacidad y Seguridad → Accesibilidad → activar Gluffi
 
-### 10. Gatekeeper
+### 9. Gatekeeper
 
 Si aparece "la app no puede abrirse porque es de un desarrollador no identificado":
 
@@ -372,11 +335,7 @@ defaults read com.user.WhisperBar
 # Idioma (es, en, fr, pt, de, it, auto…)
 defaults write com.user.WhisperBar language "es"
 
-# Activar corrección con LLM
-defaults write com.user.WhisperBar llmEnabled -bool true
 
-# Prompt personalizado para el LLM
-defaults write com.user.WhisperBar llmPrompt "Tu prompt aquí"
 
 # Duración mínima de grabación en segundos
 defaults write com.user.WhisperBar minRecordingDuration 0.5
@@ -510,3 +469,21 @@ bash build.sh
 ## Licencia
 
 MIT © [jssegurag](https://github.com/jssegurag) — ver [LICENSE](LICENSE)
+
+---
+
+## Qué NO hace, y por qué
+
+**No corrige con un modelo de lenguaje.** La ortografía la arregla el corrector de
+macOS, gratis y sin descargar nada. Un modelo de lenguaje hacía el mismo trabajo,
+tardaba segundos por dictado y reescribía tus propios términos.
+
+**No obedece comandos por voz.** Para abrir apps y crear recordatorios hablando ya
+está Siri. Además exigía que un modelo decidiera si «abre Safari» era una orden o
+parte de lo que estabas dictando, y equivocarse ahí se come tu dictado.
+
+**No traduce a otros idiomas que no sean inglés.** El motor de voz traduce hacia el
+inglés y no admite la dirección contraria; llegar a otros idiomas exigía, otra vez, un
+modelo de lenguaje.
+
+El resultado: Gluffi solo necesita el modelo de voz. Con `small` son 500 MB en total.

@@ -264,112 +264,7 @@ func testStreamingTranscriberProcessChunk() {
         "Two finalized lines from one chunk with two \\n")
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// MARK: - 5. VoiceActionDetector — parseResponse
-// ══════════════════════════════════════════════════════════════════════════════
 
-func testVoiceActionDetectorParsing() {
-    suite("VoiceActionDetector — parseResponse (LLM output parsing)")
-
-    let detector = VoiceActionDetector()
-
-    // ACTION:none → returns original text
-    let none = detector.parseResponse("ACTION:none|TEXT:Hola mundo", originalText: "Hola mundo")
-    if case .none(let text) = none {
-        assertEqual(text, "Hola mundo", "ACTION:none returns original text")
-    } else {
-        assert(false, "ACTION:none should return .none intent")
-    }
-
-    // ACTION:web_search → extracts query
-    let search = detector.parseResponse("ACTION:web_search|QUERY:clima en madrid", originalText: "busca clima en madrid")
-    if case .webSearch(let query) = search {
-        assertEqual(query, "clima en madrid", "web_search extracts query correctly")
-    } else {
-        assert(false, "Should parse as .webSearch")
-    }
-
-    // ACTION:create_reminder → extracts title
-    let reminder = detector.parseResponse("ACTION:create_reminder|TITLE:comprar leche", originalText: "crea recordatorio comprar leche")
-    if case .createReminder(let title) = reminder {
-        assertEqual(title, "comprar leche", "create_reminder extracts title correctly")
-    } else {
-        assert(false, "Should parse as .createReminder")
-    }
-
-    // ACTION:open_app → extracts app name
-    let app = detector.parseResponse("ACTION:open_app|APP:Safari", originalText: "abre safari")
-    if case .openApp(let name) = app {
-        assertEqual(name, "Safari", "open_app extracts app name correctly")
-    } else {
-        assert(false, "Should parse as .openApp")
-    }
-
-    // ACTION:translate_last → extracts language
-    let translate = detector.parseResponse("ACTION:translate_last|LANG:en", originalText: "traduce al inglés lo último")
-    if case .translateLast(let lang) = translate {
-        assertEqual(lang, "en", "translate_last extracts language correctly")
-    } else {
-        assert(false, "Should parse as .translateLast")
-    }
-
-    // Garbage response → returns .none
-    let garbage = detector.parseResponse("I don't understand the input", originalText: "hola")
-    if case .none(let text) = garbage {
-        assertEqual(text, "hola", "Garbage response falls back to .none with original text")
-    } else {
-        assert(false, "Garbage should return .none")
-    }
-
-    // ACTION: embedded in longer response (LLM verbosity protection)
-    let verbose = detector.parseResponse("Based on the input, I classify this as ACTION:web_search|QUERY:receta paella", originalText: "busca receta paella")
-    if case .webSearch(let query) = verbose {
-        assertEqual(query, "receta paella", "ACTION: found even when embedded in verbose LLM response")
-    } else {
-        assert(false, "Should find ACTION: in verbose response")
-    }
-
-    // Multiline response with ACTION on non-first line (join protection)
-    let multiline = detector.parseResponse("Analyzing the text... ACTION:none|TEXT:hola mundo\nExtra line", originalText: "hola mundo")
-    if case .none(let text) = multiline {
-        assertEqual(text, "hola mundo", "ACTION: found in multiline response with join")
-    } else {
-        assert(false, "Should parse ACTION:none from multiline")
-    }
-
-    // Empty query → falls back to .none
-    let emptyQuery = detector.parseResponse("ACTION:web_search|QUERY:", originalText: "busca")
-    if case .none = emptyQuery {
-        assert(true, "Empty query parameter falls back to .none")
-    } else {
-        assert(false, "Empty query should fall back to .none")
-    }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// MARK: - 6. VoiceActionDetector — extractParam
-// ══════════════════════════════════════════════════════════════════════════════
-
-func testVoiceActionDetectorExtractParam() {
-    suite("VoiceActionDetector — extractParam")
-
-    let detector = VoiceActionDetector()
-
-    assertEqual(
-        detector.extractParam(from: "ACTION:web_search|QUERY:hello world", prefix: "ACTION:web_search|QUERY:"),
-        "hello world",
-        "Extracts parameter after prefix")
-
-    assertEqual(
-        detector.extractParam(from: "ACTION:open_app|APP:  Safari  ", prefix: "ACTION:open_app|APP:"),
-        "Safari",
-        "Trims whitespace from extracted parameter")
-
-    assertEqual(
-        detector.extractParam(from: "ACTION:web_search|QUERY:", prefix: "ACTION:web_search|QUERY:"),
-        "",
-        "Empty parameter returns empty string")
-}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MARK: - 7. FloatingTranscriptionViewModel — appendFinalizedText
@@ -572,26 +467,6 @@ func testConfigValidation() {
         "minRecordingDuration has positive default (\(config.minRecordingDuration)s)")
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// MARK: - 14. VoiceActionIntent — Enum cases
-// ══════════════════════════════════════════════════════════════════════════════
-
-func testVoiceActionIntentEnum() {
-    suite("VoiceActionIntent — Enum coverage")
-
-    // Verify all cases can be constructed
-    let search = VoiceActionIntent.webSearch(query: "test")
-    let reminder = VoiceActionIntent.createReminder(title: "test")
-    let app = VoiceActionIntent.openApp(appName: "Safari")
-    let translate = VoiceActionIntent.translateLast(targetLanguage: "en")
-    let none = VoiceActionIntent.none(originalText: "hello")
-
-    if case .webSearch(let q) = search { assertEqual(q, "test", "webSearch stores query") }
-    if case .createReminder(let t) = reminder { assertEqual(t, "test", "createReminder stores title") }
-    if case .openApp(let a) = app { assertEqual(a, "Safari", "openApp stores appName") }
-    if case .translateLast(let l) = translate { assertEqual(l, "en", "translateLast stores language") }
-    if case .none(let t) = none { assertEqual(t, "hello", "none stores originalText") }
-}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MARK: - 15. End-to-end streaming simulation
@@ -752,12 +627,6 @@ func testConfigAutoDetection() {
     }
 
     // Test LLM detection
-    if let detected = Config.detectLlmCli() {
-        assert(FileManager.default.isExecutableFile(atPath: detected),
-            "Detected LLM CLI exists and is executable: \(detected)")
-    } else {
-        print("  \u{001B}[33m⚠ llama-completion not found (optional)\u{001B}[0m")
-    }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1985,7 +1854,7 @@ func testMenuBarIcon() {
 
     assertEqual(MenuBarIcon.treatment(for: .idle), .idle, "reposo → logo")
     assertEqual(MenuBarIcon.treatment(for: .recording), .recording, "grabando → onda")
-    for state in [MenuBarIcon.AppState.transcribing, .correcting, .translating, .runningAction] {
+    for state in [MenuBarIcon.AppState.transcribing, .translating] {
         assertEqual(MenuBarIcon.treatment(for: state), .working,
             "\(state) → anillo girando (los cuatro comparten tratamiento)")
     }
@@ -2018,28 +1887,28 @@ func testMenuBarIcon() {
 func testSetupSummary() {
     suite("SetupSummary — Encabezado de la ventana de Configuración")
 
-    let todo = SetupSummary.evaluate(engine: true, model: true, llmEnabled: true, llm: true, streaming: true)
+    let todo = SetupSummary.evaluate(engine: true, model: true, streaming: true)
     assertEqual(todo.headline, "Gluffi está listo", "con todo puesto")
-    assertEqual(todo.subhead, "Los 4 componentes están en su sitio.", "resumen de todo listo")
+    assertEqual(todo.subhead, "Los 3 componentes están en su sitio.", "resumen de todo listo")
     assert(todo.canTranscribe, "puede transcribir")
 
     // El caso del handoff: falta el modelo y los otros tres están.
-    let faltaModelo = SetupSummary.evaluate(engine: true, model: false, llmEnabled: true, llm: true, streaming: true)
+    let faltaModelo = SetupSummary.evaluate(engine: true, model: false, streaming: true)
     assertEqual(faltaModelo.headline, "Gluffi está casi listo", "casi listo si falta algo obligatorio")
-    assertEqual(faltaModelo.subhead, "Falta 1 de 4. Los otros 3 ya están listos.",
+    assertEqual(faltaModelo.subhead, "Falta 1 de 3. Los otros 2 ya están listos.",
         "cuenta cuánto falta y cuánto hay, en vez de decir «configuración incompleta»")
     assert(!faltaModelo.canTranscribe, "sin modelo no puede transcribir")
     assertEqual(faltaModelo.missingRequired, 1, "un obligatorio ausente")
 
     // Solo faltan opcionales: la app funciona, y el texto no debe alarmar.
-    let soloOpcionales = SetupSummary.evaluate(engine: true, model: true, llmEnabled: false, llm: false, streaming: false)
+    let soloOpcionales = SetupSummary.evaluate(engine: true, model: true, streaming: false)
     assertEqual(soloOpcionales.headline, "Gluffi está listo", "los opcionales no impiden transcribir")
-    assertContains(soloOpcionales.subhead, "2 mejoras opcionales", "los nombra como mejoras, no como fallos")
+    assertContains(soloOpcionales.subhead, "1 mejora opcional", "lo nombra como mejora, no como fallo")
     assert(soloOpcionales.canTranscribe, "puede transcribir igual")
 
     // Etiquetas por fila
     let componentes = faltaModelo.components
-    assertEqual(componentes.count, 4, "siempre cuatro componentes")
+    assertEqual(componentes.count, 3, "siempre tres componentes")
     assertEqual(componentes.first { $0.kind == .model }?.label, "falta esto",
         "el que falta se etiqueta «falta esto»")
     assertEqual(componentes.first { $0.kind == .engine }?.label, "obligatorio",
@@ -2390,38 +2259,6 @@ func testDictionaryUsageCount() {
     try? FileManager.default.removeItem(at: url)
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// MARK: - Modelo del LLM — un .bin de whisper no sirve
-// ══════════════════════════════════════════════════════════════════════════════
-
-func testLlmModelValidation() {
-    suite("Config — El corrector solo acepta .gguf")
-
-    assert(Config.isGGUF("/x/modelo.gguf"), "un .gguf vale")
-    assert(Config.isGGUF("/x/MODELO.GGUF"), "la extensión no distingue mayúsculas")
-    assert(!Config.isGGUF("/x/ggml-large-v3.bin"),
-        "el modelo de whisper NO vale como modelo del corrector, aunque exista")
-    assert(!Config.isGGUF(""), "una ruta vacía no vale")
-    assert(!Config.isGGUF("/x/modelo.gguf.txt"), "tiene que terminar en .gguf")
-
-    let defaults = UserDefaults.standard
-    let guardado = defaults.object(forKey: "llmModelPath")
-
-    // Sanea solo: quien ya eligió el modelo equivocado no se queda con un
-    // corrector que falla en cada dictado.
-    defaults.set("/Users/quien/.whisper-realtime/ggml-large-v3.bin", forKey: "llmModelPath")
-    assert(!Config.shared.llmModelPath.hasSuffix(".bin"),
-        "una ruta .bin guardada se ignora en lugar de devolverse")
-    assert(!Config.shared.isLlmModelValid, "y no se considera configurado")
-
-    defaults.set("/ruta/que/no/existe/modelo.gguf", forKey: "llmModelPath")
-    assertEqual(Config.shared.llmModelPath, "/ruta/que/no/existe/modelo.gguf",
-        "una ruta .gguf guardada sí se respeta")
-    assert(!Config.shared.isLlmModelValid, "pero si no existe, no está configurado")
-
-    if let v = guardado { defaults.set(v, forKey: "llmModelPath") }
-    else { defaults.removeObject(forKey: "llmModelPath") }
-}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MARK: - Sesgo de reconocimiento y ortografía
@@ -2545,8 +2382,6 @@ struct TestRunner {
         testStreamingTranscriberCleanLine()
         testStreamingTranscriberExtractFinal()
         testStreamingTranscriberProcessChunk()
-        testVoiceActionDetectorParsing()
-        testVoiceActionDetectorExtractParam()
         testViewModelAppendFinalized()
         testViewModelDeduplication()
         testViewModelRollingBuffer()
@@ -2554,7 +2389,6 @@ struct TestRunner {
         testViewModelClear()
         testConfigLanguageName()
         testConfigValidation()
-        testVoiceActionIntentEnum()
         testEndToEndStreamingSimulation()
         testEndToEndHallucinationFiltering()
         testWindowControllerState()
@@ -2596,7 +2430,6 @@ struct TestRunner {
         testSetupStatus()
         testMenuBarIcon()
         testSetupSummary()
-        testLlmModelValidation()
         testIdleWord()
         testAppNotificationContent()
         testStreamingPriority()

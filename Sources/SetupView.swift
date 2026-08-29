@@ -1,7 +1,6 @@
 import SwiftUI
 import AppKit
 import UserNotifications
-import UniformTypeIdentifiers
 import ApplicationServices
 
 /// Ventana de Configuración. Se hace una vez y no hace falta volver.
@@ -128,20 +127,6 @@ struct SetupView: View {
                           onUpdate: { UpdateChecker.shared.upgradeWhisper() },
                           onCheck: { UpdateChecker.shared.checkForUpdates(force: true) })
                 engineButtons(component)
-            }
-        case .llm:
-            VStack(alignment: .leading, spacing: 6) {
-                UpdateRow(packageName: "llama.cpp",
-                          state: UpdateChecker.shared.llamaState,
-                          onUpdate: { UpdateChecker.shared.upgradeLlama() },
-                          onCheck: { UpdateChecker.shared.checkForUpdates(force: true) })
-                HStack(spacing: 8) {
-                    if component.state != .ready {
-                        Button("Instalar con Homebrew") { install("llama.cpp", for: .llm) }
-                            .disabled(installing != nil)
-                    }
-                    Button("Elegir modelo…") { pickFile(for: .llm) }
-                }
             }
         case .model:
             modelActions(component)
@@ -308,14 +293,10 @@ struct SetupView: View {
         panel.showsHiddenFiles = true
         // El corrector solo entiende .gguf. Sin este filtro es fácil elegir el
         // modelo de whisper, que está en la misma carpeta y también es un modelo.
-        if kind == .llm, let gguf = UTType(filenameExtension: "gguf") {
-            panel.allowedContentTypes = [gguf]
-        }
         panel.message = {
             switch kind {
             case .engine:    return "Selecciona el binario whisper-cli"
             case .model:     return "Selecciona un modelo .bin de whisper"
-            case .llm:       return "Selecciona un modelo de lenguaje .gguf — no el .bin de whisper, que es el modelo de voz"
             case .streaming: return "Selecciona el binario whisper-stream"
             }
         }()
@@ -323,7 +304,6 @@ struct SetupView: View {
         switch kind {
         case .engine:    Config.shared.whisperCliPath = url.path
         case .model:     Config.shared.modelPath = url.path
-        case .llm:       Config.shared.llmModelPath = url.path
         case .streaming: Config.shared.whisperStreamPath = url.path
         }
         refresh()

@@ -11,7 +11,6 @@ struct SetupComponent: Identifiable, Equatable {
     enum Kind: String, Equatable {
         case engine      // whisper-cli
         case model       // el .bin de whisper
-        case llm         // llama-completion + modelo .gguf
         case streaming   // whisper-stream
     }
 
@@ -38,7 +37,7 @@ struct SetupComponent: Identifiable, Equatable {
         switch state {
         case .missingRequired: return "falta esto"
         case .missingOptional: return "opcional"
-        case .ready:           return kind == .engine || kind == .model ? "obligatorio" : "opcional"
+        case .ready:           return kind == .streaming ? "opcional" : "obligatorio"
         }
     }
 }
@@ -72,9 +71,7 @@ struct SetupSummary: Equatable {
         return "Los \(total) componentes están en su sitio."
     }
 
-    static func evaluate(engine: Bool, model: Bool,
-                         llmEnabled: Bool, llm: Bool,
-                         streaming: Bool) -> SetupSummary {
+    static func evaluate(engine: Bool, model: Bool, streaming: Bool) -> SetupSummary {
         SetupSummary(components: [
             SetupComponent(
                 kind: .engine,
@@ -89,18 +86,6 @@ struct SetupSummary: Equatable {
                 detail: model ? Config.shared.modelPath : "todavía no hay ninguno",
                 state: model ? .ready : .missingRequired),
             SetupComponent(
-                kind: .llm,
-                title: "Modelo de lenguaje",
-                // Ya no corrige texto: eso lo hace el corrector del sistema, gratis.
-                // Queda solo para lo que de verdad necesita entender lenguaje.
-                purpose: "Solo para los comandos por voz y para traducir a idiomas distintos del inglés. "
-                       + "Necesita un archivo .gguf, distinto del modelo de voz: aquel entiende audio, este escribe texto. "
-                       + "Si no usas comandos por voz, no hace falta.",
-                detail: llm ? Config.shared.llmModelPath
-                            : (llmEnabled ? "activada, pero falta el modelo"
-                                          : "sin configurar"),
-                state: llm ? .ready : .missingOptional),
-            SetupComponent(
                 kind: .streaming,
                 title: "Transcripción en vivo",
                 purpose: "Muestra el texto mientras hablas, en una ventana flotante.",
@@ -113,8 +98,6 @@ struct SetupSummary: Equatable {
     static func current(_ config: Config = .shared) -> SetupSummary {
         evaluate(engine: config.isWhisperCliValid,
                  model: config.isModelValid,
-                 llmEnabled: config.llmEnabled,
-                 llm: config.isLlmCliValid && config.isLlmModelValid,
                  streaming: config.isWhisperStreamValid)
     }
 }

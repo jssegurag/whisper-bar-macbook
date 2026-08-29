@@ -46,10 +46,7 @@ swiftc \
     "$DIR/Sources/HotkeyManager.swift" \
     "$DIR/Sources/PasteTargetTracker.swift" \
     "$DIR/Sources/AudioFeedback.swift" \
-    "$DIR/Sources/LLMProcessor.swift" \
     "$DIR/Sources/TranslationProcessor.swift" \
-    "$DIR/Sources/VoiceActionDetector.swift" \
-    "$DIR/Sources/VoiceActionExecutor.swift" \
     "$DIR/Sources/StreamingTranscriber.swift" \
     "$DIR/Sources/FloatingTranscriptionViewModel.swift" \
     "$DIR/Sources/FloatingTranscriptionView.swift" \
@@ -63,7 +60,6 @@ swiftc \
     "$DIR/Sources/PreferencesLiveSection.swift" \
     "$DIR/Sources/PreferencesGeneralTab.swift" \
     "$DIR/Sources/PreferencesTranslationTab.swift" \
-    "$DIR/Sources/PreferencesVoiceActionsTab.swift" \
     "$DIR/Sources/PreferencesAudioTab.swift" \
     "$DIR/Sources/PreferencesStreamingTab.swift" \
     "$DIR/Sources/PreferencesShortcutsTab.swift" \

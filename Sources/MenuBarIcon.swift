@@ -25,9 +25,7 @@ enum MenuBarIcon {
         case idle
         case recording
         case transcribing
-        case correcting
         case translating
-        case runningAction
     }
 
     /// Seis estados → tres tratamientos. Separado del dibujo para poder probarlo.
@@ -35,8 +33,7 @@ enum MenuBarIcon {
         switch state {
         case .idle:                                            return .idle
         case .recording:                                       return .recording
-        case .transcribing, .correcting, .translating, .runningAction:
-                                                               return .working
+        case .transcribing, .translating:                      return .working
         }
     }
 
