@@ -73,7 +73,16 @@ The app follows a **modular, single-responsibility** design:
 - Parses output via `cleanOutput`: filters timestamp lines and joins transcribed segments
 - Returns cleaned text ready for LLM or pasting
 
-**LLMProcessor.swift** — llama.cpp post-processing
+**LLMProcessor.swift** — llama.cpp, for the two features that need language understanding
+
+It no longer post-processes transcriptions. That step was removed: the system spell
+checker does the same job for free, without a 1 GB model, without adding seconds to
+every dictation, and without rewriting the user's own terms — which is why the
+dictionary used to have to run *after* it.
+
+What still uses it: `VoiceActionDetector` (voice commands) and `TranslationProcessor`
+when the target language is not English (English uses `whisper-cli -tr` directly).
+A user who wants neither never needs the model.
 - Calls llama-completion in single-shot mode (stdin closed after first turn)
 - Extracts assistant response from chat format output
 - Filters control characters and formatting noise

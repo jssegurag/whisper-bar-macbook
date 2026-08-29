@@ -13,7 +13,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let transcriber   = Transcriber()
     private let hotkey        = HotkeyManager()
     private let audioFeedback = AudioFeedback()
-    private let llmProcessor  = LLMProcessor()
     private let translator      = TranslationProcessor()
     private let actionDetector  = VoiceActionDetector()
     private let actionExecutor  = VoiceActionExecutor()
@@ -43,8 +42,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Evita mostrar el diálogo de Accesibilidad más de una vez por sesión.
     private var hasPromptedForAccessibility = false
-    /// Último problema del corrector avisado en esta sesión.
-    private var lastLLMWarning: String?
 
     // MARK: - Animación de grabación
 
@@ -471,25 +468,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     DispatchQueue.main.async { self.audioFeedback.stop() }
                     return
                 }
-                // LLM post-procesamiento (retorna texto original si está deshabilitado)
-                self.setIconState(.correcting)
-                PillWindowController.shared.setProcessingLabel("Corrigiendo")
-                let finalText: String
-                switch self.llmProcessor.process(text: text) {
-                case .success(let processed):
-                    finalText = processed
-                case .failure(let llmError):
-                    self.reportLLMProblem(llmError)
-                    finalText = text
-                }
                 DispatchQueue.main.async { self.audioFeedback.stop() }
 
                 guard !self.isCancelled else { return }
 
-                // Diccionario y snippets: después del LLM, que "corregiría" los
-                // términos propios del usuario hacia el español estándar, y antes
-                // del detector de acciones, para que "abre Oriuno" reconozca la app.
-                let correctedText = self.applyRewrites(finalText)
+                // Diccionario, ortografía y snippets. Antes aquí pasaba también un
+                // modelo de lenguaje corrigiendo el texto; se quitó porque hacía el
+                // mismo trabajo que el corrector del sistema, tardaba segundos y
+                // reescribía los términos propios del usuario.
+                let correctedText = self.applyRewrites(text)
 
                 // Detección de acciones por voz
                 if self.config.voiceActionsEnabled {
@@ -716,23 +703,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Notifier.shared.onUpdate = {
             UpdateChecker.shared.upgradeWhisper()
         }
-    }
-
-    /// Avisa del problema del corrector **una vez por sesión**.
-    ///
-    /// Antes se notificaba en cada dictado. Con la corrección activada y sin
-    /// modelo, eso es una alerta por cada frase que dictas: deja de ser un aviso y
-    /// pasa a ser ruido que se aprende a ignorar.
-    ///
-    /// Y separa los dos casos: sin configurar es una tarea pendiente, no un fallo.
-    private func reportLLMProblem(_ error: Error) {
-        let sinConfigurar = !config.isLlmCliValid || !config.isLlmModelValid
-        let clave = sinConfigurar ? "notConfigured" : "failed"
-        guard lastLLMWarning != clave else { return }
-        lastLLMWarning = clave
-        Notifier.shared.post(sinConfigurar
-            ? AppNotification.llmNotConfigured()
-            : AppNotification.llmFailed(error.localizedDescription))
     }
 
     /// Nombra el paquete con actualización, en vez de mandar a revisar dos

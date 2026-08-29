@@ -90,12 +90,12 @@ struct SetupSummary: Equatable {
                 state: model ? .ready : .missingRequired),
             SetupComponent(
                 kind: .llm,
-                title: "Corrección con IA",
-                // La confusión es fácil y cara: los dos archivos viven en la misma
-                // carpeta y los dos son «modelos», pero uno entiende audio y el
-                // otro escribe texto. No los ejecuta ni el mismo programa.
-                purpose: "Repasa el texto ya transcrito. Necesita un modelo de lenguaje en formato .gguf, "
-                       + "distinto del modelo de voz: aquel entiende audio, este escribe texto.",
+                title: "Modelo de lenguaje",
+                // Ya no corrige texto: eso lo hace el corrector del sistema, gratis.
+                // Queda solo para lo que de verdad necesita entender lenguaje.
+                purpose: "Solo para los comandos por voz y para traducir a idiomas distintos del inglés. "
+                       + "Necesita un archivo .gguf, distinto del modelo de voz: aquel entiende audio, este escribe texto. "
+                       + "Si no usas comandos por voz, no hace falta.",
                 detail: llm ? Config.shared.llmModelPath
                             : (llmEnabled ? "activada, pero falta el modelo"
                                           : "sin configurar"),
