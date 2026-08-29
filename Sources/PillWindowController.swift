@@ -138,6 +138,24 @@ final class PillWindowController: NSObject, NSWindowDelegate {
     }
 
     /// «Transcribiendo» o «Corrigiendo».
+    /// Qué perfil enseñar mientras graba. `nil` = preferencias globales.
+    ///
+    /// Se aplica en el acto si ya estamos en el hilo principal, que es de donde
+    /// llama `startRecording`. Saltar siempre a `async` dejaba el nombre un ciclo
+    /// por detrás de la píldora que ya se está pintando en rojo.
+    func setProfileName(_ name: String?) {
+        if Thread.isMainThread {
+            viewModel.profileName = name
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.viewModel.profileName = name
+            }
+        }
+    }
+
+    /// Lo que la píldora está enseñando ahora. Para poder comprobarlo.
+    var currentProfileName: String? { viewModel.profileName }
+
     func setProcessingLabel(_ label: String) {
         DispatchQueue.main.async { [weak self] in
             self?.viewModel.processingLabel = label

@@ -341,6 +341,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pasteTargetApp = currentPasteTarget()
         // El perfil sale de la app a la que se va a pegar, y se congela aquí.
         session = resolvedSession()
+        PillWindowController.shared.setProfileName(session.profileName)
         isCancelled = false
         registerEscMonitor()
         do {
@@ -477,6 +478,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         removeEscMonitor()
         setIconState(.idle)
         PillWindowController.shared.setState(.idle)
+        // El perfil pertenece al dictado, no a la píldora: en reposo no hay
+        // ninguno aplicándose y enseñar el último sería mentir.
+        PillWindowController.shared.setProfileName(nil)
         pasteTargetApp = nil
     }
 

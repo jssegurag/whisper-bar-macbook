@@ -3847,6 +3847,36 @@ func testDictationSessionCarriesAppName() {
     assertEqual(sesion.bundleID, "com.apple.Terminal", "junto a su identificador")
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - Píldora — El perfil activo
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testPillShowsProfile() {
+    suite("Píldora — Enseña el perfil que se está aplicando")
+
+    let model = PillViewModel()
+    assertEqual(model.profileName, nil, "en reposo no hay perfil que enseñar")
+
+    model.profileName = "Terminal e IDE"
+    model.state = .recording
+    assertEqual(model.profileName, "Terminal e IDE",
+        "grabando, la píldora dice qué perfil manda")
+
+    // Sin esto la funcionalidad es magia que falla en silencio: el usuario ve un
+    // dictado raro y no tiene forma de saber que se le aplicó otro perfil.
+    model.profileName = nil
+    assertEqual(model.profileName, nil,
+        "con las preferencias globales no se enseña nada: no hay perfil que nombrar")
+
+    let controller = PillWindowController.shared
+    controller.setProfileName("Mensajería")
+    assertEqual(controller.currentProfileName, "Mensajería",
+        "el controlador lo publica en el view model")
+    controller.setProfileName(nil)
+    assertEqual(controller.currentProfileName, nil, "y sabe volver a no enseñar nada")
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -3964,6 +3994,7 @@ struct TestRunner {
         testHistoryReadsOldEntries()
         testHistoryProfileLabel()
         testDictationSessionCarriesAppName()
+        testPillShowsProfile()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")
