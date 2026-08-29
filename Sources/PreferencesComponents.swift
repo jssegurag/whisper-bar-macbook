@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Componentes compartidos por varias pestañas de
 /// Preferencias: la fila de actualización y el campo de ruta.
@@ -106,6 +107,14 @@ struct PathField: View {
     let label: String
     @Binding var path: String
     let isValid: Bool
+    /// Por defecto se pueden elegir carpetas, que es lo que esperan los campos
+    /// que ya existían. Los campos del modelo local lo desactivan: elegir una
+    /// carpeta ahí pasaba la validación —los directorios tienen el bit +x— y
+    /// reventaba después, al intentar ejecutarla.
+    var allowsDirectories: Bool = true
+    /// Extensiones admitidas en el selector. Sin ellas, el selector invitaba a
+    /// elegir el modelo de voz (.bin) donde hacía falta un .gguf.
+    var allowedExtensions: [String]? = nil
 
     var body: some View {
         HStack {
@@ -116,8 +125,16 @@ struct PathField: View {
             Button("Elegir…") {
                 let panel = NSOpenPanel()
                 panel.canChooseFiles = true
-                panel.canChooseDirectories = true
+                panel.canChooseDirectories = allowsDirectories
                 panel.allowsMultipleSelection = false
+                panel.treatsFilePackagesAsDirectories = true
+                if let exts = allowedExtensions {
+                    // .gguf no es un tipo que el sistema conozca, así que se
+                    // construye a partir de la extensión.
+                    panel.allowedContentTypes = exts.compactMap {
+                        UTType(filenameExtension: $0)
+                    }
+                }
                 if panel.runModal() == .OK, let url = panel.url {
                     path = url.path
                 }
