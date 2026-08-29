@@ -2,7 +2,15 @@
 set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
-APP="$HOME/Applications/Gluffi.app"
+# Dónde se instala. Es variable porque el proyecto se trabaja con varias ramas
+# abiertas a la vez (ver worktree.sh) y todas instalaban en el mismo bundle: la
+# última en compilar se llevaba el nombre, y probar «la rama A» abría la B.
+#
+# Ojo con lo que esto NO separa: el bundle identifier sigue siendo el mismo, así
+# que las dos apps comparten preferencias, historial, diccionario y Llavero. Se
+# separan los binarios, no los datos.
+APP="${GLUFFI_APP_PATH:-$HOME/Applications/Gluffi.app}"
+NOMBRE="$(basename "$APP" .app)"
 
 # Detectar arquitectura (Apple Silicon vs Intel)
 # El modelo del sistema solo existe desde el SDK de macOS 26. Enlazarlo en débil
@@ -103,6 +111,13 @@ mkdir -p "$APP/Contents/MacOS"
 mkdir -p "$APP/Contents/Resources"
 cp "$DIR/Gluffi_bin" "$APP/Contents/MacOS/Gluffi"
 cp "$DIR/Info.plist"     "$APP/Contents/Info.plist"
+# El binario dentro del bundle se llama siempre Gluffi —lo fija CFBundleExecutable—,
+# pero el nombre visible sigue al del .app: con dos builds instalados hay dos
+# iconos en la barra de menú y hace falta saber cuál es cuál.
+if [ "$NOMBRE" != "Gluffi" ]; then
+    /usr/bin/plutil -replace CFBundleDisplayName -string "$NOMBRE" "$APP/Contents/Info.plist"
+    /usr/bin/plutil -replace CFBundleName        -string "$NOMBRE" "$APP/Contents/Info.plist"
+fi
 cp "$DIR/AppIcon.icns"   "$APP/Contents/Resources/AppIcon.icns"
 # Mark de la barra de menú. Se copian los dos tamaños con el sufijo @2x para que
 # NSImage(named:) elija la variante correcta según la pantalla.
@@ -131,7 +146,7 @@ else
 fi
 
 echo ""
-echo "✓ Gluffi.app instalada en: $APP"
+echo "✓ $NOMBRE.app instalada en: $APP"
 # La app se llamaba WhisperBar: el bundle viejo no se borra solo, y tener las dos
 # instaladas confunde a Spotlight y al Dock.
 if [ -d "$HOME/Applications/WhisperBar.app" ]; then

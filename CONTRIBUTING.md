@@ -56,6 +56,47 @@ defendible") y el registro de ramas activas están en
 [`docs/BRANCHES.md`](docs/BRANCHES.md). Al abrir una rama, agrégala allí con su
 propósito y su alcance; al mezclarla, quítala.
 
+#### Varias ramas a la vez
+
+`git checkout` sirve para una rama. Si trabajas en dos funcionalidades en
+paralelo, cambiar de rama con trabajo sin commitear encima lo arrastra a la rama
+nueva —o borra archivos que la otra rama sí tiene—, y con builds y tests de
+varios minutos eso se paga caro.
+
+Para eso está `worktree.sh`: cada rama en su propio directorio, todos
+compartiendo el mismo `.git`.
+
+```bash
+bash worktree.sh nueva feat/51-lo-que-sea      # rama nueva desde main + directorio
+bash worktree.sh abre  feat/50-auto-limpieza-determinista
+bash worktree.sh lista
+bash worktree.sh quita feat/51-lo-que-sea      # se niega si hay trabajo sin guardar
+```
+
+Los directorios viven **fuera** del repo, en `../Whisper-worktrees/`, y no en una
+carpeta ignorada dentro: dentro saldrían en cada `grep -r`, cada `find` y cada
+glob de build del árbol padre, con una copia entera de `Sources/` por rama
+abierta.
+
+Dos cosas que conviene saber antes de usarlo:
+
+- **`build.sh` instala siempre en el mismo sitio.** Desde un worktree, pásale
+  otro destino o la última compilación se lleva el nombre y probar «la rama A»
+  abre la B:
+
+  ```bash
+  GLUFFI_APP_PATH="$HOME/Applications/Gluffi-dev.app" bash build.sh
+  ```
+
+- **Eso separa los binarios, no los datos.** El bundle identifier sigue siendo
+  `com.user.WhisperBar`, así que las dos apps comparten preferencias, historial,
+  diccionario, snippets y Llavero — y **no conviene tenerlas abiertas a la vez**:
+  se pelean por el atajo global y escriben en el mismo `UserDefaults`. Cierra una
+  antes de abrir la otra.
+
+`run_tests.sh` funciona igual desde cualquier worktree: resuelve todo por rutas
+absolutas desde su propio directorio.
+
 ### 3. Hacer los cambios
 
 Principios del proyecto:
@@ -128,6 +169,20 @@ que dependen de binarios detectados se omiten: el total de tests que imprime CI
 es menor que el de tu máquina. Lo que importa es que pase, no el conteo.
 
 ---
+
+
+### 7. Al mezclar, borra la rama
+
+```bash
+gh pr merge <n> --squash --delete-branch
+```
+
+No es cosmética. El 29-08-2026 el repo tenía 36 ramas locales y 44 en `origin`;
+33 y 42 de ellas ya estaban íntegramente en `main`. Todas parecían trabajo
+pendiente y ninguna lo era, así que nadie se atrevía a tocarlas.
+
+Lo que la rama contaba —el diff, la discusión, CI, la fecha— lo cuenta el PR, que
+no se borra. Lo que merece sobrevivir al merge va en `docs/historias/`.
 
 ## Estructura del proyecto
 
