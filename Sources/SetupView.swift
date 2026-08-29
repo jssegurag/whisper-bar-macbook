@@ -315,7 +315,7 @@ struct SetupView: View {
             switch kind {
             case .engine:    return "Selecciona el binario whisper-cli"
             case .model:     return "Selecciona un modelo .bin de whisper"
-            case .llm:       return "Selecciona el modelo .gguf del corrector"
+            case .llm:       return "Selecciona un modelo de lenguaje .gguf — no el .bin de whisper, que es el modelo de voz"
             case .streaming: return "Selecciona el binario whisper-stream"
             }
         }()

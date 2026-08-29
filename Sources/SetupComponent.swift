@@ -85,13 +85,17 @@ struct SetupSummary: Equatable {
             SetupComponent(
                 kind: .model,
                 title: "Modelo de voz",
-                purpose: "El archivo que el motor usa para entender lo que dices.",
+                purpose: "El archivo que el motor usa para entender lo que dices. Formato .bin.",
                 detail: model ? Config.shared.modelPath : "todavía no hay ninguno",
                 state: model ? .ready : .missingRequired),
             SetupComponent(
                 kind: .llm,
                 title: "Corrección con IA",
-                purpose: "Arregla ortografía y puntuación después de transcribir.",
+                // La confusión es fácil y cara: los dos archivos viven en la misma
+                // carpeta y los dos son «modelos», pero uno entiende audio y el
+                // otro escribe texto. No los ejecuta ni el mismo programa.
+                purpose: "Repasa el texto ya transcrito. Necesita un modelo de lenguaje en formato .gguf, "
+                       + "distinto del modelo de voz: aquel entiende audio, este escribe texto.",
                 detail: llm ? Config.shared.llmModelPath
                             : (llmEnabled ? "activada, pero falta el modelo"
                                           : "sin configurar"),
