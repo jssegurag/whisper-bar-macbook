@@ -2437,32 +2437,69 @@ func testLocalLLM() {
     let savedCtx    = defaults.object(forKey: "llmContextSize")
     let savedIdle   = defaults.object(forKey: "llmIdleMinutes")
 
-    // — Disponibilidad: el mensaje tiene que decir qué hacer, no solo que falla
-    Config.shared.llamaServerPath = "/no/existe/llama-server"
-    Config.shared.llmModelPath    = "/no/existe/modelo.gguf"
-    assertEqual(LocalLLM.availability, .noServer,
-                "sin llama-server la disponibilidad es .noServer")
-    assertContains(LocalLLM.availability.message, "brew install llama.cpp",
-                   "el mensaje dice cómo instalar llama-server")
-    assert(!Config.shared.isLlmValid, "sin binario ni modelo, isLlmValid es false")
-
-    // Con servidor pero sin modelo, el diagnóstico cambia
     let fm = FileManager.default
-    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
-        .appendingPathComponent("gluffi_srv_\(UUID().uuidString)")
-    try? Data("#!/bin/sh\n".utf8).write(to: tmp)
-    try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tmp.path)
-    Config.shared.llamaServerPath = tmp.path
-    assertEqual(LocalLLM.availability, .noModel,
-                "con binario pero sin .gguf la disponibilidad es .noModel")
-    assertContains(LocalLLM.availability.message, ".gguf",
-                   "el mensaje nombra el archivo que falta")
+    let caja = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("gluffi_val_\(UUID().uuidString)")
+    try? fm.createDirectory(at: caja, withIntermediateDirectories: true)
 
-    // — Sin disponibilidad, ask() no arranca ningún proceso: devuelve nil y ya
-    assert(LocalLLM.ask(system: "s", user: "u") == nil,
-           "ask() devuelve nil cuando el modelo no está disponible")
-    assert(!LocalLLM.isRunning, "ask() fallido no deja un servidor colgando")
-    try? fm.removeItem(at: tmp)
+    // — Validación de rutas. Esto es la regresión que se coló hasta el usuario:
+    //   la app dio por válidos el modelo de voz y una carpeta, y el fallo salió
+    //   mucho después como «no respondió».
+    let gguf   = caja.appendingPathComponent("bueno.gguf")
+    let voz    = caja.appendingPathComponent("ggml-large-v3.bin")
+    let medias = caja.appendingPathComponent("a-medias.gguf")
+    try? Data("GGUF\u{0}\u{0}\u{0}\u{3}".utf8).write(to: gguf)
+    try? Data("this is a whisper model".utf8).write(to: voz)
+    try? Data("GG".utf8).write(to: medias)
+
+    assert(Config.esGguf(gguf.path), "un .gguf de verdad se acepta")
+    assert(!Config.esGguf(voz.path),
+           "el modelo de voz (.bin) NO pasa por modelo de lenguaje")
+    assert(!Config.esGguf(medias.path),
+           "un .gguf a medio descargar se rechaza antes de usarlo")
+    assert(!Config.esGguf(caja.path), "una carpeta no es un modelo")
+    assert(!Config.esGguf(""), "la ruta vacía no es un modelo")
+
+    // Un directorio tiene el bit +x, así que isExecutableFile dice que sí. Ese
+    // detalle es exactamente lo que dejó pasar una carpeta como si fuera el binario.
+    assert(FileManager.default.isExecutableFile(atPath: caja.path),
+           "premisa: el sistema considera «ejecutable» a un directorio")
+    assert(!Config.esEjecutable(caja.path),
+           "pero esEjecutable rechaza el directorio")
+
+    let bin = caja.appendingPathComponent("falso-server")
+    try? Data("#!/bin/sh\n".utf8).write(to: bin)
+    try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: bin.path)
+    assert(Config.esEjecutable(bin.path), "un ejecutable de verdad se acepta")
+
+    // — Una ruta guardada que no sirve no puede secuestrar la funcionalidad:
+    //   se ignora y se vuelve a autodetectar.
+    Config.shared.llmModelPath = voz.path
+    assertEqual(Config.shared.llmModelPath, Config.detectLlmModel() ?? "",
+                "una ruta guardada inválida se descarta y se autodetecta")
+    Config.shared.llamaServerPath = caja.path
+    assertEqual(Config.shared.llamaServerPath, Config.detectLlamaServer() ?? "",
+                "una carpeta guardada como servidor se descarta y se autodetecta")
+
+    // — Los mensajes tienen que decir qué hacer, no solo que algo falló
+    assertContains(LocalLLM.Availability.noServer.message, "brew install llama.cpp",
+                   "el mensaje de servidor ausente dice cómo instalarlo")
+    assertContains(LocalLLM.Availability.noModel.message, ".gguf",
+                   "el mensaje de modelo ausente nombra el formato que hace falta")
+    assertContains(LocalLLM.Availability.noModel.message, "ggml",
+                   "y avisa de que el modelo de voz no sirve, que fue el error real")
+    assertContains(LocalLLM.AskError.serverDied.message, "medio descargar",
+                   "si el servidor muere al arrancar, se apunta a la causa habitual")
+    assertContains(LocalLLM.AskError.cannotLaunch("motivo").message, "motivo",
+                   "cannotLaunch arrastra el motivo del sistema")
+
+    // — Sin disponibilidad, ask() no arranca ningún proceso
+    if Config.detectLlamaServer() == nil {
+        assert(LocalLLM.ask(system: "s", user: "u") == nil,
+               "ask() devuelve nil cuando no hay servidor")
+        assert(!LocalLLM.isRunning, "ask() fallido no deja un servidor colgando")
+    }
+    try? fm.removeItem(at: caja)
 
     // — Puerto libre: uno fijo chocaría con otra copia de la app
     if let p1 = LocalLLM.freePort(), let p2 = LocalLLM.freePort() {

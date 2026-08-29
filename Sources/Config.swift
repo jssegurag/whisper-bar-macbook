@@ -233,7 +233,11 @@ class Config {
     /// dejar el archivo en la carpeta y no editar ajustes.
     var llmModelPath: String {
         get {
-            if let saved = defaults.string(forKey: "llmModelPath"), !saved.isEmpty {
+            // Solo se respeta lo guardado si sirve. Una ruta inválida guardada
+            // dejaría la funcionalidad muerta hasta que el usuario la corrigiera
+            // a mano, sin saber que era eso.
+            if let saved = defaults.string(forKey: "llmModelPath"), !saved.isEmpty,
+               Config.esGguf(saved) {
                 return saved
             }
             return Config.detectLlmModel() ?? ""
@@ -246,7 +250,11 @@ class Config {
     /// modelo entero, contra ~1,5 s con el modelo ya residente.
     var llamaServerPath: String {
         get {
-            if let saved = defaults.string(forKey: "llamaServerPath"), !saved.isEmpty {
+            // Solo se respeta lo guardado si sirve. Una ruta inválida guardada
+            // dejaría la funcionalidad muerta hasta que el usuario la corrigiera
+            // a mano, sin saber que era eso.
+            if let saved = defaults.string(forKey: "llamaServerPath"), !saved.isEmpty,
+               Config.esEjecutable(saved) {
                 return saved
             }
             return Config.detectLlamaServer() ?? ""
@@ -273,13 +281,32 @@ class Config {
         set { defaults.set(max(1, min(120, newValue)), forKey: "llmIdleMinutes") }
     }
 
-    var isLlmModelValid: Bool {
-        !llmModelPath.isEmpty && FileManager.default.fileExists(atPath: llmModelPath)
+    var isLlmModelValid: Bool { Config.esGguf(llmModelPath) }
+
+    var isLlamaServerValid: Bool { Config.esEjecutable(llamaServerPath) }
+
+    /// Un GGUF de verdad, no cualquier archivo. Comprobar solo que exista aceptaba
+    /// el modelo de whisper (un .bin) y los .gguf a medio descargar, y entonces el
+    /// fallo aparecía mucho después, como «no respondió».
+    static func esGguf(_ ruta: String) -> Bool {
+        guard !ruta.isEmpty else { return false }
+        var esDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: ruta, isDirectory: &esDir),
+              !esDir.boolValue,
+              let f = FileHandle(forReadingAtPath: ruta) else { return false }
+        defer { try? f.close() }
+        return (try? f.read(upToCount: 4)) == Data("GGUF".utf8)
     }
 
-    var isLlamaServerValid: Bool {
-        !llamaServerPath.isEmpty
-            && FileManager.default.isExecutableFile(atPath: llamaServerPath)
+    /// Un ejecutable de verdad. `isExecutableFile` devuelve true para directorios
+    /// —tienen el bit +x— así que elegir una carpeta en el selector pasaba por
+    /// válido y luego reventaba al lanzar el proceso.
+    static func esEjecutable(_ ruta: String) -> Bool {
+        guard !ruta.isEmpty else { return false }
+        var esDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: ruta, isDirectory: &esDir),
+              !esDir.boolValue else { return false }
+        return FileManager.default.isExecutableFile(atPath: ruta)
     }
 
     var isLlmValid: Bool { isLlmModelValid && isLlamaServerValid }
@@ -421,12 +448,12 @@ class Config {
         ]
         for nombre in preferidos {
             let ruta = "\(dir)/\(nombre)"
-            if FileManager.default.fileExists(atPath: ruta) { return ruta }
+            if esGguf(ruta) { return ruta }
         }
         let sueltos = (try? FileManager.default.contentsOfDirectory(atPath: dir))?
             .filter { $0.hasSuffix(".gguf") }
             .sorted()
-        return sueltos?.first.map { "\(dir)/\($0)" }
+        return sueltos?.map { "\(dir)/\($0)" }.first(where: esGguf)
     }
 
     /// Busca whisper-stream en rutas comunes de Homebrew

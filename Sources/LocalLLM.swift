@@ -24,8 +24,46 @@ enum LocalLLM {
         var message: String {
             switch self {
             case .available: return "Listo."
-            case .noModel:   return "Falta el modelo .gguf. Descárgalo a ~/.whisper-realtime/"
-            case .noServer:  return "Falta llama-server. Instálalo con: brew install llama.cpp"
+            case .noModel:
+                return "La ruta del modelo no apunta a un .gguf válido. El modelo de "
+                     + "voz (ggml-….bin) no sirve aquí: hace falta un .gguf en "
+                     + "~/.whisper-realtime/"
+            case .noServer:
+                return "La ruta de llama-server no apunta a un ejecutable. "
+                     + "Instálalo con: brew install llama.cpp"
+            }
+        }
+    }
+
+    /// Por qué falló una petición. Existe porque la primera versión devolvía `nil`
+    /// para todo, y un fallo real —una carpeta elegida como si fuera el binario—
+    /// llegaba al usuario como «no respondió», que no dice qué arreglar.
+    enum AskError: Error, Equatable {
+        case unavailable(Availability)
+        case noPort
+        case cannotLaunch(String)
+        case serverDied
+        case neverHealthy
+        case noResponse
+        case badResponse
+
+        var message: String {
+            switch self {
+            case .unavailable(let a): return a.message
+            case .noPort:
+                return "El sistema no dio un puerto libre."
+            case .cannotLaunch(let d):
+                return "No se pudo ejecutar llama-server: \(d)"
+            case .serverDied:
+                return "llama-server se cerró al arrancar. Suele ser el .gguf "
+                     + "corrupto o a medio descargar, o RAM insuficiente."
+            case .neverHealthy:
+                return "llama-server arrancó pero no terminó de cargar el modelo "
+                     + "a tiempo."
+            case .noResponse:
+                return "El servidor no contestó a tiempo."
+            case .badResponse:
+                return "El servidor contestó algo que no se pudo interpretar."
             }
         }
     }
@@ -64,8 +102,24 @@ enum LocalLLM {
                     user: String,
                     maxTokens: Int = 512,
                     temperature: Double = 0.2) -> String? {
-        guard availability.isAvailable else { return nil }
-        guard let puerto = ensureRunning() else { return nil }
+        if case .success(let t) = askReporting(system: system, user: user,
+                                               maxTokens: maxTokens,
+                                               temperature: temperature) { return t }
+        return nil
+    }
+
+    /// Igual que `ask`, pero dice por qué falló. La UI usa esta.
+    static func askReporting(system: String,
+                             user: String,
+                             maxTokens: Int = 512,
+                             temperature: Double = 0.2) -> Result<String, AskError> {
+        let estado = availability
+        guard estado.isAvailable else { return .failure(.unavailable(estado)) }
+        let puerto: Int
+        switch ensureRunningReporting() {
+        case .success(let p): puerto = p
+        case .failure(let e): return .failure(e)
+        }
 
         defer { scheduleIdleShutdown() }
 
@@ -80,7 +134,7 @@ enum LocalLLM {
         ]
         guard let datos = try? JSONSerialization.data(withJSONObject: cuerpo),
               let url = URL(string: "http://127.0.0.1:\(puerto)/v1/chat/completions")
-        else { return nil }
+        else { return .failure(.badResponse) }
 
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -88,15 +142,15 @@ enum LocalLLM {
         req.httpBody = datos
         req.timeoutInterval = requestTimeout
 
-        guard let respuesta = sincrono(req) else { return nil }
+        guard let respuesta = sincrono(req) else { return .failure(.noResponse) }
         guard let json = try? JSONSerialization.jsonObject(with: respuesta) as? [String: Any],
               let choices = json["choices"] as? [[String: Any]],
               let message = choices.first?["message"] as? [String: Any],
               let texto = message["content"] as? String
-        else { return nil }
+        else { return .failure(.badResponse) }
 
         let limpio = texto.trimmingCharacters(in: .whitespacesAndNewlines)
-        return limpio.isEmpty ? nil : limpio
+        return limpio.isEmpty ? .failure(.badResponse) : .success(limpio)
     }
 
     /// Apaga el servidor y libera la RAM. Idempotente.
@@ -122,18 +176,23 @@ enum LocalLLM {
 
     /// Devuelve el puerto de un servidor vivo, arrancándolo si hace falta.
     private static func ensureRunning() -> Int? {
+        if case .success(let p) = ensureRunningReporting() { return p }
+        return nil
+    }
+
+    private static func ensureRunningReporting() -> Result<Int, AskError> {
         lock.lock()
         if let p = process, p.isRunning, port > 0 {
             let actual = port
             lock.unlock()
-            return actual
+            return .success(actual)
         }
         // Un proceso muerto que quedó guardado engañaría al siguiente que pregunte.
         process = nil
         port = 0
         lock.unlock()
 
-        guard let puerto = freePort() else { return nil }
+        guard let puerto = freePort() else { return .failure(.noPort) }
         let config = Config.shared
 
         let p = Process()
@@ -150,18 +209,21 @@ enum LocalLLM {
         p.standardOutput = FileHandle.nullDevice
         p.standardError = FileHandle.nullDevice
 
-        do { try p.run() } catch { return nil }
+        do { try p.run() } catch {
+            return .failure(.cannotLaunch(error.localizedDescription))
+        }
 
-        guard waitUntilHealthy(port: puerto, process: p) else {
+        if !waitUntilHealthy(port: puerto, process: p) {
+            let murio = !p.isRunning
             if p.isRunning { p.terminate() }
-            return nil
+            return .failure(murio ? .serverDied : .neverHealthy)
         }
 
         lock.lock()
         process = p
         port = puerto
         lock.unlock()
-        return puerto
+        return .success(puerto)
     }
 
     private static func waitUntilHealthy(port: Int, process p: Process) -> Bool {

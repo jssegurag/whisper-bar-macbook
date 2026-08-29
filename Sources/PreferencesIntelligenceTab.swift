@@ -54,7 +54,9 @@ struct IntelligenceTab: View {
 
             Section("Modelo") {
                 PathField(label: "Modelo .gguf:", path: $modelPath,
-                          isValid: Config.shared.isLlmModelValid)
+                          isValid: Config.shared.isLlmModelValid,
+                          allowsDirectories: false,
+                          allowedExtensions: ["gguf"])
                     .onChange(of: modelPath) { nuevo in
                         Config.shared.llmModelPath = nuevo
                         resultado = nil
@@ -69,7 +71,8 @@ struct IntelligenceTab: View {
                 }
 
                 PathField(label: "llama-server:", path: $serverPath,
-                          isValid: Config.shared.isLlamaServerValid)
+                          isValid: Config.shared.isLlamaServerValid,
+                          allowsDirectories: false)
                     .onChange(of: serverPath) { nuevo in
                         Config.shared.llamaServerPath = nuevo
                         resultado = nil
@@ -151,7 +154,7 @@ struct IntelligenceTab: View {
         let inicio = Date()
 
         DispatchQueue.global(qos: .userInitiated).async {
-            let salida = LocalLLM.ask(
+            let salida = LocalLLM.askReporting(
                 system: "Responde en español, en una sola frase corta.",
                 user: "Saluda y di en qué puedes ayudar.",
                 maxTokens: 60)
@@ -159,14 +162,14 @@ struct IntelligenceTab: View {
 
             DispatchQueue.main.async {
                 probando = false
-                if let salida {
+                switch salida {
+                case .success(let texto):
                     resultadoOK = true
-                    resultado = "\(salida)\n\n"
+                    resultado = "\(texto)\n\n"
                         + String(format: "Respondió en %.1f s.", segundos)
-                } else {
+                case .failure(let error):
                     resultadoOK = false
-                    resultado = "No respondió. Revisa que las rutas sean correctas "
-                        + "y que el archivo .gguf no esté a medio descargar."
+                    resultado = error.message
                 }
             }
         }
