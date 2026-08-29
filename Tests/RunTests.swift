@@ -842,7 +842,11 @@ func testAudioRecorderStartFailure() {
 /// Doble de una app en ejecución: NSRunningApplication no se puede instanciar.
 private final class FakeApp: PasteTargetCandidate {
     let processIdentifier: pid_t
-    init(_ pid: pid_t) { self.processIdentifier = pid }
+    let bundleIdentifier: String?
+    init(_ pid: pid_t, bundleIdentifier: String? = nil) {
+        self.processIdentifier = pid
+        self.bundleIdentifier = bundleIdentifier
+    }
 }
 
 func testPasteTargetTracker() {
@@ -3434,6 +3438,140 @@ func testProfileStoreCRUD() {
     assertEqual(store.profiles.count, 0, "borrar sí lo quita")
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - ProfileResolver — Qué perfil aplica
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testProfileResolverMatching() {
+    suite("ProfileResolver — Coincidencia")
+
+    let terminal = Profile(name: "Terminal e IDE",
+                           bundleIDs: ["com.apple.Terminal", "com.microsoft.VSCode"],
+                           order: 0)
+    let mensajeria = Profile(name: "Mensajería",
+                             bundleIDs: ["net.whatsapp.WhatsApp"], order: 1)
+    let perfiles = [terminal, mensajeria]
+
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal", among: perfiles)?.id,
+                terminal.id, "coincidencia simple")
+    assertEqual(ProfileResolver.resolve(bundleID: "com.microsoft.VSCode", among: perfiles)?.id,
+                terminal.id, "cualquier app de la lista sirve")
+    assertEqual(ProfileResolver.resolve(bundleID: "net.whatsapp.WhatsApp", among: perfiles)?.id,
+                mensajeria.id, "y cada perfil responde por las suyas")
+
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Safari", among: perfiles)?.id,
+                nil, "sin coincidencia se cae a las preferencias globales")
+    assertEqual(ProfileResolver.resolve(bundleID: nil, among: perfiles)?.id,
+                nil, "sin app destino, también")
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal", among: [])?.id,
+                nil, "sin perfiles no hay nada que resolver")
+}
+
+func testProfileResolverExactMatch() {
+    suite("ProfileResolver — Coincidencia exacta, sin comodines")
+
+    let perfiles = [Profile(name: "Terminal", bundleIDs: ["com.apple.Terminal"], order: 0)]
+
+    // Un comodín que empareje de más aplicaría el perfil equivocado sin que el
+    // usuario sepa por qué. Es peor que pedirle que añada la app desde la lista.
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Term", among: perfiles)?.id,
+                nil, "un prefijo no coincide")
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal.helper",
+                                        among: perfiles)?.id,
+                nil, "un sufijo tampoco")
+    assertEqual(ProfileResolver.resolve(bundleID: "COM.APPLE.TERMINAL", among: perfiles)?.id,
+                nil, "y distingue mayúsculas: los bundle ID son sensibles a ellas")
+    assertEqual(ProfileResolver.resolve(bundleID: "", among: perfiles)?.id,
+                nil, "un identificador vacío no coincide con nada")
+}
+
+func testProfileResolverPriority() {
+    suite("ProfileResolver — Empates y prioridad")
+
+    // La misma app en dos perfiles activos: gana el de orden menor.
+    let primero = Profile(name: "Primero", bundleIDs: ["com.apple.Terminal"], order: 0)
+    let segundo = Profile(name: "Segundo", bundleIDs: ["com.apple.Terminal"], order: 1)
+
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal",
+                                        among: [segundo, primero])?.id,
+                primero.id, "gana el de orden menor, llegue como llegue la lista")
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal",
+                                        among: [primero, segundo])?.id,
+                primero.id, "y el resultado no depende del orden del arreglo")
+
+    // Reproducible con órdenes iguales: desempata por id, no por posición.
+    let a = Profile(id: UUID(uuidString: "00000000-0000-0000-0000-0000000000AA")!,
+                    name: "A", bundleIDs: ["com.apple.Terminal"], order: 5)
+    let b = Profile(id: UUID(uuidString: "00000000-0000-0000-0000-0000000000BB")!,
+                    name: "B", bundleIDs: ["com.apple.Terminal"], order: 5)
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal", among: [b, a])?.id,
+                a.id, "con el mismo orden desempata por id, de forma reproducible")
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal", among: [a, b])?.id,
+                a.id, "y da lo mismo en las dos direcciones")
+}
+
+func testProfileResolverInactive() {
+    suite("ProfileResolver — Perfiles desactivados y listas vacías")
+
+    var apagado = Profile(name: "Apagado", bundleIDs: ["com.apple.Terminal"], order: 0)
+    apagado.isActive = false
+    let encendido = Profile(name: "Encendido", bundleIDs: ["com.apple.Terminal"], order: 1)
+
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal",
+                                        among: [apagado])?.id,
+                nil, "un perfil desactivado no participa, aunque siga existiendo")
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal",
+                                        among: [apagado, encendido])?.id,
+                encendido.id, "y le cede el turno al siguiente activo")
+
+    let sinApps = Profile(name: "Sin apps", bundleIDs: [], order: 0)
+    assertEqual(ProfileResolver.resolve(bundleID: "com.apple.Terminal", among: [sinApps])?.id,
+                nil, "un perfil sin apps no coincide con ninguna")
+}
+
+func testProfileResolverIgnoresGluffi() {
+    suite("ProfileResolver — Gluffi nunca se aplica a sí misma")
+
+    // Alguien podría añadir Gluffi a un perfil desde el selector de apps. Aplicar
+    // un perfil al dictado que va a nuestra propia ventana no significa nada.
+    let perfiles = [Profile(name: "Raro", bundleIDs: [ProfileResolver.ownBundleID],
+                            order: 0)]
+    assertEqual(ProfileResolver.resolve(bundleID: ProfileResolver.ownBundleID,
+                                        among: perfiles)?.id,
+                nil, "con Gluffi como destino se aplican las preferencias globales")
+}
+
+func testProfileResolverFromPasteTarget() {
+    suite("ProfileResolver — Sale del destino del paste, no del frontmost")
+
+    // El perfil se resuelve sobre la app a la que se va a pegar, que es la que
+    // PasteTargetTracker ya calcula. Si saliera del frontmost al terminar la
+    // transcripción, cambiar de ventana mientras whisper corre aplicaría medio
+    // perfil de una app y medio de otra.
+    let tracker = PasteTargetTracker(selfPid: 1)
+    let terminal = FakeApp(2, bundleIdentifier: "com.apple.Terminal")
+    tracker.record(terminal)
+
+    let destino = tracker.target(frontmost: FakeApp(1, bundleIdentifier: ProfileResolver.ownBundleID))
+    assertEqual(destino?.bundleIdentifier, "com.apple.Terminal",
+        "con una ventana nuestra al frente, el destino sigue siendo la última app externa")
+
+    let perfiles = [Profile(name: "Terminal", bundleIDs: ["com.apple.Terminal"], order: 0)]
+    assertEqual(ProfileResolver.resolve(bundleID: destino?.bundleIdentifier,
+                                        among: perfiles)?.name,
+                "Terminal",
+        "y el perfil que aplica es el de esa app, no el global")
+
+    // Sin ninguna app externa vista, no hay a quién pegar ni perfil que aplicar.
+    let virgen = PasteTargetTracker(selfPid: 1)
+    assertEqual(virgen.target(frontmost: FakeApp(1, bundleIdentifier: ProfileResolver.ownBundleID))?
+                    .bundleIdentifier,
+                nil, "sin app externa conocida no hay destino")
+    assertEqual(ProfileResolver.resolve(bundleID: nil, among: perfiles)?.id,
+                nil, "y entonces mandan las preferencias globales")
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -3536,6 +3674,12 @@ struct TestRunner {
         testProfileStoreSurvivesCorruption()
         testProfileStoreOrdering()
         testProfileStoreCRUD()
+        testProfileResolverMatching()
+        testProfileResolverExactMatch()
+        testProfileResolverPriority()
+        testProfileResolverInactive()
+        testProfileResolverIgnoresGluffi()
+        testProfileResolverFromPasteTarget()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")
