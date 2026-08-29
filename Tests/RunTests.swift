@@ -2569,6 +2569,279 @@ func testSystemPolish() {
 // MARK: - RUNNER
 // ══════════════════════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - Cleaner — Tablas y niveles
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Las tablas reales, las que se instalan con la app. Probar con una lista
+/// inventada dejaría sin verificar justo lo que el usuario va a usar.
+let tablasDeLimpieza: CleanupRules = {
+    (try? CleanupRules.load(from: URL(fileURLWithPath: "Resources/cleanup-es.json"))) ?? .empty
+}()
+
+func testCleanupRulesResource() {
+    suite("Cleaner — Las tablas viven en un archivo, no en el código")
+
+    assert(!tablasDeLimpieza.isEmpty,
+        "Resources/cleanup-es.json se lee y trae tablas")
+    assert(tablasDeLimpieza.fillersPaused.contains("este"),
+        "la lista de muletillas es editable y trae «este»")
+    assert(tablasDeLimpieza.selfCorrectionLocal.contains("mejor dicho"),
+        "y los disparadores de autocorrección")
+
+    // Un archivo al que le falta una sección sigue sirviendo para las demás: se
+    // edita a mano, y a mano se borran cosas sin querer.
+    let parcial = #"{"muletillasConPausa": ["este"]}"#.data(using: .utf8)!
+    let cargadas = try? JSONDecoder().decode(CleanupRules.self, from: parcial)
+    assertEqual(cargadas?.fillersPaused ?? [], ["este"], "una sección basta para cargar")
+    assertEqual(cargadas?.listCardinals ?? ["x"], [], "las que faltan quedan vacías, no rompen")
+
+    // Sin tablas el limpiador es inerte. Es la única respuesta segura: sin lista
+    // no hay forma de saber qué es muletilla, y adivinar borra texto del usuario.
+    assertEqual(Cleaner.clean("este, necesito el informe", level: .completo,
+                              rules: .empty, protected: .none),
+                "este, necesito el informe",
+                "sin tablas no se toca nada")
+
+    // Los niveles se leen y escriben como los escribe `defaults write`.
+    assertEqual(CleanupLevel(rawValue: "completo"), .completo, "rawValue en español: completo")
+    assertEqual(CleanupLevel(rawValue: "conservador"), .conservador, "conservador")
+    assertEqual(CleanupLevel(rawValue: "desactivado"), .desactivado, "desactivado")
+    assertEqual(CleanupLevel(rawValue: "full"), nil, "un valor inventado no cuela")
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - Cleaner — Pares entrada/salida en español
+// ══════════════════════════════════════════════════════════════════════════════
+
+private func limpia(_ texto: String,
+                    _ nivel: CleanupLevel = .completo,
+                    protegido: Cleaner.Guard = .none) -> String {
+    Cleaner.clean(texto, level: nivel, rules: tablasDeLimpieza, protected: protegido)
+}
+
+func testCleanerPositiveCases() {
+    suite("Cleaner — Casos que sí se limpian")
+
+    // Regla 1 · muletillas
+    assertEqual(limpia("este, necesito el informe"), "Necesito el informe",
+        "1 · muletilla que abre la frase, con su coma")
+    assertEqual(limpia("o sea, digamos que sí"), "Que sí",
+        "1 · dos muletillas seguidas")
+    assertEqual(limpia("bueno, entonces, la propuesta va mañana"),
+        "La propuesta va mañana", "1 · muletillas encadenadas")
+    assertEqual(limpia("necesito, o sea, el informe completo"),
+        "Necesito el informe completo",
+        "1 · una muletilla entre comas se lleva las dos comas")
+    assertEqual(limpia("necesito el informe, este."), "Necesito el informe.",
+        "1 · al final de la oración, y el punto no se pierde")
+    assertEqual(limpia("Entonces le dejó las pastas. Bueno, de eso hablamos."),
+        "Entonces le dejó las pastas. De eso hablamos.",
+        "1 · cada oración se decide por separado")
+    assertEqual(limpia("esto, es lo que hay"), "Es lo que hay",
+        "1 · «esto» entre pausas")
+    assertEqual(limpia("mira, te lo mando hoy"), "Te lo mando hoy",
+        "1 · «mira» abriendo")
+
+    // Regla 2 · repetición inmediata
+    assertEqual(limpia("la la reunión es mañana"), "La reunión es mañana",
+        "2 · palabra repetida seguida")
+    assertEqual(limpia("que que necesitas"), "Que necesitas",
+        "2 · repetición sin puntuación en medio")
+    assertEqual(limpia("el el el contrato está firmado"), "El contrato está firmado",
+        "2 · tres seguidas también colapsan")
+    assertEqual(limpia("vamos a a revisarlo"), "Vamos a revisarlo",
+        "2 · repetición en medio de la frase")
+
+    // Regla 3 · autocorrección
+    assertEqual(limpia("nos vemos el martes, mejor dicho el miércoles"),
+        "Nos vemos el miércoles",
+        "3 · se borra solo hasta donde arranca la corrección")
+    assertEqual(limpia("envía el informe, perdón, el reporte"), "Envía el reporte",
+        "3 · «perdón» como disparador entre comas")
+    assertEqual(limpia("el martes, corrijo, el jueves a las tres"),
+        "El jueves a las tres", "3 · «corrijo»")
+    assertEqual(limpia("olvida lo anterior, la reunión es el viernes"),
+        "La reunión es el viernes",
+        "3 · orden explícita: se va el disparador y lo de antes")
+    assertEqual(limpia("mándalo el lunes, quise decir el jueves"),
+        "Mándalo el jueves", "3 · «quise decir»")
+
+    // Regla 4 · listas habladas
+    assertEqual(limpia("pendientes uno cerrar el ticket dos avisar al cliente"),
+        "Pendientes:\n1. Cerrar el ticket\n2. Avisar al cliente",
+        "4 · enumeración con cardinales y encabezado")
+    assertEqual(limpia("primer punto primero revisar el contrato segundo firmar el anexo"),
+        "Primer punto:\n1. Revisar el contrato\n2. Firmar el anexo",
+        "4 · enumeración con ordinales")
+    assertEqual(limpia("uno llamar al banco dos pedir el extracto tres archivarlo"),
+        "1. Llamar al banco\n2. Pedir el extracto\n3. Archivarlo",
+        "4 · sin encabezado cuando la lista abre el dictado")
+
+    // Combinaciones
+    assertEqual(limpia("o sea, la la propuesta va mañana"), "La propuesta va mañana",
+        "1+2 · muletilla y repetición en la misma frase")
+    assertEqual(limpia("bueno, nos vemos el martes, mejor dicho el miércoles"),
+        "Nos vemos el miércoles", "1+3 · muletilla y autocorrección")
+
+    // Nivel conservador: solo las dos reglas que borran ruido.
+    assertEqual(limpia("la la reunión es mañana", .conservador), "La reunión es mañana",
+        "conservador · sí colapsa repeticiones")
+    assertEqual(limpia("este, necesito el informe", .conservador), "Necesito el informe",
+        "conservador · sí quita muletillas")
+    assertEqual(limpia("nos vemos el martes, mejor dicho el miércoles", .conservador),
+        "nos vemos el martes, mejor dicho el miércoles",
+        "conservador · NO resuelve autocorrecciones")
+    assertEqual(limpia("pendientes uno cerrar el ticket dos avisar al cliente", .conservador),
+        "pendientes uno cerrar el ticket dos avisar al cliente",
+        "conservador · NO convierte listas")
+}
+
+func testCleanerNegativeCases() {
+    suite("Cleaner — Casos que NO se tocan")
+
+    // Cada uno de estos, si se activara, borraría contenido del usuario.
+    let intactos = [
+        "el estado del contrato",                      // «este» dentro de otra palabra
+        "actualmente estamos en fase dos",             // «dos» sin lista
+        "la casa la vendimos",                         // repetidos pero no seguidos
+        "este informe es urgente",                     // demostrativo, no muletilla
+        "te pido perdón por el retraso",               // disparador sin corrección detrás
+        "uno de los problemas es que dos personas faltaron",  // «uno de» no es lista
+        "lo tengo claro, gracias",                     // «claro» sin pausa antes
+        "no quiero nada, gracias",                     // idéntico patrón, otra palabra
+        "esto es lo que hay",                          // «esto» sin pausas
+        "vamos a ver el informe",                      // «a ver» dentro de la frase
+        "quiero dos cafés y dos aguas",                // cardinales que son cantidades
+        "sí sí sí sí claro que sí",                    // racha de cuatro: es énfasis
+        "el pago es de mil dos cientos",               // cifra hablada, no lista
+        "tres puntos primero revisar segundo firmar",  // ítems de una sola palabra
+        "es más bien caro para lo que ofrece",         // «más bien» sin repetición detrás
+        "digamos que sí",                              // abre el dictado sin pausa detrás
+        "digamos la verdad de una vez",                // idem: aquí es un verbo
+    ]
+    for texto in intactos {
+        assertEqual(limpia(texto), texto, "intacto: «\(texto)»")
+    }
+}
+
+func testCleanerDisabledIsByteIdentical() {
+    suite("Cleaner — El nivel desactivado no toca ni un byte")
+
+    let textos = [
+        "este, necesito el informe",
+        "o sea,   digamos   que sí",
+        "pendientes uno cerrar el ticket dos avisar al cliente",
+        "  espacios raros \t y tabuladores  ",
+        "primera línea\nsegunda línea\n\ntercera",
+        "",
+    ]
+    for texto in textos {
+        assertEqual(Cleaner.clean(texto, level: .desactivado,
+                                  rules: tablasDeLimpieza, protected: .none),
+                    texto, "desactivado devuelve la entrada tal cual")
+    }
+
+    // Y una oración que ninguna regla toca conserva sus espacios originales
+    // aunque otra oración del mismo texto sí se limpie.
+    let mezcla = "el   estado  del contrato. este, mándalo hoy."
+    assertEqual(limpia(mezcla), "el   estado  del contrato. Mándalo hoy.",
+        "la oración intacta conserva su espaciado; solo se rehace la que cambió")
+
+    let saltos = "Hola.\nEste, te escribo por el contrato.\nGracias."
+    assertEqual(limpia(saltos), "Hola.\nTe escribo por el contrato.\nGracias.",
+        "los saltos de línea sobreviven a la limpieza")
+}
+
+func testCleanerNeverTouchesDictionary() {
+    suite("Cleaner — Regla de seguridad: lo del diccionario no se toca")
+
+    let entradas = [
+        DictionaryEntry(canonical: "ORIUNO", variants: ["o riuno"]),
+        DictionaryEntry(canonical: "Este", variants: []),
+        DictionaryEntry(canonical: "Banco de Bogotá", variants: ["banco de bogota"]),
+        // Desactivada: sigue siendo vocabulario del usuario.
+        DictionaryEntry(canonical: "Bueno", variants: [], isActive: false),
+    ]
+    let protegido = Cleaner.Guard.from(dictionary: entradas, snippetRules: [])
+
+    assertContains(limpia("ORIUNO, o sea el producto", protegido: protegido), "ORIUNO",
+        "el término del diccionario sobrevive")
+    assertEqual(limpia("Este, necesito el informe", protegido: protegido),
+        "Este, necesito el informe",
+        "una muletilla registrada como término del usuario deja de ser muletilla")
+    assertEqual(limpia("Bueno, arranca el proyecto", protegido: protegido),
+        "Bueno, arranca el proyecto",
+        "también si la entrada está desactivada")
+    assertEqual(limpia("el el Banco de Bogotá confirmó", protegido: protegido),
+        "El Banco de Bogotá confirmó",
+        "protegido lo del diccionario, el resto se sigue limpiando")
+
+    // Cada palabra de una forma de varias cuenta: quitarle el «de» a
+    // «Banco de Bogotá» sería romper el término igual que borrarlo entero.
+    assert(protegido.covers("de"), "las palabras sueltas de una forma también se protegen")
+    assert(protegido.covers("oriuno"), "la forma canónica")
+    assert(protegido.covers("riuno"), "y las variantes")
+
+    // Ninguna regla, en ningún nivel, puede hacer desaparecer un token protegido.
+    let frases = [
+        "ORIUNO ORIUNO es el producto",
+        "revisa ORIUNO, mejor dicho ORIUNO ya está",
+        "pendientes uno revisar ORIUNO dos cerrar el ticket",
+        "Este, Este es el punto",
+    ]
+    for nivel in [CleanupLevel.conservador, .completo] {
+        for frase in frases {
+            let salida = limpia(frase, nivel, protegido: protegido)
+            for termino in ["ORIUNO", "Este"] where frase.contains(termino) {
+                let antes = frase.components(separatedBy: termino).count - 1
+                let despues = salida.components(separatedBy: termino).count - 1
+                assert(despues >= antes,
+                    "[\(nivel.rawValue)] «\(frase)» conserva sus \(antes) «\(termino)»")
+            }
+        }
+    }
+
+    // Los disparadores de snippets se protegen igual. Los cuerpos no hacen
+    // falta: se insertan después de esta etapa.
+    let conSnippet = Cleaner.Guard.from(
+        dictionary: [],
+        snippetRules: [PhraseRewriter.Rule(phrases: ["este bueno"], replacement: "…")])
+    assertEqual(limpia("este bueno, mándalo hoy", protegido: conSnippet),
+        "este bueno, mándalo hoy", "un disparador de snippet no se limpia")
+}
+
+
+func testCleanerPerformance() {
+    suite("Cleaner — Coste en el pipeline")
+
+    // Un dictado largo de verdad: 300 palabras con muletillas repartidas.
+    let frase = "este, necesito que revises el informe o sea la la propuesta del cliente "
+        + "y me digas si el martes, mejor dicho el miércoles podemos cerrarlo. "
+    var texto = ""
+    while texto.split(separator: " ").count < 300 { texto += frase }
+    let palabras = texto.split(separator: " ").count
+    assert(palabras >= 300, "el texto de prueba tiene \(palabras) palabras")
+
+    let protegido = Cleaner.Guard.from(
+        dictionary: [DictionaryEntry(canonical: "DocFly", variants: ["doc fly"])],
+        snippetRules: [])
+
+    _ = Cleaner.clean(texto, level: .completo, rules: tablasDeLimpieza, protected: protegido)
+
+    // Se mide la mejor de cinco: en una máquina compartida —y CI lo es— la
+    // media mide al vecino, no al código.
+    var mejor = Double.greatestFiniteMagnitude
+    for _ in 0..<5 {
+        let inicio = Date()
+        _ = Cleaner.clean(texto, level: .completo, rules: tablasDeLimpieza, protected: protegido)
+        mejor = min(mejor, Date().timeIntervalSince(inicio) * 1000)
+    }
+    assert(mejor < 15,
+        "300 palabras se limpian en \(String(format: "%.2f", mejor)) ms (límite: 15 ms)")
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -2644,6 +2917,12 @@ struct TestRunner {
         testLocalLLM()
         testPipelineWithSpellFix()
         testModelDownloaderFormatting()
+        testCleanupRulesResource()
+        testCleanerPositiveCases()
+        testCleanerNegativeCases()
+        testCleanerDisabledIsByteIdentical()
+        testCleanerNeverTouchesDictionary()
+        testCleanerPerformance()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")

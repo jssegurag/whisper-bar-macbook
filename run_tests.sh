@@ -2,6 +2,9 @@
 set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
+# Los tests leen recursos por ruta relativa (Resources/cleanup-es.json), así que
+# el runner se ejecuta desde la raíz del repo aunque se invoque desde otro sitio.
+cd "$DIR"
 
 # Detectar arquitectura
 # El modelo del sistema solo existe desde el SDK de macOS 26. Enlazarlo en débil
@@ -45,6 +48,8 @@ swiftc \
     "$DIR/Sources/SnippetAuth.swift" \
     "$DIR/Sources/SnippetStore.swift" \
     "$DIR/Sources/RewritePipeline.swift" \
+    "$DIR/Sources/CleanupRules.swift" \
+    "$DIR/Sources/Cleaner.swift" \
     "$DIR/Sources/WhisperPrompt.swift" \
     "$DIR/Sources/SpellFixer.swift" \
     "$DIR/Sources/SystemPolish.swift" \

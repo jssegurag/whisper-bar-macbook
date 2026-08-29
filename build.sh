@@ -45,6 +45,8 @@ swiftc \
     "$DIR/Sources/SnippetAuth.swift" \
     "$DIR/Sources/SnippetStore.swift" \
     "$DIR/Sources/RewritePipeline.swift" \
+    "$DIR/Sources/CleanupRules.swift" \
+    "$DIR/Sources/Cleaner.swift" \
     "$DIR/Sources/WhisperPrompt.swift" \
     "$DIR/Sources/SpellFixer.swift" \
     "$DIR/Sources/SystemPolish.swift" \
@@ -106,6 +108,9 @@ cp "$DIR/AppIcon.icns"   "$APP/Contents/Resources/AppIcon.icns"
 # NSImage(named:) elija la variante correcta según la pantalla.
 cp "$DIR/Assets/GluffiMark.png"     "$APP/Contents/Resources/GluffiMark.png"
 cp "$DIR/Assets/GluffiMark@2x.png"  "$APP/Contents/Resources/GluffiMark@2x.png"
+# Tablas de la limpieza automática. Van como recurso, no incrustadas en el
+# binario: la lista de muletillas se ajusta editando este archivo.
+cp "$DIR/Resources/cleanup-es.json" "$APP/Contents/Resources/cleanup-es.json"
 
 # Identidad de firma. Con una identidad estable —un certificado autofirmado
 # basta— macOS deja de revocar Accesibilidad y el acceso al Llavero en cada
