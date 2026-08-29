@@ -7,13 +7,22 @@ struct TranscriptionEntry: Codable, Identifiable {
     let text: String
     let duration: TimeInterval
     let sourceApp: String?
+    /// Qué perfil se aplicó. `nil` = preferencias globales, y también las
+    /// entradas escritas antes de que existieran los perfiles: al ser opcional,
+    /// su ausencia en el JSON decodifica como nil en vez de fallar.
+    ///
+    /// Se guarda el id y no el nombre a propósito: renombrar un perfil tiene que
+    /// renombrarlo también en el historial, no dejar el nombre viejo congelado.
+    let profileID: UUID?
 
-    init(text: String, duration: TimeInterval, sourceApp: String? = nil) {
+    init(text: String, duration: TimeInterval, sourceApp: String? = nil,
+         profileID: UUID? = nil) {
         self.id        = UUID()
         self.timestamp = Date()
         self.text      = text
         self.duration  = duration
         self.sourceApp = sourceApp
+        self.profileID = profileID
     }
 }
 

@@ -23,6 +23,17 @@ enum HistoryPresentation {
         count == 1 ? "1 resultado" : "\(count) resultados"
     }
 
+    /// Nombre del perfil de una entrada, o `nil` si no hay que enseñar nada.
+    ///
+    /// Se resuelve al pintar, contra el store, en vez de leerse de la entrada:
+    /// así renombrar un perfil se refleja en el historial, y un perfil borrado
+    /// deja de nombrarse en lugar de mentir con un nombre que ya no existe.
+    /// Las preferencias globales no son un perfil, así que no se etiquetan.
+    static func profileLabel(_ id: UUID?, in store: ProfileStore) -> String? {
+        guard let id else { return nil }
+        return store.profile(with: id)?.name
+    }
+
     static func time(_ date: Date, now: Date = Date(), locale: Locale = .current) -> String {
         let formatter = DateFormatter()
         formatter.locale = locale

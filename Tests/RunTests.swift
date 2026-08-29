@@ -3745,7 +3745,7 @@ func testDictationSessionReachesWhisper() {
     var overrides = ProfileOverrides()
     overrides.language = "en"
     let sesion = DictationSession(
-        profileID: nil, profileName: nil, bundleID: nil,
+        profileID: nil, profileName: nil, bundleID: nil, appName: nil,
         whisperCliPath: "/bin/echo", modelPath: "/modelos/ggml-small.bin",
         language: "en", recognitionBias: true, systemPolish: false,
         cleanupLevel: .conservador,
@@ -3765,6 +3765,86 @@ func testDictationSessionReachesWhisper() {
                                           prompt: "DocFly", session: sesion)
     assert(conPrompt.contains("--carry-initial-prompt"),
         "el sesgo del diccionario sigue reinyectándose en cada ventana")
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - Historial — El perfil aplicado
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testHistoryRecordsProfile() {
+    suite("Historial — Cada entrada guarda su perfil")
+
+    let id = UUID()
+    let entrada = TranscriptionEntry(text: "git status", duration: 1.2,
+                                     sourceApp: "Terminal", profileID: id)
+    assertEqual(entrada.profileID, id, "la entrada recuerda qué perfil se aplicó")
+    assertEqual(entrada.sourceApp, "Terminal", "y en qué app se pegó")
+
+    // Sin perfil —preferencias globales— el campo queda vacío, no inventado.
+    let global = TranscriptionEntry(text: "hola", duration: 1, sourceApp: "Safari")
+    assertEqual(global.profileID, nil, "sin perfil no se registra ninguno")
+}
+
+func testHistoryReadsOldEntries() {
+    suite("Historial — Las entradas antiguas se leen sin error")
+
+    // Exactamente la forma que escribían las versiones anteriores: sin profileID.
+    let json = """
+    [
+      {
+        "id": "\(UUID().uuidString)",
+        "timestamp": "2026-08-01T10:00:00Z",
+        "text": "una transcripción de antes",
+        "duration": 2.5,
+        "sourceApp": "Mail"
+      }
+    ]
+    """
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let entradas = try? decoder.decode([TranscriptionEntry].self,
+                                       from: Data(json.utf8))
+    assertEqual(entradas?.count, 1, "una entrada sin profileID se decodifica")
+    assertEqual(entradas?.first?.text, "una transcripción de antes", "con su texto")
+    assertEqual(entradas?.first?.profileID, nil, "y el perfil queda vacío")
+
+    // Y al volver a escribirlas no se pierde nada de lo que ya tenían.
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    let vuelta = (try? encoder.encode(entradas ?? []))
+        .flatMap { try? decoder.decode([TranscriptionEntry].self, from: $0) }
+    assertEqual(vuelta?.first?.sourceApp, "Mail", "la app se conserva en la ida y vuelta")
+}
+
+func testHistoryProfileLabel() {
+    suite("Historial — Cómo se enseña el perfil")
+
+    // El nombre se busca al pintar, no se copia en la entrada: renombrar un
+    // perfil tiene que renombrarlo también en el historial.
+    let (store, url) = storeDePruebas()
+    defer { try? FileManager.default.removeItem(at: url) }
+    let perfil = Profile(name: "Terminal e IDE", bundleIDs: ["com.apple.Terminal"], order: 0)
+    store.add(perfil)
+
+    assertEqual(HistoryPresentation.profileLabel(perfil.id, in: store), "Terminal e IDE",
+        "la entrada enseña el nombre actual del perfil")
+    assertEqual(HistoryPresentation.profileLabel(nil, in: store), nil,
+        "sin perfil no se enseña nada: las globales no son un perfil")
+    assertEqual(HistoryPresentation.profileLabel(UUID(), in: store), nil,
+        "y un perfil borrado deja de nombrarse, en vez de mentir")
+}
+
+func testDictationSessionCarriesAppName() {
+    suite("DictationSession — El nombre de la app viaja con la sesión")
+
+    // El historial guardaba el frontmost AL TERMINAR la transcripción. Si el
+    // usuario cambiaba de ventana mientras whisper corría, atribuía el dictado a
+    // la app equivocada. Ahora sale de la misma captura que el perfil.
+    let sesion = DictationSession.make(profile: nil, bundleID: "com.apple.Terminal",
+                                       appName: "Terminal")
+    assertEqual(sesion.appName, "Terminal", "la sesión recuerda dónde va a caer el texto")
+    assertEqual(sesion.bundleID, "com.apple.Terminal", "junto a su identificador")
 }
 
 @main
@@ -3880,6 +3960,10 @@ struct TestRunner {
         testDictationSessionEachOverride()
         testDictationSessionModelFallback()
         testDictationSessionReachesWhisper()
+        testHistoryRecordsProfile()
+        testHistoryReadsOldEntries()
+        testHistoryProfileLabel()
+        testDictationSessionCarriesAppName()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")

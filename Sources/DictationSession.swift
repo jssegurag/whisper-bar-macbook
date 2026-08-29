@@ -25,6 +25,12 @@ struct DictationSession {
     let profileName: String?
     /// A qué app se resolvió. Para el historial.
     let bundleID: String?
+    /// Su nombre legible, capturado a la vez que el resto.
+    ///
+    /// El historial lo leía del frontmost **al terminar** la transcripción, así
+    /// que cambiar de ventana mientras whisper corría atribuía el dictado a la
+    /// app equivocada. Ahora sale de la misma captura que el perfil.
+    let appName: String?
 
     // Lo que necesita whisper-cli, antes de lanzarlo.
     let whisperCliPath: String
@@ -57,12 +63,14 @@ struct DictationSession {
     /// vacío produce exactamente la sesión global.
     static func make(profile: Profile?,
                      bundleID: String?,
+                     appName: String? = nil,
                      config: Config = .shared) -> DictationSession {
         let o = profile?.overrides ?? ProfileOverrides()
         return DictationSession(
             profileID: profile?.id,
             profileName: profile?.name,
             bundleID: bundleID,
+            appName: appName,
             whisperCliPath: config.whisperCliPath,
             modelPath: resolveModel(o.model, fallback: config.modelPath),
             language: o.language ?? config.language,

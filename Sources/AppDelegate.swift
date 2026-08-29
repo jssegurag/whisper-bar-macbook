@@ -363,7 +363,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let bundleID = pasteTargetApp?.bundleIdentifier
         let perfil = ProfileResolver.resolve(bundleID: bundleID,
                                              among: ProfileStore.shared.profiles)
-        return DictationSession.make(profile: perfil, bundleID: bundleID)
+        return DictationSession.make(profile: perfil, bundleID: bundleID,
+                                     appName: pasteTargetApp?.localizedName)
     }
 
     /// Cancela la grabación o transcripción en curso sin pegar nada.
@@ -530,8 +531,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 let correctedText = self.applyRewrites(textoBase, session: session)
 
-                let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
-                let entry = TranscriptionEntry(text: correctedText, duration: duration, sourceApp: sourceApp)
+                // La app sale de la sesión, capturada al presionar el atajo.
+                // Leerla del frontmost aquí atribuía el dictado a donde estuviera
+                // el usuario cuando whisper terminaba, que no es donde se pegó.
+                let entry = TranscriptionEntry(text: correctedText, duration: duration,
+                                               sourceApp: session.appName,
+                                               profileID: session.profileID)
                 self.history.add(entry)
                 self.paste(text: correctedText)
 
@@ -577,8 +582,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 DispatchQueue.main.async { self.audioFeedback.stop() }
                 guard !self.isCancelled else { return }
                 let correctedText = self.applyRewrites(text, session: session)
-                let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
-                let entry = TranscriptionEntry(text: correctedText, duration: duration, sourceApp: sourceApp)
+                // La app sale de la sesión, capturada al presionar el atajo.
+                // Leerla del frontmost aquí atribuía el dictado a donde estuviera
+                // el usuario cuando whisper terminaba, que no es donde se pegó.
+                let entry = TranscriptionEntry(text: correctedText, duration: duration,
+                                               sourceApp: session.appName,
+                                               profileID: session.profileID)
                 self.history.add(entry)
                 self.paste(text: correctedText)
             case .failure(let error):
