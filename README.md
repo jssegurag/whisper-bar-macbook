@@ -22,6 +22,7 @@ Suelta     →  ⏳ transcribe  →  📋 pega donde está el cursor
 
 - **Completamente offline** — usa whisper.cpp, sin APIs externas
 - **Ortografía automática** — con el corrector del sistema, sin instalar ningún modelo extra
+- **Repaso opcional con IA** — en macOS 26, usando el modelo que ya trae el sistema: cero descarga
 - **Reconoce tus términos** — le pasa tu diccionario a whisper antes de transcribir, para que los oiga bien desde el principio
 - **Panel de preferencias nativo** — configura todo desde una ventana SwiftUI (sin tocar terminal)
 - **Diccionario personalizado** — registra tus términos propios (marcas, clientes, siglas) y se escriben siempre con la forma correcta, aunque whisper los oiga mal
@@ -488,7 +489,12 @@ MIT © [jssegurag](https://github.com/jssegurag) — ver [LICENSE](LICENSE)
 
 ## Qué NO hace, y por qué
 
-**No corrige con un modelo de lenguaje.** La ortografía la arregla el corrector de
+**No descarga ningún modelo de lenguaje.** En macOS 26 con Apple Intelligence
+encendido puedes activar «Repasar con el modelo de macOS» en Preferencias → Texto:
+usa el modelo que el sistema ya tiene, sin ocupar un byte más. Viene apagado porque
+añade un par de segundos por dictado.
+
+**No corrige con un modelo de lenguaje descargado.** La ortografía la arregla el corrector de
 macOS, gratis y sin descargar nada. Un modelo de lenguaje hacía el mismo trabajo,
 tardaba segundos por dictado y reescribía tus propios términos.
 

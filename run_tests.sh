@@ -38,6 +38,7 @@ swiftc \
     "$DIR/Sources/RewritePipeline.swift" \
     "$DIR/Sources/WhisperPrompt.swift" \
     "$DIR/Sources/SpellFixer.swift" \
+    "$DIR/Sources/SystemPolish.swift" \
     "$DIR/Sources/SnippetsView.swift" \
     "$DIR/Sources/SnippetsWindowController.swift" \
     "$DIR/Sources/CustomDictionary.swift" \
@@ -82,6 +83,7 @@ swiftc \
     -framework UserNotifications \
     -framework CryptoKit \
     -framework LocalAuthentication \
+    -Xlinker -weak_framework -Xlinker FoundationModels \
     -target "$TARGET"
 
 echo "→ Compilación exitosa"

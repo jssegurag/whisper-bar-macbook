@@ -194,6 +194,14 @@ class Config {
         set { defaults.set(newValue, forKey: "recognitionBiasEnabled") }
     }
 
+    /// Repaso con el modelo de lenguaje que trae macOS. Apagado por defecto:
+    /// añade un par de segundos por dictado y el corrector ortográfico ya cubre
+    /// lo habitual.
+    var systemPolishEnabled: Bool {
+        get { defaults.object(forKey: "systemPolishEnabled") as? Bool ?? false }
+        set { defaults.set(newValue, forKey: "systemPolishEnabled") }
+    }
+
     /// Corrección ortográfica con el corrector del sistema.
     var spellFixEnabled: Bool {
         get { defaults.object(forKey: "spellFixEnabled") as? Bool ?? true }
