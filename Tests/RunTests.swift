@@ -3572,6 +3572,201 @@ func testProfileResolverFromPasteTarget() {
                 nil, "y entonces mandan las preferencias globales")
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - DictationSession — El perfil resuelto viaja como parámetro
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Deja Config en un estado conocido y lo devuelve como estaba al terminar.
+func conConfigDePruebas(_ cuerpo: () -> Void) {
+    let defaults = UserDefaults.standard
+    let claves = ["language", "cleanupLevel", "spellFixEnabled", "initialCapitalEnabled",
+                  "trailingPeriodEnabled", "dictionaryEnabled", "snippetsEnabled",
+                  "systemPolishEnabled", "modelPath"]
+    let previos = claves.map { ($0, defaults.object(forKey: $0)) }
+    defer {
+        for (clave, valor) in previos {
+            if let valor { defaults.set(valor, forKey: clave) }
+            else { defaults.removeObject(forKey: clave) }
+        }
+    }
+    Config.shared.language = "es"
+    Config.shared.cleanupLevel = .conservador
+    Config.shared.spellFixEnabled = true
+    Config.shared.initialCapitalEnabled = true
+    Config.shared.trailingPeriodEnabled = true
+    Config.shared.dictionaryEnabled = true
+    Config.shared.snippetsEnabled = true
+    Config.shared.systemPolishEnabled = false
+    cuerpo()
+}
+
+func testDictationSessionInheritsGlobals() {
+    suite("DictationSession — Sin perfil manda lo global")
+
+    conConfigDePruebas {
+        let global = DictationSession.make(profile: nil, bundleID: nil)
+
+        assertEqual(global.profileID, nil, "sin perfil no hay id que registrar")
+        assertEqual(global.profileName, nil, "ni nombre que enseñar en la píldora")
+        assertEqual(global.language, "es", "el idioma sale de las preferencias")
+        assertEqual(global.cleanupLevel, .conservador, "y el nivel de limpieza")
+        assertEqual(global.spellFix, true, "y el corrector")
+        assertEqual(global.initialCapital, true, "y la mayúscula inicial")
+        assertEqual(global.trailingPeriod, true, "y el punto final")
+        assertEqual(global.dictionary, true, "y el diccionario")
+        assertEqual(global.snippets, true, "y los snippets")
+        assertEqual(global.systemPolish, false, "y el repaso del sistema")
+        assertEqual(global.modelPath, Config.shared.modelPath, "y el modelo de voz")
+    }
+}
+
+func testDictationSessionEmptyProfileIsIdentical() {
+    suite("DictationSession — Un perfil vacío no cambia nada")
+
+    conConfigDePruebas {
+        // El criterio de aceptación central: los nueve campos en «heredar» tienen
+        // que producir exactamente la misma sesión que no tener perfil.
+        let vacio = Profile(name: "Vacío", bundleIDs: ["com.apple.Terminal"], order: 0)
+        let global = DictationSession.make(profile: nil, bundleID: nil)
+        let conPerfil = DictationSession.make(profile: vacio, bundleID: "com.apple.Terminal")
+
+        assert(vacio.overrides.isEmpty, "el perfil no sobrescribe nada")
+        assertEqual(conPerfil.language, global.language, "mismo idioma")
+        assertEqual(conPerfil.cleanupLevel, global.cleanupLevel, "mismo nivel de limpieza")
+        assertEqual(conPerfil.spellFix, global.spellFix, "mismo corrector")
+        assertEqual(conPerfil.initialCapital, global.initialCapital, "misma mayúscula inicial")
+        assertEqual(conPerfil.trailingPeriod, global.trailingPeriod, "mismo punto final")
+        assertEqual(conPerfil.dictionary, global.dictionary, "mismo diccionario")
+        assertEqual(conPerfil.snippets, global.snippets, "mismos snippets")
+        assertEqual(conPerfil.systemPolish, global.systemPolish, "mismo repaso del sistema")
+        assertEqual(conPerfil.modelPath, global.modelPath, "mismo modelo")
+
+        // Lo único que sí cambia: el perfil queda registrado, para el historial
+        // y para que la píldora pueda decir cuál se aplicó.
+        assertEqual(conPerfil.profileID, vacio.id, "pero el perfil queda identificado")
+        assertEqual(conPerfil.profileName, "Vacío", "con su nombre")
+    }
+}
+
+func testDictationSessionEachOverride() {
+    suite("DictationSession — Cada sobrescritura hace lo suyo, y solo lo suyo")
+
+    conConfigDePruebas {
+        let global = DictationSession.make(profile: nil, bundleID: nil)
+
+        func conUno(_ poner: (inout ProfileOverrides) -> Void) -> DictationSession {
+            var o = ProfileOverrides()
+            poner(&o)
+            let p = Profile(name: "P", bundleIDs: ["x"], order: 0, overrides: o)
+            return DictationSession.make(profile: p, bundleID: "x")
+        }
+
+        let idioma = conUno { $0.language = "en" }
+        assertEqual(idioma.language, "en", "el idioma se sobrescribe")
+        assertEqual(idioma.cleanupLevel, global.cleanupLevel, "y el resto sigue heredando")
+
+        let limpieza = conUno { $0.cleanupLevel = .completo }
+        assertEqual(limpieza.cleanupLevel, .completo, "el nivel de limpieza se sobrescribe")
+        assertEqual(limpieza.language, global.language, "y el resto sigue heredando")
+
+        let corrector = conUno { $0.spellFix = false }
+        assertEqual(corrector.spellFix, false, "el corrector se sobrescribe")
+        assertEqual(corrector.snippets, global.snippets, "y el resto sigue heredando")
+
+        let mayuscula = conUno { $0.initialCapital = false }
+        assertEqual(mayuscula.initialCapital, false, "la mayúscula inicial se sobrescribe")
+        assertEqual(mayuscula.trailingPeriod, global.trailingPeriod, "y el punto no se toca")
+
+        let punto = conUno { $0.trailingPeriod = false }
+        assertEqual(punto.trailingPeriod, false, "el punto final se sobrescribe")
+        assertEqual(punto.initialCapital, global.initialCapital, "y la mayúscula no se toca")
+
+        let diccionario = conUno { $0.dictionary = false }
+        assertEqual(diccionario.dictionary, false, "el diccionario se sobrescribe")
+        assertEqual(diccionario.spellFix, global.spellFix, "y el resto sigue heredando")
+
+        let snippets = conUno { $0.snippets = false }
+        assertEqual(snippets.snippets, false, "los snippets se sobrescriben")
+        assertEqual(snippets.dictionary, global.dictionary, "y el resto sigue heredando")
+
+        let repaso = conUno { $0.systemPolish = true }
+        assertEqual(repaso.systemPolish, true, "el repaso del sistema se sobrescribe")
+        assertEqual(repaso.cleanupLevel, global.cleanupLevel, "y el resto sigue heredando")
+    }
+}
+
+func testDictationSessionModelFallback() {
+    suite("DictationSession — Modelo de voz y su red de seguridad")
+
+    conConfigDePruebas {
+        let carpeta = ModelDownloader.destinationDirectory
+        let instalados = VoiceModel.installed(in: carpeta)
+
+        // Un modelo que no está descargado NO puede costarle el dictado al
+        // usuario: se ignora la sobrescritura y manda el global.
+        var ausente = ProfileOverrides()
+        ausente.model = "tiny"
+        let conAusente = DictationSession.make(
+            profile: Profile(name: "P", bundleIDs: ["x"], order: 0, overrides: ausente),
+            bundleID: "x")
+        if VoiceModel.named("tiny").map({ !instalados.contains($0) }) == true {
+            assertEqual(conAusente.modelPath, Config.shared.modelPath,
+                "un modelo sin descargar cae al global en vez de perder el dictado")
+        }
+
+        // Uno inventado tampoco rompe nada.
+        var inventado = ProfileOverrides()
+        inventado.model = "no-existe"
+        let conInventado = DictationSession.make(
+            profile: Profile(name: "P", bundleIDs: ["x"], order: 0, overrides: inventado),
+            bundleID: "x")
+        assertEqual(conInventado.modelPath, Config.shared.modelPath,
+            "un identificador que no está en el catálogo cae al global")
+
+        // Y uno que sí está se usa.
+        if let presente = instalados.first {
+            var valido = ProfileOverrides()
+            valido.model = presente.id
+            let conValido = DictationSession.make(
+                profile: Profile(name: "P", bundleIDs: ["x"], order: 0, overrides: valido),
+                bundleID: "x")
+            assertEqual(conValido.modelPath, presente.path(in: carpeta),
+                "un modelo descargado sí se usa")
+        }
+    }
+}
+
+func testDictationSessionReachesWhisper() {
+    suite("DictationSession — El idioma y el modelo llegan a whisper-cli")
+
+    // El criterio pide que lleguen a la invocación, no después. Se comprueba
+    // sobre los argumentos que se construyen, sin lanzar el binario.
+    var overrides = ProfileOverrides()
+    overrides.language = "en"
+    let sesion = DictationSession(
+        profileID: nil, profileName: nil, bundleID: nil,
+        whisperCliPath: "/bin/echo", modelPath: "/modelos/ggml-small.bin",
+        language: "en", recognitionBias: true, systemPolish: false,
+        cleanupLevel: .conservador,
+        dictionary: true, spellFix: true, initialCapital: true,
+        trailingPeriod: true, snippets: true)
+
+    let args = Transcriber.arguments(audio: URL(fileURLWithPath: "/tmp/a.wav"),
+                                     prompt: nil, session: sesion)
+    assert(args.contains("-l"), "se le pasa el idioma")
+    assertEqual(args[(args.firstIndex(of: "-l") ?? 0) + 1], "en",
+        "y es el del perfil, no el global")
+    assert(args.contains("-m"), "se le pasa el modelo")
+    assertEqual(args[(args.firstIndex(of: "-m") ?? 0) + 1], "/modelos/ggml-small.bin",
+        "y es el del perfil")
+
+    let conPrompt = Transcriber.arguments(audio: URL(fileURLWithPath: "/tmp/a.wav"),
+                                          prompt: "DocFly", session: sesion)
+    assert(conPrompt.contains("--carry-initial-prompt"),
+        "el sesgo del diccionario sigue reinyectándose en cada ventana")
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -3680,6 +3875,11 @@ struct TestRunner {
         testProfileResolverInactive()
         testProfileResolverIgnoresGluffi()
         testProfileResolverFromPasteTarget()
+        testDictationSessionInheritsGlobals()
+        testDictationSessionEmptyProfileIsIdentical()
+        testDictationSessionEachOverride()
+        testDictationSessionModelFallback()
+        testDictationSessionReachesWhisper()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")

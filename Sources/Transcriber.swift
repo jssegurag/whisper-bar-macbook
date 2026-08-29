@@ -1,9 +1,13 @@
 import Foundation
 
 /// Invoca whisper-cli para transcribir un archivo de audio.
+///
+/// No consulta `Config`: recibe la ruta del binario, el modelo y el idioma en la
+/// `DictationSession` que se resolvió al presionar el atajo. Leerlos aquí haría
+/// que cambiar de aplicación a mitad de una transcripción larga cambiara el
+/// resultado.
 class Transcriber {
 
-    private let config = Config.shared
     private let timeout: TimeInterval = 60
 
     /// Margen para que los lectores de las tuberías vean EOF después de que el
@@ -61,11 +65,33 @@ class Transcriber {
     ///
     /// `prompt` sesga el reconocimiento: los términos que aparecen ahí se oyen
     /// mejor. Ver WhisperPrompt.
-    func transcribe(url: URL, prompt: String? = nil) -> Result<String, Error> {
-        guard config.isValid else {
+    /// Los argumentos de la invocación. Separado para poder comprobar que el
+    /// idioma y el modelo del perfil llegan **a la llamada**, y no después, sin
+    /// tener que lanzar el binario.
+    static func arguments(audio: URL, prompt: String?,
+                          session: DictationSession) -> [String] {
+        var argumentos = [
+            "-m", session.modelPath,
+            "-l", session.language,
+            "--no-timestamps",
+            "-f", audio.path,
+        ]
+        if let prompt, !prompt.isEmpty {
+            // --carry-initial-prompt lo reinyecta en cada ventana: sin él, el
+            // sesgo se pierde a los pocos segundos de audio.
+            argumentos += ["--prompt", prompt, "--carry-initial-prompt"]
+        }
+        return argumentos
+    }
+
+    /// `session` trae el idioma y el modelo ya resueltos. Por defecto son los
+    /// globales, que es lo que hacía antes de existir los perfiles.
+    func transcribe(url: URL, prompt: String? = nil,
+                    session: DictationSession = .global()) -> Result<String, Error> {
+        guard session.isValid else {
             return .failure(TranscriberError.invalidConfig(
-                whisperCli: config.whisperCliPath,
-                model:       config.modelPath
+                whisperCli: session.whisperCliPath,
+                model:       session.modelPath
             ))
         }
 
@@ -76,19 +102,8 @@ class Transcriber {
         lock.unlock()
 
         let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: config.whisperCliPath)
-        var argumentos = [
-            "-m", config.modelPath,
-            "-l", config.language,
-            "--no-timestamps",
-            "-f", url.path,
-        ]
-        if let prompt, !prompt.isEmpty {
-            // --carry-initial-prompt lo reinyecta en cada ventana: sin él, el
-            // sesgo se pierde a los pocos segundos de audio.
-            argumentos += ["--prompt", prompt, "--carry-initial-prompt"]
-        }
-        proc.arguments = argumentos
+        proc.executableURL = URL(fileURLWithPath: session.whisperCliPath)
+        proc.arguments = Transcriber.arguments(audio: url, prompt: prompt, session: session)
 
         let outPipe = Pipe()
         let errPipe = Pipe()

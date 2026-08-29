@@ -11,7 +11,6 @@ import Foundation
 /// idioma tiene herramientas mejores a un atajo de distancia.
 class TranslationProcessor {
 
-    private let config = Config.shared
     private let timeout: TimeInterval = 60
 
     enum TranslationError: LocalizedError {
@@ -29,21 +28,23 @@ class TranslationProcessor {
     }
 
     /// Traduce el audio al inglés.
-    func translate(audioURL: URL) -> Result<String, Error> {
-        transcribeWithTranslation(url: audioURL)
+    func translate(audioURL: URL,
+                   session: DictationSession = .global()) -> Result<String, Error> {
+        transcribeWithTranslation(url: audioURL, session: session)
     }
 
     /// Invoca whisper-cli con -tr para traducción directa a inglés.
-    private func transcribeWithTranslation(url: URL) -> Result<String, Error> {
-        guard config.isValid else {
+    private func transcribeWithTranslation(url: URL,
+                                           session: DictationSession) -> Result<String, Error> {
+        guard session.isValid else {
             return .failure(TranslationError.invalidConfig)
         }
 
         let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: config.whisperCliPath)
+        proc.executableURL = URL(fileURLWithPath: session.whisperCliPath)
         proc.arguments = [
-            "-m", config.modelPath,
-            "-l", config.language,
+            "-m", session.modelPath,
+            "-l", session.language,
             "--no-timestamps",
             "-tr",
             "-f", url.path,
