@@ -312,6 +312,9 @@ All settings stored in `com.user.WhisperBar` UserDefaults domain:
 - `cleanupLevel` — `desactivado` | `conservador` | `completo` (default: `conservador`). Read on every dictation, so `defaults write com.user.WhisperBar cleanupLevel completo` applies without a restart
 - `dictionaryEnabled` — apply the custom dictionary to transcriptions (default: true; inert when the dictionary is empty)
 - `snippetsEnabled` — expand voice snippets (default: true; inert with no snippets)
+- `initialCapitalEnabled` — capitalize the first letter (default: true — inert on whisper's usual output; off forces lowercase)
+- `trailingPeriodEnabled` — keep the final period (default: true — keeping means not touching; off removes it)
+- `profilesSeeded` — the three seed profiles were already created; deleting them must not bring them back
 - `llmModelPath`, `llamaServerPath` — modelo GGUF y binario; vacío = autodetectar
 - `llmContextSize` — ventana de contexto (default 4096; más contexto es más RAM)
 - `llmIdleMinutes` — minutos sin uso antes de apagar el servidor (default 5)
@@ -550,6 +553,89 @@ Insertion points: `AppDelegate.applyDictionary(_:)` called from `stopAndTranscri
 
 The engine deliberately does **not** do fuzzy matching: in a work email, replacing a word the user actually said is worse than one misspelling. Variants are explicit. See `docs/historias/HU-001-diccionario-personalizado.md` for the full story and what v2 leaves out.
 
+### Per-App Profiles
+
+A profile is an **override layer** over the global preferences, not a parallel
+configuration system. Every field of `ProfileOverrides` is `Optional`, and `nil`
+means *inherit*. That single decision buys three things: a new profile behaves
+exactly like no profile (there is a test asserting it field by field), the
+Preferences window is not duplicated, and adding a setting to the app later does
+not force a change here.
+
+**The profile is resolved once, when the hotkey is pressed, and travels as
+`DictationSession`.** No stage reads `Config` while processing. Two reasons, both
+of them the feature:
+
+- Language and model are needed **before** invoking whisper-cli. Reading them at
+  the end would arrive too late.
+- A long transcription leaves plenty of time to switch windows. A stage reading
+  global state would apply half of one app's profile and half of another's, with
+  a different result every time.
+
+`whisperCliPath` and `recognitionBias` travel too even though no profile
+overrides them — the rule takes no exceptions, and both used to be read inside
+the background thread.
+
+Order of the rewrite pipeline, with the stage this feature added:
+
+```
+whisper-cli → SystemPolish → Cleaner → dictionary → SpellFixer → TextFinish → snippets
+```
+
+`TextFinish` (initial capital, trailing period) sits there and **not earlier**
+because `SystemPolish` fixes punctuation by design and would undo it. It sits
+before snippets because a snippet body is literal text the user wrote.
+
+Things that must not be "simplified":
+
+- **Matching is exact — no wildcards, no prefixes, no regex.** A pattern that
+  matches too much applies the wrong profile and the user has no way to find out
+  why their dictation came out strange.
+- **The user never types a bundle ID.** A mistyped one produces a profile that
+  never applies, silently. `AppCatalog` offers installed *and* running apps, with
+  name and icon; Gluffi excludes itself.
+- **With a Gluffi window frontmost, the profile is the last external app's**, not
+  the global one — because that is where the text lands. Resolving to global
+  would mean pasting into Terminal with the email formatting. The issue asked for
+  the opposite; the divergence is deliberate and documented.
+- **A profile's model that is not downloaded falls back to the global one.** A
+  misconfigured setting must never cost the user their dictation.
+
+There are **nine** overridable settings, not the eight the issue listed.
+`systemPolish` was added on performance grounds: it is the most expensive
+post-processing stage (seconds per dictation, 8 s ceiling) and contributes
+nothing to a terminal command.
+
+**Why the model is the lever that matters:** whisper-cli spawns a fresh process
+per dictation and reloads the model from disk every time, so on a short dictation
+that load *is* the wait. Measured on an M5 over 1.6 s of audio: `large-v3` 3.3 s
+warm, `small` 0.6 s — 5.4× — at a real accuracy cost (`small` drops the `s` in
+"tests"). And since nothing is warm, alternating models between profiles has no
+structural penalty.
+
+Seed profiles are created once, on first load of `ProfileStore.shared`, with the
+**whole** `KnownApps` catalogue — not filtered against what is installed. The
+first version filtered, and that left the feature half-useful: installing Slack
+the next day never added it to «Mensajería». A bundle ID for an app you do not
+have is harmless because matching is exact, and `KnownApps` ships the display
+name alongside it, so the list reads «Slack» instead of
+`com.tinyspeck.slackmacgap`. Apps that are not installed render dimmed.
+
+**The seeding lives in `ProfileStore`, not in `AppDelegate`.** It used to hang off
+the delegate, which meant any entry point that is not the full app — the
+`preview_ui.sh` harness, for one — opened the Profiles tab empty, and the feature
+is incomprehensible from an empty tab.
+
+If the user deletes the profiles they do not come back (`SeedProfiles.doneKey`).
+The bundle IDs of apps that were installed here were **verified on a real
+machine** with `osascript -e 'id of app "…"'`, not recalled: Cursor uses a
+todesktop identifier that changes between versions, and JetBrains ones vary per
+product. The rest come from vendor documentation and are marked as such in
+`KnownApps`.
+
+See `docs/historias/HU-005-perfiles-por-app.md` for the three specification
+assumptions the code disproved.
+
 ### Voice Snippets
 
 Say "agrega mi correo" and the configured email is written. Triggers are explicit phrases, not LLM intent detection: a false positive here does not misspell a word, it **inserts your email into a message where it did not belong**.
@@ -590,6 +676,7 @@ The floating window (FloatingTranscriptionWindowController) receives whisper-str
 - **Config (UserDefaults):** `com.user.WhisperBar` domain
 - **History (JSON):** `~/Library/Application Support/WhisperBar/history.json`
 - **Dictionary (JSON):** `~/Library/Application Support/WhisperBar/dictionary.json`
+- **Profiles (JSON):** `~/Library/Application Support/WhisperBar/profiles.json` (has a `version` envelope; the other two do not and cannot get one without a migration)
 - **Snippets (JSON):** `~/Library/Application Support/WhisperBar/snippets.json` (sensitive bodies encrypted; key in Keychain under service `com.user.WhisperBar`, account `snippets-encryption-key-v1`)
 - **Audio temporary:** `/tmp/whisperbar_recording.wav`
 - **Whisper model:** `~/.whisper-realtime/ggml-*.bin`

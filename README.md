@@ -21,6 +21,7 @@ Suelta     →  ⏳ transcribe  →  📋 pega donde está el cursor
 ## Características
 
 - **Completamente offline** — usa whisper.cpp, sin APIs externas
+- **Perfiles por aplicación** — dicta un comando en Terminal sin mayúscula ni punto final, y un correo en Mail con las dos; Gluffi cambia solo según dónde estés escribiendo
 - **Limpieza del dictado** — quita muletillas («o sea», «este»), palabras repetidas y frases empezadas dos veces, con reglas y sin modelo: no añade espera
 - **Ortografía automática** — con el corrector del sistema, sin instalar ningún modelo extra
 - **Repaso opcional con IA** — en macOS 26, usando el modelo que ya trae el sistema: cero descarga
@@ -227,6 +228,73 @@ El menú muestra el estado de la configuración en tiempo real (✅/❌) y da ac
 
 ---
 
+## Perfiles por aplicación
+
+Dictar un comando y dictar un correo no quieren lo mismo. En la terminal, la
+mayúscula inicial y el punto final **rompen el comando**, y el corrector reescribe
+tus banderas. En un correo quieres exactamente lo contrario.
+
+Un perfil dice qué cambia Gluffi en unas aplicaciones concretas. Preferencias →
+pestaña **Perfiles**.
+
+Al actualizar te encuentras tres ya hechos, con **una lista amplia de
+aplicaciones ya clasificada** — terminales y editores, chats, correo y
+documentos:
+
+| Perfil | Qué hace |
+|---|---|
+| **Terminal e IDE** | Sin mayúscula inicial, sin punto final, corrector apagado y sin repaso con IA. Tu diccionario y tus snippets siguen activos. |
+| **Mensajería** | Sin punto final —en un chat suena cortante— y limpieza completa. |
+| **Correo y documentos** | Mayúscula, punto y corrector. Limpieza completa. |
+
+Las aplicaciones que no tengas instaladas aparecen en gris, y **se quedan ahí a
+propósito**: el día que instales Slack, el perfil de mensajería ya lo estaba
+esperando. Un identificador que no corresponde a ninguna app de tu Mac no hace
+nada.
+
+Puedes cambiarlos o borrarlos. **Si los borras, no vuelven.**
+
+### Cómo funciona
+
+1. **Añade aplicaciones** desde una lista con nombre e icono. Nunca escribes un
+   identificador a mano: uno mal tecleado daría un perfil que no se aplica nunca
+   y sin avisar.
+2. **Elige qué cambia.** Nueve ajustes, y todos empiezan en «Heredar»: lo que
+   dejes ahí sigue tus preferencias generales. Un perfil con todo heredado no
+   cambia nada.
+3. **Arrastra para priorizar.** Si una aplicación está en dos perfiles, gana el
+   de más arriba.
+
+Mientras grabas, **la píldora te dice qué perfil se está aplicando**. No es
+adorno: un perfil cambia en silencio cómo sale el dictado, y sin verlo creerías
+que la app falla cuando lo que pasa es que estabas en otra aplicación. El
+historial también lo guarda, junto a la aplicación.
+
+El perfil se decide **al empezar a dictar**, no al terminar. Puedes cambiar de
+ventana mientras transcribe: se aplica el que había cuando pulsaste.
+
+### Un modelo distinto según dónde dictes
+
+Entre los nueve ajustes está el **modelo de voz**, y es el que más se nota.
+`whisper-cli` recarga el modelo de disco en cada dictado, así que en uno corto esa
+carga es casi toda la espera. Medido en un MacBook M5 con 1,6 s de audio:
+
+| Modelo | En caliente | Transcribió |
+|---|---|---|
+| `large-v3` (2,9 GB) | 3,3 s | «Abre la rama y corre los tests.» |
+| `small` (465 MB) | 0,6 s | «Abre la rama y corre los test.» |
+
+Cinco veces más rápido — y se come la `s` de «tests». Para comandos cortos
+compensa; para un correo, no. Por eso se elige por aplicación.
+
+Los modelos se descargan desde **Configuración**, y el selector del perfil solo
+ofrece los que ya tengas: elegir uno sin descargar dejaría un ajuste que no hace
+nada sin que te enteres.
+
+Los perfiles viven en `~/Library/Application Support/WhisperBar/profiles.json`.
+
+---
+
 ## Diccionario personalizado
 
 whisper transcribe fonéticamente y no conoce tu vocabulario: «Oriuno» sale como
@@ -320,7 +388,8 @@ Desde el menú de Gluffi → **Preferencias…** (`⌘,`):
 | Sección | Opciones |
 |---------|----------|
 | General | Idioma · ignorar grabaciones muy cortas · píldora flotante · abrir al iniciar sesión |
-| Texto | Las tres capas, numeradas por el orden en que se aplican: reconocer tus términos, diccionario, ortografía y snippets |
+| Texto | Las capas, numeradas por el orden en que se aplican: reconocer tus términos, limpieza, diccionario, ortografía, acabado y snippets |
+| Perfiles | Qué cambia Gluffi según la aplicación donde dictes |
 | Idiomas | Traducir al inglés al dictar |
 | En vivo | Prioridad Rápido / Equilibrado / Preciso, y los parámetros a mano si hace falta |
 | Sonido | Activar · volumen · seis presets con previsualización · archivo propio |
