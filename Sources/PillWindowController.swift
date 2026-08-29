@@ -33,8 +33,12 @@ final class PillWindowController: NSObject, NSWindowDelegate {
     /// estados.
     private var pillSize = CGSize(width: 200, height: 74)
 
-    /// Origen antes de empezar a arrastrar, para aplicar el desplazamiento.
-    private var dragAnchor: NSPoint?
+    /// Estado del arrastre: dónde estaba el ratón y dónde la ventana al empezar.
+    /// Se mide contra la posición absoluta del ratón en pantalla, no contra la
+    /// traslación del gesto: esa es relativa a la vista, y la vista se mueve con
+    /// la ventana, así que realimentaba y hacía vibrar la píldora.
+    private var dragMouseStart: NSPoint?
+    private var dragOriginStart: NSPoint?
 
     /// Callback disparado cuando el usuario hace click izquierdo en el pill.
     var onPillTapped: (() -> Void)?
@@ -74,7 +78,7 @@ final class PillWindowController: NSObject, NSWindowDelegate {
                 model: viewModel,
                 onTap: { [weak self] in self?.onPillTapped?() },
                 onCancel: { [weak self] in self?.onPillCancelTapped?() },
-                onDrag: { [weak self] translation in self?.drag(by: translation) },
+                onDrag: { [weak self] in self?.dragToMouse() },
                 onDragEnded: { [weak self] in self?.endDrag() },
                 onSizeChange: { [weak self] size in self?.resize(to: size) }
             )
@@ -163,6 +167,9 @@ final class PillWindowController: NSObject, NSWindowDelegate {
     /// Ajusta el panel al contenido, conservando la esquina superior izquierda
     /// para que la píldora no salte al cambiar de estado.
     private func resize(to contentSize: CGSize) {
+        // Mientras se arrastra, mover la ventana por un cambio de tamaño la haría
+        // saltar bajo el cursor.
+        guard dragMouseStart == nil else { return }
         let target = CGSize(width: ceil(contentSize.width) + shadowMargin * 2,
                             height: ceil(contentSize.height) + shadowMargin * 2)
         guard let panel, abs(target.width - pillSize.width) > 0.5
@@ -176,18 +183,27 @@ final class PillWindowController: NSObject, NSWindowDelegate {
         panel.setFrame(NSRect(origin: origin, size: target), display: true)
     }
 
-    private func drag(by translation: CGSize) {
+    /// Coloca la ventana siguiendo el ratón.
+    ///
+    /// `NSEvent.mouseLocation` está en coordenadas de pantalla y no cambia porque
+    /// la ventana se mueva, así que el desplazamiento se calcula siempre contra el
+    /// mismo origen y no hay realimentación.
+    private func dragToMouse() {
         guard let panel else { return }
-        if dragAnchor == nil { dragAnchor = panel.frame.origin }
-        guard let anchor = dragAnchor else { return }
-        // El eje vertical se invierte: SwiftUI crece hacia abajo, AppKit hacia arriba.
-        let moved = NSPoint(x: anchor.x + translation.width,
-                            y: anchor.y - translation.height)
+        let mouse = NSEvent.mouseLocation
+        if dragMouseStart == nil {
+            dragMouseStart = mouse
+            dragOriginStart = panel.frame.origin
+        }
+        guard let mouseStart = dragMouseStart, let originStart = dragOriginStart else { return }
+        let moved = NSPoint(x: originStart.x + (mouse.x - mouseStart.x),
+                            y: originStart.y + (mouse.y - mouseStart.y))
         panel.setFrameOrigin(clamp(moved))
     }
 
     private func endDrag() {
-        dragAnchor = nil
+        dragMouseStart = nil
+        dragOriginStart = nil
         if let panel { persistOrigin(panel.frame.origin) }
     }
 

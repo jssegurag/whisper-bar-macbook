@@ -33,13 +33,14 @@ struct PillView: View {
     @ObservedObject var model: PillViewModel
     var onTap: () -> Void
     var onCancel: () -> Void
-    /// Desplazamiento acumulado del arrastre, en coordenadas de pantalla.
-    var onDrag: (CGSize) -> Void = { _ in }
+    /// Aviso de que el arrastre está en curso. No lleva desplazamiento a
+    /// propósito: el de DragGesture es relativo a esta vista, que viaja con la
+    /// ventana, así que usarlo para mover la ventana se realimenta. Quien mueve
+    /// lee la posición del ratón en pantalla, que es absoluta.
+    var onDrag: () -> Void = {}
     var onDragEnded: () -> Void = {}
     /// Tamaño real del contenido, para que el panel se ajuste.
     var onSizeChange: (CGSize) -> Void = { _ in }
-
-    @State private var dragDistance: CGFloat = 0
 
     private let height: CGFloat = Theme.pillHeight
 
@@ -198,15 +199,11 @@ struct PillView: View {
     /// desplazamiento acumulado se considera arrastre, así que un pulso torpe no
     /// mueve la píldora en vez de grabar.
     private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 4, coordinateSpace: .global)
-            .onChanged { value in
-                dragDistance = abs(value.translation.width) + abs(value.translation.height)
-                onDrag(value.translation)
-            }
-            .onEnded { _ in
-                dragDistance = 0
-                onDragEnded()
-            }
+        // El umbral de 4 px lo aplica minimumDistance: un pulso torpe sigue siendo
+        // «grabar», no un arrastre de un píxel.
+        DragGesture(minimumDistance: 4)
+            .onChanged { _ in onDrag() }
+            .onEnded { _ in onDragEnded() }
     }
 }
 
