@@ -1,49 +1,36 @@
 import Foundation
 
-/// Traduce audio a texto en el idioma destino configurado.
-/// Si target=en → usa whisper-cli -tr (sin LLM). Si target≠en → whisper + LLM traduce.
+/// Traduce lo que dictas al inglés, con whisper.
+///
+/// **Solo al inglés, y no es una limitación de Gluffi:** whisper trae `-tr`, que
+/// traduce hacia inglés y nada más. No existe la dirección contraria.
+///
+/// Hubo una segunda vía que pasaba la transcripción por un modelo de lenguaje
+/// para llegar a otros idiomas. Se quitó: obligaba a descargar un gigabyte para
+/// una traducción de calidad incierta, cuando quien necesita traducir a otro
+/// idioma tiene herramientas mejores a un atajo de distancia.
 class TranslationProcessor {
 
     private let config = Config.shared
-    private let llmProcessor = LLMProcessor()
     private let timeout: TimeInterval = 60
 
     enum TranslationError: LocalizedError {
         case invalidConfig
         case timeout
         case emptyOutput
-        case llmRequired
 
         var errorDescription: String? {
             switch self {
-            case .invalidConfig: return "Config inválida para traducción."
-            case .timeout:       return "Traducción timeout (>60s)."
-            case .emptyOutput:   return "Traducción no devolvió texto."
-            case .llmRequired:   return "Traducción a \(Config.shared.translationTargetLanguage) requiere LLM activado."
+            case .invalidConfig: return "Falta el motor o el modelo de voz."
+            case .timeout:       return "La traducción tardó demasiado (>60s)."
+            case .emptyOutput:   return "No se entendió nada del audio."
             }
         }
     }
 
-    /// Traduce el audio de la URL dada al idioma configurado.
+    /// Traduce el audio al inglés.
     func translate(audioURL: URL) -> Result<String, Error> {
-        let target = config.translationTargetLanguage
-
-        if target == "en" {
-            // whisper-cli tiene -tr built-in para traducir a inglés
-            return transcribeWithTranslation(url: audioURL)
-        } else {
-            // Paso 1: Transcribir normalmente
-            let transcriber = Transcriber()
-            switch transcriber.transcribe(url: audioURL) {
-            case .success(let text) where !text.isEmpty:
-                // Paso 2: Traducir via LLM
-                return translateViaLLM(text: text, targetLanguage: target)
-            case .success:
-                return .failure(TranslationError.emptyOutput)
-            case .failure(let error):
-                return .failure(error)
-            }
-        }
+        transcribeWithTranslation(url: audioURL)
     }
 
     /// Invoca whisper-cli con -tr para traducción directa a inglés.
@@ -87,14 +74,4 @@ class TranslationProcessor {
         return text.isEmpty ? .failure(TranslationError.emptyOutput) : .success(text)
     }
 
-    /// Usa LLM para traducir texto al idioma destino.
-    private func translateViaLLM(text: String, targetLanguage: String) -> Result<String, Error> {
-        guard config.llmEnabled, config.isLlmCliValid, config.isLlmModelValid else {
-            return .failure(TranslationError.llmRequired)
-        }
-
-        let langName = Config.languageName(for: targetLanguage)
-        let prompt = "Traduce el siguiente texto a \(langName). Devuelve SOLO el texto traducido, nada más."
-        return llmProcessor.process(text: text, systemPrompt: prompt)
-    }
 }
