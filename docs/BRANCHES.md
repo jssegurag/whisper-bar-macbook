@@ -184,6 +184,17 @@ bloque entrante. Tras resolver, `bash run_tests.sh` debe dar **151 tests** (118 
 - **Se revisa commit por commit.** Los pasos dependen entre sí y un diff plano de 15 commits no se puede leer.
 - **Estado:** PR #17, 446 tests en verde.
 
+### `feat/50-auto-limpieza-determinista`
+
+- **Propósito:** implementar HU-003 — quitar del dictado lo que se dice al hablar y no se escribe, sin modelo de lenguaje.
+- **Alcance:** `Sources/Cleaner.swift`, `Sources/CleanupRules.swift`, `Resources/cleanup-es.json` (nuevos); `RewritePipeline.swift`, `Config.swift`, `AppDelegate.swift`, `FloatingTranscriptionViewModel.swift`, `PreferencesTextSection.swift` (puntos de inserción); `Tools/CleanupReport.swift` y `cleanup_report.sh`; `build.sh`, `run_tests.sh`, README, `CLAUDE.md`, tests.
+- **Historia:** `docs/historias/HU-003-auto-limpieza-determinista.md`, en la propia rama.
+- **Depende de:** — (sale de `main`, ya con `feat/llm-local` mezclado). Se rebasó sobre él;
+  no hubo conflicto porque el modelo local vive en su propia pestaña «Inteligencia» y no
+  toca `RewritePipeline` ni la sección Texto.
+- **Nota de revisión:** la numeración de las capas en Preferencias cambia. No es cosmética: el repaso con el modelo del sistema **corre antes** del diccionario y la lista lo enseñaba en cuarto lugar. Con la limpieza en medio había que renumerar de todos modos, así que el orden visible pasa a ser el real.
+- **Estado:** implementada, 597 tests en verde (576 al abrirla, más los que trajo `main`). Validada contra el historial real con `bash cleanup_report.sh`.
+
 ---
 
 ## Rama de integración

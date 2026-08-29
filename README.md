@@ -21,6 +21,7 @@ Suelta     →  ⏳ transcribe  →  📋 pega donde está el cursor
 ## Características
 
 - **Completamente offline** — usa whisper.cpp, sin APIs externas
+- **Limpieza del dictado** — quita muletillas («o sea», «este»), palabras repetidas y frases empezadas dos veces, con reglas y sin modelo: no añade espera
 - **Ortografía automática** — con el corrector del sistema, sin instalar ningún modelo extra
 - **Repaso opcional con IA** — en macOS 26, usando el modelo que ya trae el sistema: cero descarga
 - **Modelo de lenguaje local (opcional)** — un `.gguf` en tu Mac para habilidades que no salen de reglas. Se configura en Preferencias → Inteligencia y se apaga solo cuando no se usa
@@ -405,7 +406,9 @@ Gluffi/
 │   ├── Transcriber.swift             # whisper-cli, con sesgo por --prompt
 │   ├── WhisperPrompt.swift           # Construye ese sesgo desde el diccionario
 │   ├── PhraseRewriter.swift          # Motor compartido: frase → reemplazo
-│   ├── RewritePipeline.swift         # El orden: diccionario → ortografía → snippets
+│   ├── RewritePipeline.swift         # El orden: limpieza → diccionario → ortografía → snippets
+│   ├── Cleaner.swift                 # Muletillas, repeticiones, autocorrecciones, listas
+│   ├── CleanupRules.swift            # Sus tablas, leídas de Resources/cleanup-es.json
 │   ├── SpellFixer.swift              # Corrector del sistema, conservador
 │   ├── CustomDictionary.swift        # Términos propios y su persistencia
 │   ├── SnippetStore.swift            # Snippets, con cifrado de los sensibles
@@ -425,11 +428,42 @@ Gluffi/
 ```
 ⌘⌥ (mantener)  →  AudioRecorder (16 kHz mono WAV)
 ⌘⌥ (soltar)    →  whisper-cli  ← recibe tus términos como sesgo (--prompt)
+               →  Repaso IA    (opcional, modelo del sistema en macOS 26)
+               →  Limpieza     (muletillas, repeticiones, autocorrecciones)
                →  Diccionario  (lo que aun así se oyó mal)
                →  Ortografía   (corrector del sistema)
                →  Snippets     (texto literal, nada lo reescribe)
                →  Historial
                →  Portapapeles + ⌘V en la app donde estabas
+```
+
+La limpieza va **antes** del diccionario: trabaja sobre lo que se dijo, no sobre
+lo ya reescrito. Y nunca toca un término de tu diccionario ni el disparador de un
+snippet, aunque coincida con una muletilla.
+
+### Limpieza del dictado
+
+Tres niveles, en Preferencias → **Texto**:
+
+| Nivel | Qué hace |
+|---|---|
+| `desactivado` | Nada. El texto se pega tal como lo transcribió whisper. |
+| `conservador` | Quita muletillas entre pausas y palabras repetidas seguidas. **Por defecto.** |
+| `completo` | Además resuelve autocorrecciones («el martes, mejor dicho el miércoles») y convierte enumeraciones habladas en listas numeradas. |
+
+También desde la terminal, sin reiniciar la app:
+
+```bash
+defaults write com.user.WhisperBar cleanupLevel completo
+```
+
+La lista de muletillas no está en el código: vive en `cleanup-es.json`. Para
+ajustarla a cómo hablas tú, copia el archivo del bundle a tu carpeta de datos y
+edítalo — esa copia tiene prioridad:
+
+```bash
+cp /Applications/Gluffi.app/Contents/Resources/cleanup-es.json \
+   ~/Library/Application\ Support/WhisperBar/
 ```
 
 ---

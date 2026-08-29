@@ -201,7 +201,22 @@ The app follows a **modular, single-responsibility** design:
 - `DictionaryProcessor` is a thin layer over it, kept as its own type so the dictionary's API and tests didn't have to change
 
 **RewritePipeline.swift** — The order rewrites happen in
-- Dictionary first, snippets second. Exists as a named type because the order **is** part of the feature: snippet bodies are literal text the user wrote, and a dictionary pass afterwards would rewrite their own signature
+- Cleanup, dictionary, spell check, snippets. Exists as a named type because the order **is** part of the feature: snippet bodies are literal text the user wrote, and a dictionary pass afterwards would rewrite their own signature
+- Cleanup runs **first**, on the text as dictated. Running it after the dictionary would make it decide about terms the user never pronounced that way
+
+**Cleaner.swift** — Deterministic cleanup of the dictation (pure functions)
+- Four rules: isolated fillers, immediate repetition, self-correction, spoken lists. No language model — tables and rules, ~4 ms for 300 words
+- **Never removes or alters a protected token**: every word of every dictionary form (canonical and variants, active or not) and every snippet trigger. Snippet bodies need no protection — they are inserted after this stage
+- Ambiguous construction → the sentence comes back **untouched**. So does a sentence cleanup would leave empty
+- Works sentence by sentence, and a sentence no rule touched is returned **byte for byte**, spacing included. Only the sentence that changed gets re-rendered
+- Self-correction deletes back to where the correction *restarts* (the anchor is its first word, searched backwards), not to the start of the sentence. Without an anchor it does nothing — that is what keeps «te pido perdón por el retraso» intact
+- Fillers come in two lists for a reason: the ambiguous ones («este», «claro») are removed only between two pauses, or «lo tengo claro, gracias» would lose a word
+
+**CleanupRules.swift** — Its tables, and the three levels
+- `CleanupLevel`: `desactivado` | `conservador` (rules 1–2, the default) | `completo` (all four). The `rawValue`s are Spanish because they are what `defaults write` takes
+- Tables live in `Resources/cleanup-es.json`, not in the code. Looked up in the user's Application Support first, then the bundle, then `Resources/` under the cwd (tests and tools run outside a bundle)
+- Re-read when the file's modification date changes, so editing the filler list needs no restart
+- **No built-in fallback list on purpose.** With no tables the cleaner is inert: without a list there is no way to know what is a filler, and guessing is exactly the failure the safety rule forbids
 
 **SecretBox.swift** — AES-GCM 256 for sensitive snippet bodies
 - Key in Keychain (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`), ciphertext in the app's JSON. A key stored next to the ciphertext is not encryption, it's obfuscation
@@ -270,7 +285,8 @@ AudioRecorder outputs WAV → Transcriber invokes whisper-cli
   ↓
 Transcriber returns text
   ↓
-[If enabled] RewritePipeline: dictionary rewrites custom terms, then snippets expand
+[If enabled] RewritePipeline: Cleaner strips fillers, dictionary rewrites custom
+             terms, the spell checker fixes typos, then snippets expand
   ↓
 Paste text
   ↓
@@ -293,6 +309,7 @@ All settings stored in `com.user.WhisperBar` UserDefaults domain:
 - `audioFeedbackVolume` — volume 0.0–1.0 (default: 1.0)
 - `audioFeedbackPreset` — preset ID: `theta` | `deep` | `528hz` | `alpha` | `beta` | `432hz` | `custom` (default: `theta`)
 - `audioFeedbackCustomPath` — path to user-supplied audio file (used when preset = `custom`)
+- `cleanupLevel` — `desactivado` | `conservador` | `completo` (default: `conservador`). Read on every dictation, so `defaults write com.user.WhisperBar cleanupLevel completo` applies without a restart
 - `dictionaryEnabled` — apply the custom dictionary to transcriptions (default: true; inert when the dictionary is empty)
 - `snippetsEnabled` — expand voice snippets (default: true; inert with no snippets)
 - `llmModelPath`, `llamaServerPath` — modelo GGUF y binario; vacío = autodetectar
@@ -317,6 +334,8 @@ bash build.sh
 ```
 
 Compiles every file listed in `build.sh` to a single binary, bundles with Info.plist and icon, ad-hoc code signs, and installs to `~/Applications/Gluffi.app`. Adding a source file means adding it to both `build.sh` and `run_tests.sh`.
+
+`Resources/` is copied into the bundle. `cleanup-es.json` lives there instead of in the binary so the filler list can be edited; `run_tests.sh` `cd`s to the repo root because the tests read it by relative path.
 
 Architecture detection is automatic (arm64 vs x86_64).
 
@@ -435,6 +454,7 @@ Tests are organized by module/feature with colored output. No external testing f
 - **Cancel callback** — `onPillCancelTapped` assignment and invocation
 - **Recording format & start failure** — `recordSettings` is PCM 16 kHz mono 16-bit, and `AudioRecorderError.couldNotStart` carries a message pointing at the Microphone permission (the tests do not open the mic, so they run unattended)
 - **Voice snippets** — AES-GCM round trip and tamper detection, the sensitive body never appearing in plaintext on disk, search not reaching into bodies, one-auth-per-session logic (with an injected evaluator, so no system dialog), cross-collisions with the dictionary, export omitting sensitive entries, and the pipeline order
+- **Dictation cleanup** — the resource loads (and a file missing a section still loads the rest), 24 input/output pairs in Spanish across the four rules, **16 negative cases** that must not fire, `desactivado` returning the input byte for byte, the safety rule (occurrences of a dictionary term counted before and after, at every level), which text the dictionary actually *sees* — not just the final result — and 300 words under 15 ms
 - **Custom dictionary** — normalization, index building, every H1 acceptance criterion (n-gram splits, accents, punctuation, longest-match precedence, inactive entries, idempotence), CRUD, persistence round-trip, import/export, and the streaming rule that only finalized text is rewritten
 - **whisper-cli subprocess** — stderr flood (~270 KB) must not stall the run, non-zero exit surfaces as `processFailed`, `cancel()` from another thread returns `cancelled` promptly. These suites install a fake `whisper-cli` (an `sh` script) via `Config`, so they run without whisper-cpp installed and restore the original UserDefaults afterwards
 
@@ -530,6 +550,8 @@ The floating window (FloatingTranscriptionWindowController) receives whisper-str
 
 - **Source code:** `/Sources/`
 - **Tests:** `/Tests/RunTests.swift`
+- **Cleanup tables:** `/Resources/cleanup-es.json` (copied into the bundle; the user's copy in Application Support wins)
+- **Cleanup validation tool:** `/Tools/CleanupReport.swift` + `cleanup_report.sh` — runs the cleaner over the real `history.json` and reports what it would change
 - **Build intermediate:** `./Gluffi_bin` (compiled binary before bundling; safe to delete)
 - **Build output:** `~/Applications/Gluffi.app`
 - **UI preview harness:** `/Tools/PreviewUI.swift` + `preview_ui.sh` (build artifacts go to `$TMPDIR/whisperbar-preview`, never the repo)
