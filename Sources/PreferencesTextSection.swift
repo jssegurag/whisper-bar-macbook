@@ -36,6 +36,28 @@ struct TextSection: View {
                   isOn: $llmEnabled) {
                 Config.shared.llmEnabled = llmEnabled
             } extra: {
+                if llmEnabled && !Config.shared.isLlmModelValid {
+                    // El interruptor encendido sin modelo miente: dice que corrige
+                    // y no corrige. El aviso va aquí, junto al interruptor que lo
+                    // causó, no escondido en otra ventana.
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(Theme.warn)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Falta el modelo: no está corrigiendo nada")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text("Necesita un archivo .gguf. El de whisper no sirve: es el modelo de voz.")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Button("Configurar…") { SetupWindowController.shared.showWindow() }
+                                .controlSize(.small)
+                        }
+                    }
+                    .padding(10)
+                    .background(Theme.warn.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
                 if llmEnabled {
                     DisclosureGroup("Instrucción al modelo", isExpanded: $showPrompt) {
                         TextEditor(text: $llmPrompt)

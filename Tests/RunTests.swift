@@ -2154,6 +2154,23 @@ func testAppNotificationContent() {
     assertContains(fallo?.body ?? "", "failed to load model",
         "el fallo del binario muestra su última línea, no un código")
 
+    // Sin configurar no es un fallo: es una tarea pendiente, y el texto no debe
+    // sonar a que algo se rompió.
+    let sinConfigurar = AppNotification.llmNotConfigured()
+    assertContains(sinConfigurar.title, "no está configurada", "lo nombra como pendiente")
+    assert(!sinConfigurar.title.contains("falló"), "no lo presenta como un fallo")
+    assertContains(sinConfigurar.body, ".gguf", "dice qué tipo de archivo hace falta")
+    assertContains(sinConfigurar.body, "apaga la corrección",
+        "ofrece la otra salida: apagarla si no la quiere")
+    assert(sinConfigurar.actions.contains(.configure), "lleva a resolverlo")
+    assert(sinConfigurar.actions.contains(.dismiss), "y deja posponerlo")
+
+    // Un fallo de verdad sí trae la causa del proceso
+    let falloReal = AppNotification.llmFailed("timeout tras 30 s")
+    assertContains(falloReal.body, "timeout tras 30 s", "el fallo real conserva su causa")
+    assert(falloReal.identifier == sinConfigurar.identifier,
+        "comparten identificador: uno reemplaza al otro en vez de apilarse")
+
     // Categoría derivada de los botones: agregar una notificación nueva no
     // obliga a registrar nada a mano.
     assert(setup.categoryIdentifier != update.categoryIdentifier,
