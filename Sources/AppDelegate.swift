@@ -43,6 +43,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Evita mostrar el diálogo de Accesibilidad más de una vez por sesión.
     private var hasPromptedForAccessibility = false
+    /// Último problema del corrector avisado en esta sesión.
+    private var lastLLMWarning: String?
 
     // MARK: - Animación de grabación
 
@@ -462,7 +464,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 case .success(let processed):
                     finalText = processed
                 case .failure(let llmError):
-                    Notifier.shared.post(AppNotification.llmFailed(llmError.localizedDescription))
+                    self.reportLLMProblem(llmError)
                     finalText = text
                 }
                 DispatchQueue.main.async { self.audioFeedback.stop() }
@@ -699,6 +701,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Notifier.shared.onUpdate = {
             UpdateChecker.shared.upgradeWhisper()
         }
+    }
+
+    /// Avisa del problema del corrector **una vez por sesión**.
+    ///
+    /// Antes se notificaba en cada dictado. Con la corrección activada y sin
+    /// modelo, eso es una alerta por cada frase que dictas: deja de ser un aviso y
+    /// pasa a ser ruido que se aprende a ignorar.
+    ///
+    /// Y separa los dos casos: sin configurar es una tarea pendiente, no un fallo.
+    private func reportLLMProblem(_ error: Error) {
+        let sinConfigurar = !config.isLlmCliValid || !config.isLlmModelValid
+        let clave = sinConfigurar ? "notConfigured" : "failed"
+        guard lastLLMWarning != clave else { return }
+        lastLLMWarning = clave
+        Notifier.shared.post(sinConfigurar
+            ? AppNotification.llmNotConfigured()
+            : AppNotification.llmFailed(error.localizedDescription))
     }
 
     /// Nombra el paquete con actualización, en vez de mandar a revisar dos

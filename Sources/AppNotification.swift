@@ -121,6 +121,18 @@ enum AppNotification {
         }
     }
 
+    /// La corrección está activada pero sin configurar. No es un fallo: es una
+    /// tarea pendiente, y se avisa **una vez**, no en cada dictado.
+    static func llmNotConfigured() -> Content {
+        Content(title: "La corrección con IA no está configurada",
+                body: "Está activada pero le falta el modelo, así que Gluffi pega la transcripción "
+                    + "tal cual. Elige un modelo .gguf, o apaga la corrección para dejar de verla como pendiente.",
+                actions: [.configure, .dismiss],
+                identifier: "llm")
+    }
+
+    /// La corrección estaba bien configurada y aun así falló. Eso sí es un fallo,
+    /// y trae la causa que devolvió el proceso.
     static func llmFailed(_ message: String) -> Content {
         Content(title: "Se pegó el texto sin corregir",
                 body: "La corrección con IA falló, así que Gluffi pegó la transcripción tal cual. \(message)",
