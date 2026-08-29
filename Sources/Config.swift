@@ -48,46 +48,9 @@ class Config {
 
     // MARK: - LLM Post-procesamiento
 
-    /// Si el post-procesamiento con LLM está habilitado
-    var llmEnabled: Bool {
-        get { defaults.bool(forKey: "llmEnabled") }
-        set { defaults.set(newValue, forKey: "llmEnabled") }
-    }
 
-    /// Ruta al binario llama-completion (single-shot, no modo conversación)
-    var llmCliPath: String {
-        get {
-            if let saved = defaults.string(forKey: "llmCliPath"), !saved.isEmpty {
-                return saved
-            }
-            return Config.detectLlmCli() ?? "/opt/homebrew/bin/llama-completion"
-        }
-        set { defaults.set(newValue, forKey: "llmCliPath") }
-    }
 
-    /// Ruta al modelo LLM (.gguf)
-    var llmModelPath: String {
-        get {
-            // Una ruta guardada que no es .gguf se ignora: sanea solo la
-            // configuración de quien ya eligió el modelo equivocado, en vez de
-            // dejarlo con un corrector que falla en cada dictado.
-            if let saved = defaults.string(forKey: "llmModelPath"),
-               Config.isGGUF(saved) {
-                return saved
-            }
-            return Config.detectLlmModel() ?? ""
-        }
-        set { defaults.set(newValue, forKey: "llmModelPath") }
-    }
 
-    /// Prompt del sistema para corrección con LLM
-    var llmPrompt: String {
-        get {
-            defaults.string(forKey: "llmPrompt")
-                ?? "Corrige ortografía y puntuación del siguiente texto. No cambies las palabras, solo corrige errores. Devuelve SOLO el texto corregido."
-        }
-        set { defaults.set(newValue, forKey: "llmPrompt") }
-    }
 
     // MARK: - Traducción por voz
 
@@ -100,11 +63,6 @@ class Config {
 
     // MARK: - Acciones por voz
 
-    /// Si las acciones por voz están habilitadas
-    var voiceActionsEnabled: Bool {
-        get { defaults.bool(forKey: "voiceActionsEnabled") }
-        set { defaults.set(newValue, forKey: "voiceActionsEnabled") }
-    }
 
     // MARK: - Pill flotante de micrófono
 
@@ -314,20 +272,8 @@ class Config {
 
     var isValid: Bool { isWhisperCliValid && isModelValid }
 
-    var isLlmCliValid: Bool {
-        FileManager.default.isExecutableFile(atPath: llmCliPath)
-    }
 
-    /// Un `.bin` de whisper existe y se deja elegir, pero llama-completion no lo
-    /// puede cargar. Sin comprobar la extensión, la app se creía configurada y
-    /// fallaba en cada dictado con «se pegó el texto sin corregir».
-    var isLlmModelValid: Bool {
-        Config.isGGUF(llmModelPath) && FileManager.default.fileExists(atPath: llmModelPath)
-    }
 
-    static func isGGUF(_ path: String) -> Bool {
-        !path.isEmpty && path.lowercased().hasSuffix(".gguf")
-    }
 
     // MARK: - Auto-detección
 
@@ -369,27 +315,7 @@ class Config {
         return candidates.first { FileManager.default.fileExists(atPath: $0) }
     }
 
-    /// Busca llama-completion en rutas comunes de Homebrew (single-shot, sin modo conversación)
-    static func detectLlmCli() -> String? {
-        let candidates = [
-            "/opt/homebrew/bin/llama-completion",   // Apple Silicon
-            "/usr/local/bin/llama-completion",       // Intel
-            "/opt/homebrew/bin/llama-cli",           // fallback legacy
-            "/usr/local/bin/llama-cli",
-        ]
-        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
-    }
 
-    /// Busca modelos .gguf en la carpeta estándar
-    static func detectLlmModel() -> String? {
-        let dir = "\(NSHomeDirectory())/.whisper-realtime"
-        guard let files = try? FileManager.default.contentsOfDirectory(atPath: dir) else { return nil }
-        return files
-            .filter { $0.hasSuffix(".gguf") }
-            .sorted()
-            .first
-            .map { "\(dir)/\($0)" }
-    }
 
     /// Busca whisper-stream en rutas comunes de Homebrew
     static func detectWhisperStream() -> String? {

@@ -17,6 +17,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Custom dictionary that rewrites the user's own vocabulary (brands, clients, acronyms) to its canonical form
 - Voice snippets: say a trigger phrase, get a preconfigured text; sensitive ones are encrypted and gated behind Touch ID
 
+## What this app deliberately does not do
+
+Three features were removed after they shipped, and the reasoning is worth keeping so
+nobody adds them back by reflex:
+
+- **LLM text correction.** The system spell checker does the same job for free. The
+  model cost a gigabyte, added seconds per dictation, and rewrote the user's own terms
+  — which is why the dictionary had to run after it.
+- **Voice commands.** macOS already has Siri. And it required a model to decide whether
+  "abre Safari" was an order or part of what you were dictating; getting that wrong
+  eats a dictation.
+- **Translation to languages other than English.** whisper's `-tr` only goes *to*
+  English. Reaching other languages meant routing the transcript through a language
+  model.
+
+What is left needs **only the voice model**. No llama.cpp, no `.gguf`, no second
+download.
+
 ## Naming
 
 The app is called **Gluffi**. Everything the user sees says Gluffi: the bundle display
@@ -73,20 +91,6 @@ The app follows a **modular, single-responsibility** design:
 - Parses output via `cleanOutput`: filters timestamp lines and joins transcribed segments
 - Returns cleaned text ready for LLM or pasting
 
-**LLMProcessor.swift** — llama.cpp, for the two features that need language understanding
-
-It no longer post-processes transcriptions. That step was removed: the system spell
-checker does the same job for free, without a 1 GB model, without adding seconds to
-every dictation, and without rewriting the user's own terms — which is why the
-dictionary used to have to run *after* it.
-
-What still uses it: `VoiceActionDetector` (voice commands) and `TranslationProcessor`
-when the target language is not English (English uses `whisper-cli -tr` directly).
-A user who wants neither never needs the model.
-- Calls llama-completion in single-shot mode (stdin closed after first turn)
-- Extracts assistant response from chat format output
-- Filters control characters and formatting noise
-- Returns original text if LLM is disabled/unavailable
 
 **HotkeyManager.swift** — Global keyboard event monitoring
 - Uses NSEvent.addGlobalMonitorForEvents with flagsChanged
@@ -126,10 +130,6 @@ A user who wants neither never needs the model.
 - JSON persistence in ~/Library/Application Support/WhisperBar/history.json
 - Click to copy entry to clipboard
 
-**VoiceActionDetector.swift & VoiceActionExecutor.swift** — Voice commands
-- Detects intents from LLM output: web search, create reminder, open app, translate
-- Parses ACTION:intent|PARAM:value format from llama-completion responses
-- Executor invokes appropriate system actions (NSWorkspace, Apple Events)
 
 **PillView.swift, PillWindowController.swift** — Floating microphone button
 - Draggable pill UI showing recording/transcribing state
@@ -215,13 +215,9 @@ AudioRecorder outputs WAV → Transcriber invokes whisper-cli
   ↓
 Transcriber returns text
   ↓
-[Optional] LLMProcessor corrects with llama-cli
-  ↓
 [If enabled] RewritePipeline: dictionary rewrites custom terms, then snippets expand
   ↓
-[If enabled] VoiceActionDetector classifies intent via LLM
-  ↓
-If action detected: VoiceActionExecutor handles it; else: paste text
+Paste text
   ↓
 AppDelegate posts Cmd+V to captured paste target app
   ↓
@@ -234,9 +230,7 @@ All settings stored in `com.user.WhisperBar` UserDefaults domain:
 - `whisperCliPath`, `modelPath` — binary/model paths (auto-detected if not set)
 - `language` — transcription language code (default: "es")
 - `minRecordingDuration` — minimum seconds before transcribing (default: 0.5)
-- `llmEnabled`, `llmCliPath`, `llmModelPath`, `llmPrompt` — LLM configuration
 - `translationEnabled` — translate to English while dictating (whisper's own `-tr`; there is no reverse direction)
-- `voiceActionsEnabled` — enable/disable voice command detection
 - `floatingPillEnabled`, `floatingPillOriginX/Y` — floating button state & position
 - `streamStepMs`, `streamLengthMs`, `streamKeepMs` — streaming parameters
 - `maxHistoryCount` — history size limit

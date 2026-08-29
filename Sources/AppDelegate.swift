@@ -14,8 +14,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let hotkey        = HotkeyManager()
     private let audioFeedback = AudioFeedback()
     private let translator      = TranslationProcessor()
-    private let actionDetector  = VoiceActionDetector()
-    private let actionExecutor  = VoiceActionExecutor()
     private let history       = TranscriptionHistory.shared
 
     /// Modo de grabación actual (transcripción o traducción)
@@ -478,33 +476,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 // reescribía los términos propios del usuario.
                 let correctedText = self.applyRewrites(text)
 
-                // Detección de acciones por voz
-                if self.config.voiceActionsEnabled {
-                    let intent = self.actionDetector.detect(text: correctedText)
-                    switch intent {
-                    case .none(let originalText):
-                        // Sin acción → paste normal
-                        let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
-                        let entry = TranscriptionEntry(text: originalText, duration: duration, sourceApp: sourceApp)
-                        self.history.add(entry)
-                        self.paste(text: originalText)
-                    default:
-                        // Ejecutar acción
-                        self.setIconState(.runningAction)
-                        let result = self.actionExecutor.execute(intent)
-                        Notifier.shared.post(AppNotification.actionResult(result))
-                        DispatchQueue.main.async {
-                            self.resetIdleUI()
-                            self.rebuildMenu()
-                        }
-                    }
-                } else {
-                    // Acciones desactivadas → paste normal
-                    let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
-                    let entry = TranscriptionEntry(text: correctedText, duration: duration, sourceApp: sourceApp)
-                    self.history.add(entry)
-                    self.paste(text: correctedText)
-                }
+                let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
+                let entry = TranscriptionEntry(text: correctedText, duration: duration, sourceApp: sourceApp)
+                self.history.add(entry)
+                self.paste(text: correctedText)
+
             case .failure(let error):
                 DispatchQueue.main.async { self.audioFeedback.stop() }
                 guard !self.isCancelled else { return }
@@ -711,9 +687,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let checker = UpdateChecker.shared
         if case .available(let version) = checker.whisperState {
             Notifier.shared.post(AppNotification.updateAvailable(package: "el motor de voz",
-                                                                version: version))
-        } else if case .available(let version) = checker.llamaState {
-            Notifier.shared.post(AppNotification.updateAvailable(package: "la corrección con IA",
                                                                 version: version))
         }
     }

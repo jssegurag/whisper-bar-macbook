@@ -12,7 +12,7 @@ import SwiftUI
 struct PreferencesView: View {
 
     enum Section: String, CaseIterable, Identifiable {
-        case general, text, languages, commands, live, sound, shortcuts
+        case general, text, languages, live, sound, shortcuts
 
         var id: String { rawValue }
 
@@ -21,7 +21,6 @@ struct PreferencesView: View {
             case .general:   return "General"
             case .text:      return "Texto"
             case .languages: return "Idiomas"
-            case .commands:  return "Comandos"
             case .live:      return "En vivo"
             case .sound:     return "Sonido"
             case .shortcuts: return "Atajos"
@@ -33,7 +32,6 @@ struct PreferencesView: View {
             case .general:   return "gearshape"
             case .text:      return "text.alignleft"
             case .languages: return "globe"
-            case .commands:  return "bolt"
             case .live:      return "waveform"
             case .sound:     return "speaker.wave.2"
             case .shortcuts: return "command"
@@ -46,9 +44,8 @@ struct PreferencesView: View {
             let config = Config.shared
             switch self {
             case .general, .shortcuts: return true
-            case .text:      return config.llmEnabled || config.dictionaryEnabled || config.snippetsEnabled
+            case .text:      return config.dictionaryEnabled || config.snippetsEnabled
             case .languages: return config.translationEnabled
-            case .commands:  return config.voiceActionsEnabled
             case .live:      return config.isWhisperStreamValid
             case .sound:     return config.audioFeedbackEnabled
             }
@@ -145,7 +142,6 @@ struct PreferencesView: View {
                 case .general:   GeneralTab()
                 case .text:      TextSection()
                 case .languages: TranslationTab()
-                case .commands:  VoiceActionsTab()
                 case .live:      LiveSection()
                 case .sound:     AudioTab()
                 case .shortcuts: ShortcutsTab()
