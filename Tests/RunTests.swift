@@ -1920,7 +1920,7 @@ func testSetupSummary() {
 func testModelDownloaderFormatting() {
     suite("ModelDownloader — Tamaño legible en el botón")
 
-    let texto = ModelDownloader.humanSize(ModelDownloader.defaultModel.bytes)
+    let texto = ModelDownloader.humanSize(VoiceModel.default.bytes)
     assert(texto.contains("GB"), "el botón dice GB, no bytes: «Descargar (\(texto))»")
     assertEqual(ModelDownloader.State.idle.progress, nil, "sin descarga no hay progreso")
     assertEqual(ModelDownloader.State.downloading(received: 50, total: 200).progress, 0.25,
@@ -3161,6 +3161,91 @@ func testTextFinishConfigDefaults() {
     else { defaults.removeObject(forKey: "trailingPeriodEnabled") }
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - VoiceModel — Catálogo de modelos de voz
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testVoiceModelCatalogue() {
+    suite("VoiceModel — El catálogo")
+
+    let catalogo = VoiceModel.catalogue
+    assertEqual(catalogo.count, 5, "cinco modelos: tiny, base, small, medium y large-v3")
+
+    // Ordenado de más liviano a más pesado: es el eje por el que se elige.
+    let pesos = catalogo.map(\.bytes)
+    assertEqual(pesos, pesos.sorted(), "el catálogo va de más liviano a más pesado")
+
+    assertEqual(VoiceModel.default.id, "large-v3",
+        "el de fábrica sigue siendo large-v3, como documenta el README")
+
+    for modelo in catalogo {
+        assertEqual(modelo.filename, "ggml-\(modelo.id).bin",
+            "\(modelo.id) se guarda como ggml-\(modelo.id).bin")
+        assert(modelo.url.absoluteString.hasSuffix(modelo.filename),
+            "la URL de \(modelo.id) apunta a su propio archivo")
+        assert(modelo.bytes > 0, "\(modelo.id) declara su tamaño")
+        assert(!modelo.note.isEmpty, "\(modelo.id) explica qué gana y qué pierde")
+    }
+
+    assertEqual(VoiceModel.named("small")?.id, "small", "se busca por identificador")
+    assertEqual(VoiceModel.named("inventado")?.id, nil, "y un identificador que no existe da nil")
+}
+
+func testVoiceModelPathMatching() {
+    suite("VoiceModel — Reconocer un modelo por su ruta")
+
+    assertEqual(VoiceModel.matching(path: "/Users/x/.whisper-realtime/ggml-small.bin")?.id,
+                "small", "reconoce el modelo desde una ruta absoluta")
+    assertEqual(VoiceModel.matching(path: "/otro/sitio/ggml-large-v3.bin")?.id,
+                "large-v3", "la carpeta da igual, lo que manda es el archivo")
+    assertEqual(VoiceModel.matching(path: "/Users/x/.whisper-realtime/ggml-custom.bin")?.id,
+                nil, "un modelo que no está en el catálogo no se reconoce")
+    assertEqual(VoiceModel.matching(path: "")?.id, nil, "una ruta vacía tampoco")
+}
+
+func testVoiceModelInstalled() {
+    suite("VoiceModel — Cuáles están descargados")
+
+    let temporal = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("gluffi-modelos-\(UUID().uuidString)", isDirectory: true)
+    try? FileManager.default.createDirectory(at: temporal, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: temporal) }
+
+    assertEqual(VoiceModel.installed(in: temporal).count, 0,
+        "una carpeta vacía no tiene modelos")
+
+    // Solo el nombre importa: el contenido no se valida aquí.
+    for nombre in ["ggml-small.bin", "ggml-base.bin", "ruido.txt"] {
+        FileManager.default.createFile(atPath: temporal.appendingPathComponent(nombre).path,
+                                       contents: Data("x".utf8))
+    }
+    let encontrados = VoiceModel.installed(in: temporal).map(\.id)
+    assertEqual(encontrados, ["base", "small"],
+        "lista solo los del catálogo que existen, de más liviano a más pesado")
+
+    assertEqual(VoiceModel.named("small")?.path(in: temporal),
+                temporal.appendingPathComponent("ggml-small.bin").path,
+        "la ruta de un modelo dentro de una carpeta es su nombre de archivo")
+}
+
+func testModelDownloaderTargets() {
+    suite("ModelDownloader — Descarga el modelo que se le pida")
+
+    // El destino se calcula a partir del modelo, no de una constante: es lo que
+    // permite bajar `small` para un perfil sin tocar el modelo global.
+    let carpeta = ModelDownloader.destinationDirectory
+    assertEqual(ModelDownloader.destination(for: VoiceModel.named("small")!).path,
+                carpeta.appendingPathComponent("ggml-small.bin").path,
+        "small aterriza en su propio archivo")
+    assertEqual(ModelDownloader.destination(for: VoiceModel.default).path,
+                carpeta.appendingPathComponent("ggml-large-v3.bin").path,
+        "y large-v3 en el suyo")
+
+    let texto = ModelDownloader.humanSize(VoiceModel.default.bytes)
+    assertContains(texto, "GB", "el botón dice GB, no bytes: «Descargar (\(texto))»")
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -3252,6 +3337,10 @@ struct TestRunner {
         testTextFinishTerminalCase()
         testTextFinishInPipeline()
         testTextFinishConfigDefaults()
+        testVoiceModelCatalogue()
+        testVoiceModelPathMatching()
+        testVoiceModelInstalled()
+        testModelDownloaderTargets()
 
         // Summary
         print("\n\u{001B}[1;35m══════════════════════════════════════════════════════════════\u{001B}[0m")

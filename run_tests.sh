@@ -36,7 +36,8 @@ swiftc \
     "$DIR/Sources/AppNotification.swift" \
     "$DIR/Sources/Notifier.swift" \
     "$DIR/Sources/SetupComponent.swift" \
-    "$DIR/Sources/ModelDownloader.swift" \
+        "$DIR/Sources/VoiceModel.swift" \
+"$DIR/Sources/ModelDownloader.swift" \
     "$DIR/Sources/SetupView.swift" \
     "$DIR/Sources/SetupWindowController.swift" \
     "$DIR/Sources/MenuBarIcon.swift" \

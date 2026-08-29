@@ -178,7 +178,7 @@ struct SetupView: View {
         default:
             HStack(spacing: 8) {
                 if component.state != .ready {
-                    Button("Descargar (\(ModelDownloader.humanSize(ModelDownloader.defaultModel.bytes)))") {
+                    Button("Descargar (\(ModelDownloader.humanSize(VoiceModel.default.bytes)))") {
                         downloader.start()
                     }
                     .buttonStyle(.borderedProminent)
