@@ -539,6 +539,24 @@ The user can cancel at any point (during recording or while whisper-cli is runni
 
 The Esc monitor is always removed when the operation ends (normally or via cancel) so it doesn't interfere with other apps.
 
+**The Esc monitor is also the test for "is there anything to cancel".**
+`AppDelegate.canCancel(alreadyCancelled:escMonitor:)` reads that monitor and
+nothing else, because its lifetime *is* the operation's: registered in
+`startRecording()`, removed on a failed start, on cancel, and in `resetIdleUI()`.
+
+Do not go back to asking the recorder or the sound, which is what the guard used
+to do (`recorder.isRecording || audioFeedback.isPlaying`). Neither signal covers
+the transcribing phase: `stopAndTranscribe()` calls `recorder.stop()` **before**
+launching whisper, so `isRecording` is false for the seconds that matter, and the
+guard was left hanging on `audioFeedback.isPlaying` alone — which is false
+whenever `audioFeedbackEnabled` is off, since `AudioFeedback.start()` returns
+early without touching `isPlaying`. The result was that a user with the sound
+turned off could not cancel a transcription at all: neither Esc nor the pill's
+`✕` did anything, silently. Cancelling must not depend on a cosmetic setting.
+
+`canCancel` is `static` so it can be tested: instantiating `AppDelegate` in a
+test drags in the menu bar and the global hotkeys.
+
 ### Custom Dictionary
 
 whisper transcribes phonetically and knows nobody's vocabulary: "Oriuno" comes back as "o riuno", "DocFly" as "doc flai". The dictionary rewrites those to the form the user registered.

@@ -368,12 +368,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                      appName: pasteTargetApp?.localizedName)
     }
 
+    /// ¿Hay una operación (grabación o transcripción) que se pueda cancelar?
+    ///
+    /// La señal es el monitor de Escape, no el estado del grabador ni el del
+    /// sonido, porque su vida es exactamente la de la operación: se registra en
+    /// `startRecording()` y se quita al fallar el arranque, al cancelar y en
+    /// `resetIdleUI()`.
+    ///
+    /// Las dos señales que se usaban antes —`recorder.isRecording ||
+    /// audioFeedback.isPlaying`— no cubren la fase de transcripción:
+    /// `stopAndTranscribe()` ya llamó a `recorder.stop()`, así que `isRecording`
+    /// es `false` mientras whisper corre, y el guard quedaba colgando solo de
+    /// `audioFeedback.isPlaying` — que es `false` con el sonido apagado, porque
+    /// `AudioFeedback.start()` sale temprano sin tocar `isPlaying`. Con
+    /// `audioFeedbackEnabled = false` no había manera de cancelar una
+    /// transcripción: ni Escape ni el botón de la píldora hacían nada, en
+    /// silencio y sin aviso.
+    ///
+    /// Está aparte y es estática para poder probarla: instanciar `AppDelegate`
+    /// en un test arrastra la barra de menús y los atajos globales.
+    static func canCancel(alreadyCancelled: Bool, escMonitor: Any?) -> Bool {
+        !alreadyCancelled && escMonitor != nil
+    }
+
     /// Cancela la grabación o transcripción en curso sin pegar nada.
     func cancelRecording() {
-        // Solo cancela si hay una operación activa y no se canceló ya.
-        // El guard previo permitía ejecutar la cancelación en estado idle porque
-        // `isCancelled == false` siempre es verdadero en arranque.
-        guard !isCancelled, recorder.isRecording || audioFeedback.isPlaying else { return }
+        guard AppDelegate.canCancel(alreadyCancelled: isCancelled,
+                                    escMonitor: escKeyMonitor) else { return }
         isCancelled = true
         if recorder.isRecording {
             recorder.stop()

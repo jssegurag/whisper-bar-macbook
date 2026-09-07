@@ -789,6 +789,61 @@ func testPillCancelCallback() {
     wc.onPillCancelTapped = nil
 }
 
+func testCancelDuringTranscription() {
+    suite("AppDelegate — Cancelar mientras transcribe (regresión)")
+
+    let monitorPuesto: Any = NSObject()   // lo que devuelve addGlobalMonitorForEvents
+
+    // En reposo no hay monitor, así que no hay nada que cancelar. Es el caso que
+    // el guard original dejaba pasar: escribía `|| isCancelled == false`, que en
+    // arranque es siempre verdadero, y la cancelación corría en estado idle.
+    assert(!AppDelegate.canCancel(alreadyCancelled: false, escMonitor: nil),
+        "en reposo no cancela: no hay monitor de Escape puesto")
+
+    // Grabando. El monitor se registra en startRecording().
+    assert(AppDelegate.canCancel(alreadyCancelled: false, escMonitor: monitorPuesto),
+        "grabando sí cancela")
+
+    // LA REGRESIÓN. Mientras whisper corre el monitor sigue puesto, y eso basta:
+    // ni recorder.isRecording ni audioFeedback.isPlaying entran en la decisión.
+    assert(AppDelegate.canCancel(alreadyCancelled: false, escMonitor: monitorPuesto),
+        "transcribiendo sí cancela, con el sonido apagado y sin grabar")
+
+    // No se cancela dos veces: la bandera manda aunque el monitor siga puesto.
+    assert(!AppDelegate.canCancel(alreadyCancelled: true, escMonitor: monitorPuesto),
+        "ya cancelado no vuelve a cancelar")
+
+    // ── Por qué las dos señales anteriores no servían ───────────────────────
+    // El guard decía `recorder.isRecording || audioFeedback.isPlaying`. Estas
+    // dos aserciones son sobre los tipos reales y muestran que en la fase de
+    // transcripción, con el sonido apagado, las dos son false — y por tanto el
+    // guard bloqueaba la cancelación en silencio.
+
+    // 1. stopAndTranscribe() llama a recorder.stop() antes de lanzar whisper, así
+    //    que mientras transcribe el grabador ya no está grabando.
+    let recorder = AudioRecorder()
+    assert(!recorder.isRecording,
+        "señal vieja 1: un grabador detenido reporta isRecording == false")
+
+    // 2. Con audioFeedbackEnabled = false, start() sale temprano y nunca marca
+    //    isPlaying. No abrimos ningún dispositivo de audio en este camino.
+    let defaults = UserDefaults.standard
+    let guardado = defaults.object(forKey: "audioFeedbackEnabled")
+    defaults.set(false, forKey: "audioFeedbackEnabled")
+    let feedback = AudioFeedback()
+    feedback.start()
+    assert(!feedback.isPlaying,
+        "señal vieja 2: con el sonido apagado, start() deja isPlaying == false")
+    feedback.stop()
+    if let v = guardado { defaults.set(v, forKey: "audioFeedbackEnabled") }
+    else { defaults.removeObject(forKey: "audioFeedbackEnabled") }
+
+    // 3. Y entonces el predicado viejo era false justo cuando el usuario más
+    //    necesita cancelar: whisper llevando segundos con un dictado largo.
+    assert(!(recorder.isRecording || feedback.isPlaying),
+        "el predicado viejo era false transcribiendo: ahí se perdía la cancelación")
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // MARK: - 25. AudioRecorder — Formato y fallo al iniciar
 // ══════════════════════════════════════════════════════════════════════════════
@@ -4130,6 +4185,7 @@ struct TestRunner {
         testConfigFloatingPillDefaults()
         testConfigAudioFeedback()
         testPillCancelCallback()
+        testCancelDuringTranscription()
         testAudioRecorderSettings()
         testAudioRecorderStartFailure()
         testTranscriberOutputCleaning()

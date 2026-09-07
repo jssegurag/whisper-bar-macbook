@@ -16,6 +16,18 @@ Las versiones siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Corregido
+
+- **Cancelar una transcripción no funcionaba si tenías el sonido apagado.**
+  Con «Sonido durante la transcripción» desactivado en Preferencias → Audio, ni
+  Escape ni el botón `✕` de la píldora cancelaban una vez que whisper había
+  empezado a trabajar: no pasaba nada, sin aviso, y el texto se pegaba igual al
+  terminar. Cancelar mientras grabas sí funcionaba; era la fase de «pensando» la
+  que no. La condición que decidía si había algo que cancelar miraba el grabador
+  y el sonido, y en esa fase el grabador ya está detenido y el sonido no suena.
+  Ahora mira si la operación está en curso, que es lo que importa, y cancelar no
+  depende de un ajuste cosmético.
+
 ## [0.5.0] — 2026-08-29
 
 ### Añadido
