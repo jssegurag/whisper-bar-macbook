@@ -156,7 +156,7 @@ struct PillView: View {
         .frame(height: height)
         .background(background)
         .overlay(
-            Capsule().stroke(Theme.brand.opacity(0.4), lineWidth: 1)
+            Capsule().stroke(accent.opacity(0.4), lineWidth: 1)
         )
         .overlay(breathRing(time))
         .clipShape(Capsule())
@@ -168,6 +168,15 @@ struct PillView: View {
         .gesture(dragGesture)
     }
 
+    /// El acento de la píldora entera. En modo orden todo cambia —la marca, el
+    /// borde, el halo, la onda— porque lo que se va a pegar no es lo que el
+    /// usuario está diciendo, y eso tiene que ser imposible de confundir con un
+    /// dictado normal.
+    ///
+    /// Un solo punto de decisión a propósito: repartir el condicional por cada
+    /// vista es cómo se acaba con media píldora de un color y media de otro.
+    private var accent: Color { model.isAgent ? Theme.agent : Theme.brand }
+
     /// Onda de 0 a 1 con el periodo dado. Es la base de todo el movimiento.
     private func wave(_ time: TimeInterval, period: Double, offset: Double = 0) -> Double {
         0.5 + 0.5 * sin(2 * .pi * (time / period - offset))
@@ -177,7 +186,7 @@ struct PillView: View {
 
     private func idleContent(_ time: TimeInterval) -> some View {
         HStack(spacing: Theme.pillGap) {
-            GluffiMarkView(size: 17, color: Theme.brand)
+            GluffiMarkView(size: 17, color: accent)
             Text(spokenWord)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.92))
@@ -204,21 +213,16 @@ struct PillView: View {
     /// un modo que se olvida, y olvidarse de este significa pedir un correo
     /// cuando querías dictar una frase.
     private var intentToggle: some View {
-        HStack(spacing: 4) {
-            Image(systemName: model.intent.symbol)
-                .font(.system(size: 9, weight: .semibold))
-            Text(model.intent.shortTitle)
-                .font(.system(size: 10, weight: .semibold))
-        }
-        .foregroundStyle(model.isAgent ? Theme.onBrand : .white.opacity(0.55))
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(
-            Capsule().fill(model.isAgent ? Theme.warn : Color.white.opacity(0.10)))
-        .contentShape(Capsule())
-        .onTapGesture { onToggleIntent() }
-        .help("Cambiar entre transcribir lo que dices y redactar lo que pides")
-        .animation(.easeInOut(duration: 0.2), value: model.intent)
+        Image(systemName: model.intent.symbol)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(model.isAgent ? Theme.onBrand : .white.opacity(0.55))
+            .frame(width: 20, height: 16)
+            .background(
+                Capsule().fill(model.isAgent ? Theme.agent : Color.white.opacity(0.10)))
+            .contentShape(Capsule())
+            .onTapGesture { onToggleIntent() }
+            .help(model.intent.help)
+            .animation(.easeInOut(duration: 0.2), value: model.intent)
     }
 
     /// El punto que dice si el modelo está despierto. Solo en modo agente:
@@ -236,7 +240,7 @@ struct PillView: View {
                 .frame(width: 6, height: 6)
                 .opacity(0.35 + 0.65 * wave(time, period: 0.9))
         case .ready:
-            Circle().fill(Theme.brand).frame(width: 6, height: 6)
+            Circle().fill(Theme.agent).frame(width: 6, height: 6)
         case .unavailable:
             Circle().fill(Theme.danger).frame(width: 6, height: 6)
         }
@@ -252,27 +256,21 @@ struct PillView: View {
         return HStack(spacing: Theme.pillGap) {
             // El logo sigue visible mientras graba: el estado lo comunica el
             // punto rojo y la onda, no la desaparición de la marca.
-            GluffiMarkView(size: 17, color: model.isAgent ? Theme.warn : Theme.brand)
+            GluffiMarkView(size: 17, color: accent)
             Circle()
                 .fill(Theme.danger)
                 .frame(width: 6, height: 6)
                 .opacity(0.45 + 0.55 * pulse)
                 .scaleEffect(0.82 + 0.18 * pulse)
-            VoiceWaveView(time: time, level: model.micLevel)
+            VoiceWaveView(time: time, level: model.micLevel, color: accent)
             // En modo agente lo que se graba es una orden, y lo que se pegará no
             // es lo que el usuario está diciendo. Tiene que verse antes de
             // soltar la tecla, que es cuando todavía se puede cancelar.
-            if model.isAgent {
-                Text(DictationIntent.agent.shortTitle)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Theme.warn)
-                    .fixedSize()
-                modelDot(time)
-            }
+            if model.isAgent { modelDot(time) }
             if let perfil = model.profileName {
                 Text(perfil)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(Theme.brand)
+                    .foregroundStyle(accent)
                     .lineLimit(1)
                     .fixedSize()
             }
@@ -286,10 +284,10 @@ struct PillView: View {
         let angle = (time / 0.85).truncatingRemainder(dividingBy: 1) * 360
         return HStack(spacing: Theme.pillGap) {
             ZStack {
-                GluffiMarkView(size: 17, color: Theme.brand.opacity(0.55))
+                GluffiMarkView(size: 17, color: accent.opacity(0.55))
                 Circle()
                     .trim(from: 0, to: 0.22)
-                    .stroke(Theme.brand, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    .stroke(accent, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                     .frame(width: 21, height: 21)
                     .rotationEffect(.degrees(angle))
             }
@@ -334,7 +332,7 @@ struct PillView: View {
     private func breathRing(_ time: TimeInterval) -> some View {
         if model.state == .idle {
             Capsule()
-                .stroke(Theme.brand.opacity(0.35 * wave(time, period: 3.4)), lineWidth: 3)
+                .stroke(accent.opacity(0.35 * wave(time, period: 3.4)), lineWidth: 3)
                 .blur(radius: 3)
         }
     }
@@ -371,6 +369,8 @@ struct VoiceWaveView: View {
     var time: TimeInterval
     /// 0…1 del micrófono.
     var level: CGFloat
+    /// El acento lo pone quien la usa: la onda no sabe en qué modo está la app.
+    var color: Color = Theme.brand
 
     /// Proporciones del handoff, escaladas a la altura de la píldora.
     private let ratios: [CGFloat] = [14, 20, 26, 30, 26, 20, 14].map { $0 / 30 }
@@ -413,8 +413,8 @@ struct VoiceWaveView: View {
         let full = maxHeight * ratios[index] * scale
         let core = maxHeight * coreRatios[index] * scale
         return ZStack {
-            Capsule().fill(Theme.brand.opacity(0.28)).frame(width: 4, height: full)
-            Capsule().fill(Theme.brand).frame(width: 4, height: max(core, 2))
+            Capsule().fill(color.opacity(0.28)).frame(width: 4, height: full)
+            Capsule().fill(color).frame(width: 4, height: max(core, 2))
         }
         .frame(width: 4, height: maxHeight)
     }

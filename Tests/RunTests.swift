@@ -4632,8 +4632,13 @@ func testAgentPillState() {
     // El modo se elige ANTES de hablar, y por eso tiene que verse siempre.
     assertEqual(DictationIntent.transcribe.toggled, .agent, "el interruptor alterna")
     assertEqual(DictationIntent.agent.toggled, .transcribe, "en los dos sentidos")
-    assertEqual(DictationIntent.transcribe.shortTitle, "Dictado", "lo que enseña la píldora")
-    assertEqual(DictationIntent.agent.shortTitle, "Orden", "en el otro modo")
+    // El interruptor no lleva texto: el modo se lee en el color de toda la
+    // píldora, que es más visible que una palabra de diez puntos.
+    assertEqual(DictationIntent.transcribe.symbol, "textformat.abc", "«AB»: sale tu texto")
+    assertEqual(DictationIntent.agent.symbol, "sparkles", "chispas: lo escribe Gluffi")
+    assertContains(DictationIntent.transcribe.help, "pulsa para redactar",
+        "la ayuda dice qué pasa al pulsarlo, no solo dónde estás")
+    assertContains(DictationIntent.agent.help, "pulsa para volver", "y al revés")
 
     let model = PillViewModel()
     assertEqual(model.intent, .transcribe,

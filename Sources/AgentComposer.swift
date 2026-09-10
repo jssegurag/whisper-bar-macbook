@@ -41,18 +41,19 @@ enum DictationIntent: String, CaseIterable {
         }
     }
 
-    /// Lo que la píldora enseña. Corto: comparte sitio con la palabra y el atajo.
-    var shortTitle: String {
+    /// El icono del interruptor. Sin etiqueta: el modo se lee en el color de
+    /// toda la píldora, que es más visible que una palabra de diez puntos.
+    var symbol: String {
         switch self {
-        case .transcribe: return "Dictado"
-        case .agent:      return "Orden"
+        case .transcribe: return "textformat.abc"   // «AB»: sale tu texto tal cual
+        case .agent:      return "sparkles"
         }
     }
 
-    var symbol: String {
+    var help: String {
         switch self {
-        case .transcribe: return "text.quote"
-        case .agent:      return "wand.and.stars"
+        case .transcribe: return "Transcribir lo que dices · pulsa para redactar lo que pides"
+        case .agent:      return "Redactar lo que pides · pulsa para volver a transcribir"
         }
     }
 
