@@ -24,6 +24,32 @@ final class PillViewModel: ObservableObject {
     /// creería que falla la app, cuando lo que pasa es que estaba en otra
     /// aplicación. Se enseña mientras graba, que es cuando aún puede cancelar.
     @Published var profileName: String?
+
+    /// El atajo que dispara el dictado, tal como lo tenga configurado el
+    /// usuario. Estaba escrito a mano como «⌘⌥» y por eso mentía en cuanto
+    /// alguien lo cambiaba en Preferencias — que es exactamente lo que hace
+    /// quien tiene un conflicto con otra app: el atajo de fábrica choca con
+    /// Photoshop, se cambia a ⌃⇧, y la píldora seguía anunciando el de antes.
+    @Published var shortcutGlyphs: String = PillViewModel.currentGlyphs()
+
+    private var hotkeyObserver: NSObjectProtocol?
+
+    static func currentGlyphs() -> String {
+        HotkeyBinding.glyphs(for: Config.shared.hotkeyModifiers(for: .transcribe))
+    }
+
+    init() {
+        // El mismo aviso que usa AppDelegate para volver a registrar los atajos:
+        // si la píldora no lo escucha, hay que reiniciar para verla al día.
+        hotkeyObserver = NotificationCenter.default.addObserver(
+            forName: .gluffiHotkeysChanged, object: nil, queue: .main) { [weak self] _ in
+                self?.shortcutGlyphs = PillViewModel.currentGlyphs()
+        }
+    }
+
+    deinit {
+        if let hotkeyObserver { NotificationCenter.default.removeObserver(hotkeyObserver) }
+    }
 }
 
 /// Píldora flotante.
@@ -110,9 +136,12 @@ struct PillView: View {
                 .foregroundStyle(.white.opacity(0.92))
                 .transition(.opacity)
                 .id(model.idleWord)          // fuerza el cruce al cambiar
-            Text("⌘⌥")
-                .font(.system(size: 11.5))
-                .foregroundStyle(.white.opacity(0.38))
+            // Vacío no se pinta: dejaría un hueco raro en vez de un atajo.
+            if !model.shortcutGlyphs.isEmpty {
+                Text(model.shortcutGlyphs)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.white.opacity(0.38))
+            }
         }
         .animation(.easeInOut(duration: 0.45), value: model.idleWord)
     }
