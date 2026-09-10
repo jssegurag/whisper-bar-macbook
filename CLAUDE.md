@@ -152,8 +152,15 @@ The app follows a **modular, single-responsibility** design:
 - So the capture only ever grows, and the decision happens on release. The button shows what is composed so far instead of a fixed «Pulsa las teclas…»
 - `normalize` keeps only the four modifiers: the flags field also carries left/right and numeric-pad bits
 
+**HotkeyMatcher.swift** — The decision behind the hotkeys (pure)
+- Event in, action out. No `NSEvent`, no monitors, no global state — hotkeys are the one thing that cannot be exercised from outside (global events plus an Accessibility grant) and the most expensive to break: a bug here leaves the whole app deaf to the keyboard
+- **The extra key does not fire, it transforms.** A modifiers-only shortcut fires the moment it completes, so by the time the space bar arrives the recording is already running. Waiting «just in case» would add latency to the path used a hundred times a day. Instead the recording is the same and the key changes what happens to it on release — and you get to start dictating and decide halfway through that it was an order
+- Auto-repeat is ignored, and a shortcut transforms **once** per press: the key repeats while held, and transforming twice would turn the mode on and back off
+- In `toggle` mode the shortcut outlives the keys, so the extra key still applies — that is the long-dictation case
+
 **HotkeyManager.swift** — Global keyboard event monitoring
 - Uses NSEvent.addGlobalMonitorForEvents with flagsChanged
+- All decisions delegate to `HotkeyMatcher`; this type only wires monitors to callbacks
 - Supports exact modifier combination matching (⌘⌥, ⌘⌥⇧, ⌘⌥⌃) without conflicts
 - Prioritizes combinations with more modifiers to avoid false matches
 - Requests Accessibility permission (prompts once, then retries if denied)

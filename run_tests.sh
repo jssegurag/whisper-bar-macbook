@@ -72,6 +72,7 @@ swiftc \
     "$DIR/Sources/CustomDictionary.swift" \
     "$DIR/Sources/DictionaryProcessor.swift" \
     "$DIR/Sources/HotkeyBinding.swift" \
+    "$DIR/Sources/HotkeyMatcher.swift" \
     "$DIR/Sources/HotkeyManager.swift" \
     "$DIR/Sources/PasteTargetTracker.swift" \
     "$DIR/Sources/AudioFeedback.swift" \
