@@ -53,10 +53,7 @@ las tengas abiertas a la vez. El detalle completo, en `CONTRIBUTING.md`.
 
 | Tipo       | Para qué                                                        | Ejemplo                                 |
 |------------|-----------------------------------------------------------------|-----------------------------------------|
-| `feat/`    | Capacidad nueva visible para el usuario                         | `feat/configurable-hotkeys`             |
-| `fix/`     | Corrección de comportamiento incorrecto                         | `fix/transcriber-subprocess-reliability`|
 | `refactor/`| Reorganización sin cambio de comportamiento                     | `docs/`    | Solo documentación                                              | `docs/branch-strategy`                  |
-| `chore/`   | Build, tooling, CI, dependencias                                | `chore/github-actions-ci`               |
 
 Reglas:
 
@@ -75,7 +72,7 @@ imperativo, ≤ 72 caracteres. El cuerpo explica el *por qué*, no el *qué*.
 
 | Rama | Propósito | Estado |
 |---|---|---|
-| `fix/60-aviso-de-atajo-al-soltar` | Que el aviso de «dos teclas» no salte con un atajo válido. | PR #60 |
+| _(ninguna)_ | | |
 
 Esta tabla es corta a propósito. Antes vivía aquí una ficha por rama —propósito,
 alcance, bugs que cerraba, orden de mezcla— y para el 29-08-2026 doce de esas
