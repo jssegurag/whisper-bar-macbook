@@ -16,7 +16,7 @@ Las versiones siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
-### Corregido
+## [0.5.1] — 2026-09-09
 
 ### Corregido
 
@@ -34,7 +34,6 @@ Las versiones siguen [SemVer](https://semver.org/lang/es/).
   reasigna por chocar con otra aplicación. Ahora lee el configurado y se
   actualiza sin reiniciar; de paso, con el orden de modificadores de macOS, el
   mismo que muestra la pestaña de Atajos (#59).
-
 - **Al asignar un atajo de dos teclas salía «hace falta combinar al menos dos
   teclas»**, con el atajo ya guardado correctamente. La captura validaba en cada
   evento y `flagsChanged` llega también al soltar, así que la bajada de la
