@@ -165,10 +165,12 @@ class StreamingTranscriber {
         // desaparecía. Ahora la coincidencia es de la línea completa y
         // normalizada, que además reconoce «¡Gracias por ver el video!» —la
         // variante con signos, que la versión anterior dejaba pasar.
-        if HallucinationFilter.matches(cleaned, phrases: HallucinationFilter.phrases()) {
-            return ""
+        guard let sobreviven = HallucinationFilter.keptSentences(
+                cleaned,
+                phrases: HallucinationFilter.phrases(),
+                ambiguous: HallucinationFilter.ambiguousPhrases()) else {
+            return cleaned      // nada que quitar: la línea sale como entró
         }
-
-        return cleaned
+        return sobreviven.joined(separator: " ")
     }
 }

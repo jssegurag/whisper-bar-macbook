@@ -195,11 +195,14 @@ class Transcriber {
             .components(separatedBy: .newlines)
             .map    { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty && !$0.hasPrefix("[") }   // elimina líneas de timestamp
-        // whisper-cli corre con --no-timestamps, así que cada segmento es una
-        // línea y la alucinación llega como la suya propia, al final.
-        return HallucinationFilter
-            .stripTrailing(lineas, phrases: HallucinationFilter.phrases())
-            .joined(separator: " ")
+        // Se corta por oraciones, no por línea: whisper mete varias alucinaciones
+        // en el mismo renglón y así no se detectan. Si no hay nada que quitar se
+        // unen las líneas como siempre.
+        let sobreviven = HallucinationFilter.keptSentences(
+            lineas.joined(separator: "\n"),
+            phrases: HallucinationFilter.phrases(),
+            ambiguous: HallucinationFilter.ambiguousPhrases())
+        return (sobreviven ?? lineas).joined(separator: " ")
     }
 
     /// Últimas `count` líneas no vacías: el stderr de whisper-cli es largo y solo

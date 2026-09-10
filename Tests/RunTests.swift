@@ -4148,24 +4148,27 @@ func testHallucinationFilter() {
         "sin tablas el filtro es inerte")
 
     // Solo la cola. Una frase de la lista en mitad del dictado es contenido.
-    let enMedio = ["hola", "Gracias por ver el video", "seguimos mañana"]
-    assertEqual(HallucinationFilter.stripTrailing(enMedio, phrases: frases).count, 3,
+    let a = HallucinationFilter.ambiguousPhrases()
+    let enMedio = "hola\nGracias por ver el video\nseguimos mañana"
+    assertEqual(HallucinationFilter.strip(enMedio, phrases: frases, ambiguous: a), enMedio,
         "una alucinación en mitad del dictado NO se toca")
 
-    let alFinal = ["seguimos mañana", "Gracias por ver el video."]
-    assertEqual(HallucinationFilter.stripTrailing(alFinal, phrases: frases),
-        ["seguimos mañana"], "al final sí se descarta")
+    assertEqual(HallucinationFilter.strip("seguimos mañana\nGracias por ver el video.",
+                                          phrases: frases, ambiguous: a),
+        "seguimos mañana", "al final sí se descarta")
 
-    let variasAlFinal = ["seguimos mañana", "Gracias por ver el video.", "¡Suscríbete al canal!"]
-    assertEqual(HallucinationFilter.stripTrailing(variasAlFinal, phrases: frases),
-        ["seguimos mañana"], "y si son varias, todas")
+    assertEqual(HallucinationFilter.strip(
+        "seguimos mañana\nGracias por ver el video.\n¡Suscríbete al canal!",
+        phrases: frases, ambiguous: a),
+        "seguimos mañana", "y si son varias, todas")
 
     // Un toque accidental produce solo la alucinación: mejor no pegar nada.
-    assertEqual(HallucinationFilter.stripTrailing(["¡Gracias por ver el video!"], phrases: frases),
-        [], "un dictado que es solo alucinación queda vacío")
+    assertEqual(HallucinationFilter.strip("¡Gracias por ver el video!",
+                                          phrases: frases, ambiguous: a), "",
+        "un dictado que es solo alucinación queda vacío")
 
-    assertEqual(HallucinationFilter.stripTrailing([], phrases: frases), [],
-        "sin líneas no hay nada que hacer")
+    assertEqual(HallucinationFilter.strip("", phrases: frases, ambiguous: a), "",
+        "sin texto no hay nada que hacer")
 }
 
 func testTranscriberDropsHallucinations() {
@@ -4228,6 +4231,67 @@ func testStreamingKeepsLegitimatePhrases() {
         "Necesito el informe del cliente", "el texto normal pasa intacto")
 }
 
+func testHallucinationBursts() {
+    suite("HallucinationFilter — Ráfagas y despedidas de verdad")
+
+    let f = HallucinationFilter.phrases()
+    let a = HallucinationFilter.ambiguousPhrases()
+    assert(!a.isEmpty, "la lista de frases ambiguas se lee")
+
+    // La ráfaga literal que salió probando la app: cinco líneas, y una de ellas
+    // con dos alucinaciones en el mismo renglón.
+    let rafaga = """
+    subtitles by the Amara.org community
+    ¡gracias por ver el video! ¡Suscríbete al canal!
+    gracias a todos por su atención
+    gracias a todos por su participación
+    subtitles by the Amara.org community
+    """
+    assertEqual(HallucinationFilter.strip(rafaga, phrases: f, ambiguous: a), "",
+        "la ráfaga entera se descarta")
+    assertEqual(HallucinationFilter.strip(
+        "Necesito el informe del cliente para el jueves.\n" + rafaga, phrases: f, ambiguous: a),
+        "Necesito el informe del cliente para el jueves.",
+        "y con dictado delante, solo sobrevive el dictado")
+
+    // Dos frases conocidas en una línea: por línea completa no coincidía ninguna.
+    assertEqual(HallucinationFilter.strip(
+        "¡gracias por ver el video! ¡Suscríbete al canal!", phrases: f, ambiguous: a), "",
+        "dos alucinaciones en el mismo renglón se detectan por oración")
+
+    // El punto de «Amara.org» no cierra oración. Con el corte ingenuo la firma
+    // se partía en dos y dejaba de reconocerse.
+    assertEqual(HallucinationFilter.sentences("subtitles by the Amara.org community").count, 1,
+        "«Amara.org» no se parte: un punto pegado a lo siguiente no cierra oración")
+    assertEqual(HallucinationFilter.sentences("Hola. Adiós.").count, 2,
+        "un punto seguido de espacio sí cierra oración")
+    assertEqual(HallucinationFilter.sentences("Cuesta 3.5 millones.").count, 1,
+        "tampoco parte un decimal")
+
+    // Lo ambiguo, solo, es una despedida humana y no se toca. Esta es la razón
+    // de que existan dos listas.
+    for despedida in [
+        "Buen trabajo hoy. Gracias a todos.",
+        "Nos vemos el jueves. Hasta la próxima.",
+        "Cerramos el trimestre. Gracias a todos por su participación.",
+        "Gracias.",
+    ] {
+        assertEqual(HallucinationFilter.strip(despedida, phrases: f, ambiguous: a), despedida,
+            "intacta sin una inequívoca que la acompañe: «\(despedida)»")
+    }
+
+    // Pero acompañada de una inequívoca, es parte de la ráfaga.
+    assertEqual(HallucinationFilter.strip(
+        "Cerramos el trimestre. Gracias a todos. Gracias por ver el video.",
+        phrases: f, ambiguous: a),
+        "Cerramos el trimestre.",
+        "con una inequívoca al lado, la ambigua cae con ella")
+
+    // Sin tablas no se descarta nada.
+    assertEqual(HallucinationFilter.strip(rafaga, phrases: [], ambiguous: []), rafaga,
+        "sin tablas el filtro es inerte")
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -4262,6 +4326,7 @@ struct TestRunner {
         testAudioRecorderStartFailure()
         testTranscriberOutputCleaning()
         testHallucinationFilter()
+        testHallucinationBursts()
         testTranscriberDropsHallucinations()
         testStreamingKeepsLegitimatePhrases()
         testTranscriberErrorMessages()

@@ -29,6 +29,10 @@ import Foundation
 ///   borraba «Gracias por el reporte, lo reviso mañana» entera.
 /// - **Solo se descarta la cola.** Una frase de la lista en mitad del dictado se
 ///   respeta: ahí el usuario estaba hablando.
+///
+/// Y se compara **por oración, no por línea**: whisper encadena varias en el
+/// mismo renglón —«¡gracias por ver el video! ¡Suscríbete al canal!»— y mirando
+/// la línea entera no coincide ninguna de las dos.
 enum HallucinationFilter {
 
     // MARK: - Decisión
@@ -44,18 +48,91 @@ enum HallucinationFilter {
         return phrases.contains(key)
     }
 
-    /// Descarta las líneas alucinadas **del final** y devuelve el resto intacto.
+    /// Corta el texto en oraciones, conservando cada una tal cual.
     ///
-    /// Se recorre hacia atrás y se para en la primera línea que no es una
-    /// alucinación: lo que hay antes es lo que el usuario dictó, aunque
-    /// contenga una frase de la lista.
-    static func stripTrailing(_ lines: [String], phrases: Set<String>) -> [String] {
-        guard !phrases.isEmpty else { return lines }
-        var fin = lines.count
-        while fin > 0, matches(lines[fin - 1], phrases: phrases) {
+    /// Hace falta porque whisper encadena varias alucinaciones en una sola
+    /// línea: «¡gracias por ver el video! ¡Suscríbete al canal!» son dos frases
+    /// conocidas, y comparando la línea entera no coincide ninguna.
+    static func sentences(_ text: String) -> [String] {
+        var trozos: [String] = []
+        var actual = ""
+        let chars = Array(text)
+
+        for (i, ch) in chars.enumerated() {
+            if ch.isNewline {
+                if !actual.trimmingCharacters(in: .whitespaces).isEmpty { trozos.append(actual) }
+                actual = ""
+                continue
+            }
+            actual.append(ch)
+            guard ch == "." || ch == "!" || ch == "?" || ch == "…" else { continue }
+            // Solo corta si detrás viene un espacio o el final. Un punto pegado
+            // a lo siguiente no cierra oración: es «Amara.org», «3.5», «etc.».
+            // Con el corte ingenuo, la firma de Amara se partía en dos y dejaba
+            // de reconocerse — que es justo la alucinación más repetida.
+            let siguiente = i + 1 < chars.count ? chars[i + 1] : " "
+            guard siguiente.isWhitespace else { continue }
+            trozos.append(actual)
+            actual = ""
+        }
+        if !actual.trimmingCharacters(in: .whitespaces).isEmpty { trozos.append(actual) }
+        return trozos
+    }
+
+    /// Quita las oraciones alucinadas **del final** y devuelve el resto intacto.
+    ///
+    /// Dos niveles de confianza, y la diferencia importa:
+    ///
+    /// - `phrases` son inequívocas —«gracias por ver el video», la firma de
+    ///   Amara.org—. Nadie las dicta en serio, así que basta una para descartarla.
+    /// - `ambiguous` las alucina whisper igual, pero un humano también las dice:
+    ///   «Buen trabajo hoy. Gracias a todos.» es una despedida normal. Solo se
+    ///   descartan si en la misma cola hay **al menos una inequívoca**.
+    ///
+    /// Eso es lo que distingue una ráfaga alucinada —que llega en bloque, con la
+    /// firma de Amara o el «suscríbete» delatándola— de una despedida de verdad,
+    /// que va sola.
+    /// Las oraciones que sobreviven, o **nil si no hay nada que quitar**.
+    ///
+    /// Devolver nil en vez del texto no es un detalle: quien llama sabe cómo
+    /// quiere unir lo suyo, y así una entrada que el filtro no toca se devuelve
+    /// exactamente como entró. Cuando esto devolvía el texto ya reensamblado,
+    /// `cleanOutput` empezó a soltar los segmentos separados por saltos de línea
+    /// en vez de por espacios — una regresión silenciosa en dictados que no
+    /// tenían ninguna alucinación.
+    static func keptSentences(_ text: String,
+                              phrases: Set<String>,
+                              ambiguous: Set<String> = []) -> [String]? {
+        guard !phrases.isEmpty || !ambiguous.isEmpty, !text.isEmpty else { return nil }
+        let trozos = sentences(text)
+
+        // Se recorre hacia atrás hasta la primera oración que no es candidata.
+        var fin = trozos.count
+        var inequivocas = 0
+        while fin > 0 {
+            let trozo = trozos[fin - 1]
+            if matches(trozo, phrases: phrases) {
+                inequivocas += 1
+            } else if !matches(trozo, phrases: ambiguous) {
+                break
+            }
             fin -= 1
         }
-        return Array(lines[0..<fin])
+        // Solo ambiguas: es una despedida del usuario, no una ráfaga. No se toca.
+        guard fin < trozos.count, inequivocas > 0 else { return nil }
+
+        return trozos[0..<fin]
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    /// Igual, uniendo con espacio y devolviendo el texto intacto si no hay nada
+    /// que quitar.
+    static func strip(_ text: String, phrases: Set<String>, ambiguous: Set<String> = []) -> String {
+        guard let kept = keptSentences(text, phrases: phrases, ambiguous: ambiguous) else {
+            return text
+        }
+        return kept.joined(separator: " ")
     }
 
     // MARK: - Tablas
@@ -67,14 +144,24 @@ enum HallucinationFilter {
         Set(tables().frases.map(Cleaner.phraseKey).filter { !$0.isEmpty })
     }
 
+    /// Las que solo cuentan acompañadas de una inequívoca.
+    static func ambiguousPhrases() -> Set<String> {
+        Set(tables().frasesAmbiguas.map(Cleaner.phraseKey).filter { !$0.isEmpty })
+    }
+
     struct Tables: Codable {
         var frases: [String]
+        var frasesAmbiguas: [String]
 
-        init(frases: [String] = []) { self.frases = frases }
+        init(frases: [String] = [], frasesAmbiguas: [String] = []) {
+            self.frases = frases
+            self.frasesAmbiguas = frasesAmbiguas
+        }
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            frases = try c.decodeIfPresent([String].self, forKey: .frases) ?? []
+            frases         = try c.decodeIfPresent([String].self, forKey: .frases) ?? []
+            frasesAmbiguas = try c.decodeIfPresent([String].self, forKey: .frasesAmbiguas) ?? []
         }
     }
 
