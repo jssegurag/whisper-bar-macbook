@@ -182,13 +182,27 @@ class Transcriber {
         lock.unlock()
     }
 
-    /// Une los segmentos transcritos y descarta las líneas de timestamp.
+    /// Une los segmentos transcritos, descarta las líneas de timestamp y quita la
+    /// cola alucinada.
+    ///
+    /// Lo último es lo que faltaba aquí: el filtro de alucinaciones existía solo
+    /// en `StreamingTranscriber`, así que la ventana flotante lo aplicaba y el
+    /// dictado normal —la ruta que usa todo el mundo— no. En el historial real
+    /// del usuario, 4 de cada 100 dictados terminaban en «Gracias por ver el
+    /// video».
     static func cleanOutput(_ raw: String) -> String {
-        raw
+        let lineas = raw
             .components(separatedBy: .newlines)
             .map    { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty && !$0.hasPrefix("[") }   // elimina líneas de timestamp
-            .joined(separator: " ")
+        // Se corta por oraciones, no por línea: whisper mete varias alucinaciones
+        // en el mismo renglón y así no se detectan. Si no hay nada que quitar se
+        // unen las líneas como siempre.
+        let sobreviven = HallucinationFilter.keptSentences(
+            lineas.joined(separator: "\n"),
+            phrases: HallucinationFilter.phrases(),
+            ambiguous: HallucinationFilter.ambiguousPhrases())
+        return (sobreviven ?? lineas).joined(separator: " ")
     }
 
     /// Últimas `count` líneas no vacías: el stderr de whisper-cli es largo y solo

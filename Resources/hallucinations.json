@@ -1,0 +1,67 @@
+{
+  "_comentario": [
+    "Frases que whisper inventa cuando el audio es silencio (HallucinationFilter.swift).",
+    "",
+    "No son un fallo de la app ni del modelo: whisper se entrenó con 680.000 horas de",
+    "audio de internet, buena parte subtítulos de YouTube. Ante silencio tiene que",
+    "predecir algo, y lo más probable que aprendió es la despedida de un vídeo. Se",
+    "reproduce con un WAV de silencio digital absoluto.",
+    "",
+    "REGLA PARA EDITAR ESTA LISTA: solo frases que nadie dictaría en serio.",
+    "La comparación es de la LÍNEA COMPLETA, normalizada (minúsculas, sin tildes ni",
+    "signos). Nunca por prefijo. Por eso «gracias» a secas NO puede estar aquí: se",
+    "llevaría por delante «Gracias por el reporte, lo reviso mañana».",
+    "",
+    "Para ajustarla sin recompilar, copia este archivo a",
+    "~/Library/Application Support/WhisperBar/hallucinations.json — esa copia gana."
+  ],
+  "version": 1,
+
+  "_frasesAmbiguas": [
+    "Estas también las alucina whisper, pero un humano las dice en serio:",
+    "«Buen trabajo hoy. Gracias a todos.» es una despedida normal.",
+    "Por eso solo se descartan si en la misma cola hay al menos una frase",
+    "de la lista de arriba, que sí es inequívoca. Una sola, suelta, se respeta."
+  ],
+
+  "frasesAmbiguas": [
+    "gracias a todos",
+    "muchas gracias a todos",
+    "hasta la proxima",
+    "nos vemos en el proximo",
+    "hasta luego",
+    "gracias"
+  ],
+
+  "frases": [
+    "gracias por ver el video",
+    "gracias por ver el vídeo",
+    "gracias por ver",
+    "gracias por vernos",
+    "gracias a todos por su atencion",
+    "gracias a todos por su participacion",
+    "gracias por su atencion",
+    "gracias por su participacion",
+    "muchas gracias por su atencion",
+    "gracias por acompanarnos",
+    "no olvides suscribirte",
+    "no olvides suscribirte al canal",
+    "suscribete al canal",
+    "nos vemos en el proximo video",
+    "hasta el proximo video",
+    "subtitulos realizados por la comunidad de amara org",
+    "subtitulos por la comunidad de amara org",
+    "subtitulado por la comunidad de amara org",
+    "mas informacion en www lavozdelosmuertos com",
+    "suscribete y activa la campanita",
+    "dale like y suscribete",
+
+    "thank you for watching",
+    "thanks for watching",
+    "thank you for watching this video",
+    "please subscribe to my channel",
+    "subscribe to my channel",
+    "see you in the next video",
+    "subtitles by the amara org community"
+  ]
+}
