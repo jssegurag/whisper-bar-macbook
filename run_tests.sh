@@ -60,6 +60,7 @@ swiftc \
     "$DIR/Sources/RewritePipeline.swift" \
     "$DIR/Sources/CleanupRules.swift" \
     "$DIR/Sources/Cleaner.swift" \
+    "$DIR/Sources/HallucinationFilter.swift" \
     "$DIR/Sources/WhisperPrompt.swift" \
     "$DIR/Sources/SpellFixer.swift" \
     "$DIR/Sources/TextFinish.swift" \
