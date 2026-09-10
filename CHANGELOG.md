@@ -16,6 +16,14 @@ Las versiones siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Corregido
+
+- **La píldora anunciaba el atajo de fábrica** aunque lo hubieras cambiado en
+  Preferencias. Estaba escrito a mano como «⌘⌥», así que mentía justo a quien lo
+  reasigna por chocar con otra aplicación. Ahora lee el configurado y se
+  actualiza sin reiniciar; de paso, con el orden de modificadores de macOS, el
+  mismo que muestra la pestaña de Atajos (#59).
+
 ## [0.5.0] — 2026-08-29
 
 ### Añadido
