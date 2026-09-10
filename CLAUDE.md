@@ -147,6 +147,11 @@ The app follows a **modular, single-responsibility** design:
 - Returns cleaned text ready for LLM or pasting
 
 
+**HotkeyBinding.swift / ShortcutCapture** — The shortcut model, and composing a new one
+- `ShortcutCapture` lives outside the view because the event sequence is not obvious and that is where the bug was: `flagsChanged` fires on **press and on release**, so composing ⌃⇧ produces four events — `⌃ · ⌃⇧ · ⌃ · none`. Validating each one meant the third (a single key, already on the way up) lit «hace falta combinar al menos dos teclas» on top of a shortcut that had just been saved correctly on the second. **The shortcut was right and the screen said it was wrong**
+- So the capture only ever grows, and the decision happens on release. The button shows what is composed so far instead of a fixed «Pulsa las teclas…»
+- `normalize` keeps only the four modifiers: the flags field also carries left/right and numeric-pad bits
+
 **HotkeyManager.swift** — Global keyboard event monitoring
 - Uses NSEvent.addGlobalMonitorForEvents with flagsChanged
 - Supports exact modifier combination matching (⌘⌥, ⌘⌥⇧, ⌘⌥⌃) without conflicts

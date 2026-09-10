@@ -114,3 +114,53 @@ struct HotkeyBinding: Equatable {
         return .ok
     }
 }
+
+/// La composición de un atajo mientras el usuario tiene teclas pulsadas.
+///
+/// Existe separado de la vista porque la secuencia de eventos no es evidente y
+/// era justo donde estaba el fallo. `flagsChanged` llega al pulsar **y al
+/// soltar**, así que componer ⌃⇧ produce cuatro eventos:
+///
+///     ⌃  ·  ⌃⇧  ·  ⌃  ·  (nada)
+///
+/// Validando cada uno, el tercero —una sola tecla, ya de bajada— encendía el
+/// aviso «hace falta combinar al menos dos teclas» sobre un atajo que se había
+/// guardado bien en el segundo. El atajo quedaba correcto y la pantalla decía
+/// que no. Por eso aquí solo se acumula, y se decide al soltar.
+struct ShortcutCapture {
+
+    enum Outcome: Equatable {
+        /// Sigue componiendo: no se valida ni se guarda todavía.
+        case composing(NSEvent.ModifierFlags)
+        /// Soltó todo. Esto es lo que hay que validar y guardar.
+        case finished(NSEvent.ModifierFlags)
+    }
+
+    /// La combinación más completa vista en esta pulsación.
+    private(set) var best: NSEvent.ModifierFlags = []
+
+    static let tracked: [NSEvent.ModifierFlags] = [.command, .option, .shift, .control]
+
+    static func count(_ modifiers: NSEvent.ModifierFlags) -> Int {
+        tracked.filter { modifiers.contains($0) }.count
+    }
+
+    /// Solo los cuatro modificadores que nos interesan, sin la parte de hardware
+    /// (izquierda/derecha), que llega en el mismo campo.
+    static func normalize(_ flags: NSEvent.ModifierFlags) -> NSEvent.ModifierFlags {
+        flags.intersection(.deviceIndependentFlagsMask)
+             .intersection([.command, .option, .shift, .control])
+    }
+
+    /// Un evento de `flagsChanged` ya normalizado.
+    mutating func feed(_ pressed: NSEvent.ModifierFlags) -> Outcome {
+        guard !pressed.isEmpty else { return .finished(best) }
+        // Solo crece. La bajada no puede reducir lo compuesto.
+        if ShortcutCapture.count(pressed) > ShortcutCapture.count(best) {
+            best = pressed
+        }
+        return .composing(best)
+    }
+
+    mutating func reset() { best = [] }
+}

@@ -4100,6 +4100,67 @@ func testAppCatalogSearch() {
         "una búsqueda de solo espacios no filtra nada")
 }
 
+func testShortcutCapture() {
+    suite("ShortcutCapture — El atajo se decide al soltar")
+
+    // LA SECUENCIA DEL FALLO. Componer ⌃⇧ no son dos eventos, son cuatro:
+    // flagsChanged llega al pulsar y al soltar. El tercero —⌃ solo, ya de
+    // bajada— es el que encendía «hace falta combinar al menos dos teclas»
+    // encima de un atajo que se acababa de guardar bien.
+    var captura = ShortcutCapture()
+    assertEqual(captura.feed([.control]), .composing([.control]),
+        "1· pulsa ⌃: componiendo, no se valida")
+    assertEqual(captura.feed([.control, .shift]), .composing([.control, .shift]),
+        "2· añade ⇧: componiendo")
+    assertEqual(captura.feed([.control]), .composing([.control, .shift]),
+        "3· suelta ⇧: NO reduce lo compuesto — aquí estaba el fallo")
+    assertEqual(captura.feed([]), .finished([.control, .shift]),
+        "4· suelta todo: ahora sí, y con las dos teclas")
+
+    // Y lo que se decide es válido, que es lo que el usuario veía negado.
+    assertEqual(HotkeyBinding.validate([.control, .shift], for: .transcribe,
+                                       others: [HotkeyBinding(action: .transcribe,
+                                                              modifiers: [.command, .option],
+                                                              mode: .hold)]),
+                .ok, "⌃⇧ es una combinación válida")
+
+    // Tres teclas, soltadas en cualquier orden.
+    var tres = ShortcutCapture()
+    _ = tres.feed([.command])
+    _ = tres.feed([.command, .option])
+    _ = tres.feed([.command, .option, .shift])
+    _ = tres.feed([.command, .shift])          // suelta ⌥ primero
+    _ = tres.feed([.shift])
+    assertEqual(tres.feed([]), .finished([.command, .option, .shift]),
+        "el orden de soltada no altera lo capturado")
+
+    // Una sola tecla sí debe avisar: es el caso para el que el mensaje existe.
+    var una = ShortcutCapture()
+    _ = una.feed([.command])
+    assertEqual(una.feed([]), .finished([.command]),
+        "con una sola, se entrega esa y el validador la rechaza")
+    assertEqual(HotkeyBinding.validate([.command], for: .transcribe, others: []), .tooFew,
+        "y ahí el aviso es correcto")
+
+    // Salir de la captura sin pulsar nada no propone nada.
+    var vacia = ShortcutCapture()
+    assertEqual(vacia.feed([]), .finished([]), "sin teclas, no hay combinación")
+
+    // reset deja el capturador limpio para la siguiente.
+    var reutilizada = ShortcutCapture()
+    _ = reutilizada.feed([.command, .option])
+    reutilizada.reset()
+    assertEqual(reutilizada.best, [], "reset limpia lo compuesto")
+
+    // normalize se queda solo con los cuatro modificadores. El campo trae
+    // también el bit de izquierda/derecha y el de teclado numérico.
+    assertEqual(ShortcutCapture.normalize([.control, .shift, .numericPad, .function]),
+                [.control, .shift],
+        "normalize descarta lo que no es un modificador de atajo")
+    assertEqual(ShortcutCapture.count([.command, .option, .shift]), 3, "cuenta modificadores")
+    assertEqual(ShortcutCapture.count([]), 0, "y el conjunto vacío es cero")
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -4166,6 +4227,7 @@ struct TestRunner {
         testAppNotificationContent()
         testStreamingPriority()
         testHotkeyBinding()
+        testShortcutCapture()
         testHistoryPresentation()
         testLiveMeta()
         testDictionaryUsageCount()

@@ -12,6 +12,9 @@ struct ShortcutsTab: View {
     @State private var capturing: HotkeyBinding.Action?
     @State private var validation: HotkeyBinding.Validation = .ok
     @State private var monitor: Any?
+    /// La composición en curso. La máquina de estados vive en `ShortcutCapture`,
+    /// fuera de la vista, para poder probarla.
+    @State private var capture = ShortcutCapture()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -73,7 +76,10 @@ struct ShortcutsTab: View {
         return Button {
             isCapturing ? stopCapture() : startCapture(for: binding.action)
         } label: {
-            Text(isCapturing ? "Pulsa las teclas…" : binding.glyphs)
+            Text(isCapturing
+                 ? (capture.best.isEmpty ? "Pulsa las teclas…"
+                                          : HotkeyBinding.glyphs(for: capture.best))
+                 : binding.glyphs)
                 .font(.system(size: isCapturing ? 11.5 : 15, weight: .medium))
                 .frame(minWidth: 108)
                 .padding(.vertical, 5)
@@ -98,22 +104,21 @@ struct ShortcutsTab: View {
         stopCapture()
         capturing = action
         validation = .ok
+        capture.reset()
         monitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
-            let pressed = event.modifierFlags
-                .intersection(.deviceIndependentFlagsMask)
-                .intersection([.command, .option, .shift, .control])
-            // Se decide al soltar: mientras el usuario suma teclas, el conjunto
-            // crece, y el que vale es el más completo antes de la soltada.
-            if pressed.isEmpty {
+            switch capture.feed(ShortcutCapture.normalize(event.modifierFlags)) {
+            case .composing:
+                validation = .ok        // mientras compone no se le riñe
+            case .finished(let modifiers):
+                commit(modifiers, for: action)
                 stopCapture()
-            } else {
-                commit(pressed, for: action)
             }
             return event
         }
     }
 
     private func commit(_ modifiers: NSEvent.ModifierFlags, for action: HotkeyBinding.Action) {
+        guard !modifiers.isEmpty else { return }   // se salió de la captura sin pulsar nada
         let result = HotkeyBinding.validate(modifiers, for: action, others: bindings)
         validation = result
         guard result == .ok else { return }
@@ -125,6 +130,7 @@ struct ShortcutsTab: View {
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
         capturing = nil
+        capture.reset()
     }
 
     private func setMode(_ mode: HotkeyBinding.Mode, for action: HotkeyBinding.Action) {
