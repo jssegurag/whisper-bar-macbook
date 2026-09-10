@@ -75,7 +75,7 @@ imperativo, ≤ 72 caracteres. El cuerpo explica el *por qué*, no el *qué*.
 
 | Rama | Propósito | Estado |
 |---|---|---|
-| _(ninguna)_ | | |
+| `fix/60-aviso-de-atajo-al-soltar` | Que el aviso de «dos teclas» no salte con un atajo válido. | PR #60 |
 
 Esta tabla es corta a propósito. Antes vivía aquí una ficha por rama —propósito,
 alcance, bugs que cerraba, orden de mezcla— y para el 29-08-2026 doce de esas

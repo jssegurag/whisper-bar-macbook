@@ -16,6 +16,15 @@ Las versiones siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Corregido
+
+- **Al asignar un atajo de dos teclas salía «hace falta combinar al menos dos
+  teclas»**, con el atajo ya guardado correctamente. La captura validaba en cada
+  evento y `flagsChanged` llega también al soltar, así que la bajada de la
+  primera tecla encendía un aviso que ya no aplicaba. Ahora la combinación se
+  decide al soltar, y mientras compones el botón enseña lo que llevas
+  pulsado (#60).
+
 ## [0.5.0] — 2026-08-29
 
 ### Añadido
