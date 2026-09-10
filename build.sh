@@ -72,6 +72,7 @@ swiftc \
     "$DIR/Sources/SystemPolish.swift" \
     "$DIR/Sources/LocalLLM.swift" \
     "$DIR/Sources/AgentComposer.swift" \
+    "$DIR/Sources/StyleProfiler.swift" \
     "$DIR/Sources/PreferencesIntelligenceTab.swift" \
     "$DIR/Sources/SnippetsView.swift" \
     "$DIR/Sources/SnippetsWindowController.swift" \

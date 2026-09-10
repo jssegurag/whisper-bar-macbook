@@ -463,7 +463,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let reglas = session.snippets ? SnippetStore.shared.rules() : []
         let resultado = AgentComposer.compose(
             order: order,
-            style: "",   // el perfil de estilo llega en la entrega siguiente
+            style: config.agentStyleProfile,
             snippetRules: reglas,
             ask: { sistema, usuario in
                 LocalLLM.askReporting(system: sistema, user: usuario,
