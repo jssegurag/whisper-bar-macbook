@@ -66,6 +66,7 @@ swiftc \
     "$DIR/Sources/TextFinish.swift" \
     "$DIR/Sources/SystemPolish.swift" \
     "$DIR/Sources/LocalLLM.swift" \
+    "$DIR/Sources/AgentComposer.swift" \
     "$DIR/Sources/PreferencesIntelligenceTab.swift" \
     "$DIR/Sources/SnippetsView.swift" \
     "$DIR/Sources/SnippetsWindowController.swift" \

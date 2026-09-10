@@ -331,6 +331,20 @@ class Config {
 
     var isLlmValid: Bool { isLlmModelValid && isLlamaServerValid }
 
+    // MARK: - Modo agente
+
+    /// Si el atajo del usuario **más la barra espaciadora** convierte el dictado
+    /// en una orden para el modelo.
+    ///
+    /// Se puede apagar porque añade una combinación de teclas global, no porque
+    /// consuma nada: el modelo solo arranca cuando se usa y `llmIdleMinutes` lo
+    /// vuelve a soltar. Apagado aquí, la app ni siquiera instala el monitor de
+    /// teclas.
+    var agentModeEnabled: Bool {
+        get { defaults.object(forKey: "agentModeEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "agentModeEnabled") }
+    }
+
     // MARK: - Snippets por voz
 
     // MARK: - Atajos

@@ -45,6 +45,7 @@ final class PillWindowController: NSObject, NSWindowDelegate {
 
     /// Callback disparado cuando el usuario pulsa el botón ✕ del pill.
     var onPillCancelTapped: (() -> Void)?
+    var onIntentToggled: (() -> Void)?
 
     /// Callback disparado cuando el usuario oculta el pill desde el menú contextual.
     var onPillHiddenByUser: (() -> Void)?
@@ -77,6 +78,7 @@ final class PillWindowController: NSObject, NSWindowDelegate {
             rootView: PillView(
                 model: viewModel,
                 onTap: { [weak self] in self?.onPillTapped?() },
+                onToggleIntent: { [weak self] in self?.onIntentToggled?() },
                 onCancel: { [weak self] in self?.onPillCancelTapped?() },
                 onDrag: { [weak self] in self?.dragToMouse() },
                 onDragEnded: { [weak self] in self?.endDrag() },
@@ -155,6 +157,26 @@ final class PillWindowController: NSObject, NSWindowDelegate {
 
     /// Lo que la píldora está enseñando ahora. Para poder comprobarlo.
     var currentProfileName: String? { viewModel.profileName }
+
+    /// El usuario cambió de modo, desde la píldora o desde el menú.
+    func setIntent(_ intent: DictationIntent) {
+        viewModel.intent = intent
+        if intent == .transcribe { viewModel.modelState = .asleep }
+    }
+
+    var intent: DictationIntent { viewModel.intent }
+
+    /// Si se ofrece el interruptor. Sin modelo configurado o con el modo
+    /// apagado no se enseña: prometer algo que no va a funcionar es peor que
+    /// callarse, y además dejaría al usuario en un modo que no redacta.
+    func setAgentAvailable(_ available: Bool) {
+        viewModel.agentAvailable = available
+        if !available { viewModel.leaveAgentMode() }
+    }
+
+    func setModelState(_ state: AgentModelState) {
+        viewModel.modelState = state
+    }
 
     func setProcessingLabel(_ label: String) {
         DispatchQueue.main.async { [weak self] in

@@ -67,6 +67,50 @@ with the newer SDK before pushing.
 launches on macOS 13 where the framework does not exist. `availability` reports why it
 cannot be used in words the user can act on.
 
+## Agent mode — dictating an order instead of a text
+
+Your shortcut **plus the space bar**: what you dictate stops being text to paste
+and becomes an order. `AgentComposer` turns it into the text you wanted. Full
+story in `docs/historias/HU-006-modo-agente.md`.
+
+- **Snippets run first here, and only here.** Everywhere else they go last,
+  because their body is literal text the user wrote. But an order *talks about*
+  them — «diciendo que este es mi correo» — so an unresolved «mi correo» would
+  have the model write that literally, or invent an address. The dictionary
+  still runs **after** the model: HU-004's acceptance run proved it rewrites the
+  user's own terms on its own.
+- **On failure nothing is pasted.** The rest of the app falls back to the
+  original text; here the "original" is the order, and pasting «Redacta un
+  correo para Juan…» into the mail to Juan is a visible disaster. `compose`
+  returns an error, never a substitute. The order still reaches the history with
+  `kind: .agent`, so a failed run does not lose what was dictated.
+- **The mode is picked before speaking**, with a toggle on the pill (and in the
+  menu, since the pill can be hidden). The shortcut is the same for both: it
+  means «start listening», not «what kind of listening». An earlier version used
+  the shortcut plus the space bar and was withdrawn — the shortcut fires the
+  moment it completes, so for a second the user did not know which of the two
+  was happening
+- **The mode does not survive a restart.** A persistent mode turns a visible
+  failure into an invisible one: you open the laptop, dictate «llego en diez
+  minutos» without looking at the pill, and get a four-paragraph email because
+  last night you left the agent on. Starting in the safe mode costs one click a
+  day; the opposite costs a sent email
+- **`DictationIntent` travels in `DictationSession`**, same discipline as the
+  profile: a long dictation leaves plenty of time to flip the toggle, and reading
+  it at the end would apply a mode the user did not pick when they started
+- **`LocalLLM.warmUp()` fires when the space bar arrives**, not on release:
+  24,9 s cold against ~1,5 s warm, so the model loads while the user is still
+  dictating — time that was being spent anyway.
+- `clean` strips what small models add unasked — «¡Claro! Aquí tienes:»,
+  wrapping quotes — the same problem `SystemPolish` already had. A single line
+  ending in a colon is **never** a preamble: it was the answer.
+- The instruction inside the order outranks the style profile, which is why it
+  goes last in the system prompt. `maxTokens` is 1024 here; the rest stays at 512.
+- The pill says so **before** the key is released — different accent, an «Orden»
+  label, and a model-state dot — because this mode pastes something the user did
+  not say, and that can only be caught while it can still be cancelled. Asleep
+  paints no dot: off is the correct state, not a fault.
+
 ## LocalLLM — the optional downloaded model
 
 `LocalLLM` runs `llama-server` and talks to it over HTTP on `127.0.0.1`. Full story in
@@ -335,6 +379,7 @@ All settings stored in `com.user.WhisperBar` UserDefaults domain:
 - `audioFeedbackVolume` — volume 0.0–1.0 (default: 1.0)
 - `audioFeedbackPreset` — preset ID: `theta` | `deep` | `528hz` | `alpha` | `beta` | `432hz` | `custom` (default: `theta`)
 - `audioFeedbackCustomPath` — path to user-supplied audio file (used when preset = `custom`)
+- `agentModeEnabled` — the pill gets a toggle between transcribing and composing (default: true). Turning it off saves no memory —the model only starts when used and shuts itself down— it removes the toggle for whoever does not want it there
 - `cleanupLevel` — `desactivado` | `conservador` | `completo` (default: `conservador`). Read on every dictation, so `defaults write com.user.WhisperBar cleanupLevel completo` applies without a restart
 - `dictionaryEnabled` — apply the custom dictionary to transcriptions (default: true; inert when the dictionary is empty)
 - `snippetsEnabled` — expand voice snippets (default: true; inert with no snippets)

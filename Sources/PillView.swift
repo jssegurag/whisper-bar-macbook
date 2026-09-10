@@ -7,6 +7,30 @@ enum PillState {
     case transcribing
 }
 
+/// Si el modelo del modo agente está despierto, y si se puede contar con él.
+///
+/// El rojo **no** es «apagado». Apagado es el estado correcto: el modelo ocupa
+/// unos 3 GB y `llmIdleMinutes` existe justo para soltarlos. Un punto rojo
+/// permanente sobre un comportamiento sano enseña a ignorarlo, y el día que
+/// haya un problema de verdad nadie lo estará mirando. Así que dormido no pinta
+/// nada, y el rojo queda para lo único que pide una acción.
+enum AgentModelState: Equatable {
+    case asleep
+    case waking
+    case ready
+    case unavailable(String)
+
+    /// Lo que dice Gluffi, en primera persona, como ya habla en reposo.
+    var word: String? {
+        switch self {
+        case .asleep:      return nil          // sigue la palabra de reposo
+        case .waking:      return "Dame un segundo"
+        case .ready:       return "Te escucho"
+        case .unavailable: return "No tengo modelo"
+        }
+    }
+}
+
 /// View model observable. Único punto de cambio de estado para la UI.
 final class PillViewModel: ObservableObject {
     @Published var state: PillState = .idle
@@ -31,6 +55,28 @@ final class PillViewModel: ObservableObject {
     /// quien tiene un conflicto con otra app: el atajo de fábrica choca con
     /// Photoshop, se cambia a ⌃⇧, y la píldora seguía anunciando el de antes.
     @Published var shortcutGlyphs: String = PillViewModel.currentGlyphs()
+
+    /// En qué modo está Gluffi. Se elige **antes** de hablar, con el interruptor
+    /// de la píldora, así que tiene que verse siempre y no solo al grabar: un
+    /// modo que no se ve es un modo que se olvida.
+    ///
+    /// Arranca en `.transcribe` en cada sesión. Ver `DictationIntent`.
+    @Published var intent: DictationIntent = .transcribe
+
+    var isAgent: Bool { intent == .agent }
+
+    /// Solo se enseña en modo orden: un punto que cambia de color en reposo
+    /// sería lo que `IdleWord` prohíbe expresamente.
+    @Published var modelState: AgentModelState = .asleep
+
+    /// Si tiene sentido ofrecer el interruptor: sin modelo configurado o con el
+    /// modo apagado, enseñar algo que no va a funcionar es peor que callarse.
+    @Published var agentAvailable: Bool = false
+
+    func leaveAgentMode() {
+        intent = .transcribe
+        modelState = .asleep
+    }
 
     private var hotkeyObserver: NSObjectProtocol?
 
@@ -65,6 +111,7 @@ final class PillViewModel: ObservableObject {
 struct PillView: View {
     @ObservedObject var model: PillViewModel
     var onTap: () -> Void
+    var onToggleIntent: () -> Void = {}
     var onCancel: () -> Void
     /// Aviso de que el arrastre está en curso. No lleva desplazamiento a
     /// propósito: el de DragGesture es relativo a esta vista, que viaja con la
@@ -131,19 +178,73 @@ struct PillView: View {
     private func idleContent(_ time: TimeInterval) -> some View {
         HStack(spacing: Theme.pillGap) {
             GluffiMarkView(size: 17, color: Theme.brand)
-            Text(model.idleWord)
+            Text(spokenWord)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.92))
                 .transition(.opacity)
-                .id(model.idleWord)          // fuerza el cruce al cambiar
+                .id(spokenWord)              // fuerza el cruce al cambiar
             // Vacío no se pinta: dejaría un hueco raro en vez de un atajo.
             if !model.shortcutGlyphs.isEmpty {
                 Text(model.shortcutGlyphs)
                     .font(.system(size: 11.5))
                     .foregroundStyle(.white.opacity(0.38))
             }
+            if model.agentAvailable { intentToggle }
         }
         .animation(.easeInOut(duration: 0.45), value: model.idleWord)
+    }
+
+    /// El interruptor entre dictar y pedir.
+    ///
+    /// Con zona propia y su propio `onTapGesture`: el clic de la píldora entera
+    /// ya inicia y detiene la grabación, así que un toggle sin superficie propia
+    /// se dispararía al querer grabar y al revés.
+    ///
+    /// Se ve **siempre**, no solo al grabar. Un modo persistente que no se ve es
+    /// un modo que se olvida, y olvidarse de este significa pedir un correo
+    /// cuando querías dictar una frase.
+    private var intentToggle: some View {
+        HStack(spacing: 4) {
+            Image(systemName: model.intent.symbol)
+                .font(.system(size: 9, weight: .semibold))
+            Text(model.intent.shortTitle)
+                .font(.system(size: 10, weight: .semibold))
+        }
+        .foregroundStyle(model.isAgent ? Theme.onBrand : .white.opacity(0.55))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(
+            Capsule().fill(model.isAgent ? Theme.warn : Color.white.opacity(0.10)))
+        .contentShape(Capsule())
+        .onTapGesture { onToggleIntent() }
+        .help("Cambiar entre transcribir lo que dices y redactar lo que pides")
+        .animation(.easeInOut(duration: 0.2), value: model.intent)
+    }
+
+    /// El punto que dice si el modelo está despierto. Solo en modo agente:
+    /// en reposo sería lo que `IdleWord` prohíbe —algo que cambia solo delante
+    /// de quien intenta trabajar—.
+    @ViewBuilder
+    private func modelDot(_ time: TimeInterval) -> some View {
+        switch model.modelState {
+        case .asleep:
+            EmptyView()
+        case .waking:
+            // Late mientras carga: es lo que distingue «espera» de «colgado».
+            Circle()
+                .fill(Theme.warn)
+                .frame(width: 6, height: 6)
+                .opacity(0.35 + 0.65 * wave(time, period: 0.9))
+        case .ready:
+            Circle().fill(Theme.brand).frame(width: 6, height: 6)
+        case .unavailable:
+            Circle().fill(Theme.danger).frame(width: 6, height: 6)
+        }
+    }
+
+    /// Lo que dice Gluffi en modo agente, o la palabra de reposo de siempre.
+    private var spokenWord: String {
+        model.isAgent ? (model.modelState.word ?? model.idleWord) : model.idleWord
     }
 
     private func recordingContent(_ time: TimeInterval) -> some View {
@@ -151,13 +252,23 @@ struct PillView: View {
         return HStack(spacing: Theme.pillGap) {
             // El logo sigue visible mientras graba: el estado lo comunica el
             // punto rojo y la onda, no la desaparición de la marca.
-            GluffiMarkView(size: 17, color: Theme.brand)
+            GluffiMarkView(size: 17, color: model.isAgent ? Theme.warn : Theme.brand)
             Circle()
                 .fill(Theme.danger)
                 .frame(width: 6, height: 6)
                 .opacity(0.45 + 0.55 * pulse)
                 .scaleEffect(0.82 + 0.18 * pulse)
             VoiceWaveView(time: time, level: model.micLevel)
+            // En modo agente lo que se graba es una orden, y lo que se pegará no
+            // es lo que el usuario está diciendo. Tiene que verse antes de
+            // soltar la tecla, que es cuando todavía se puede cancelar.
+            if model.isAgent {
+                Text(DictationIntent.agent.shortTitle)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Theme.warn)
+                    .fixedSize()
+                modelDot(time)
+            }
             if let perfil = model.profileName {
                 Text(perfil)
                     .font(.system(size: 10, weight: .medium))

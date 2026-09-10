@@ -154,6 +154,22 @@ enum LocalLLM {
     }
 
     /// Apaga el servidor y libera la RAM. Idempotente.
+    /// Arranca el servidor sin preguntar nada, y espera a que responda.
+    ///
+    /// Existe para el modo agente: el atajo se detecta cuando el usuario empieza
+    /// a hablar, así que el modelo carga mientras dicta la orden. Es lo que
+    /// convierte los 24,9 s en frío en una espera que ya se estaba gastando.
+    ///
+    /// No consume el tiempo de inactividad: si el usuario suelta sin llegar a
+    /// pedir nada, `scheduleIdleShutdown` lo apaga como siempre.
+    @discardableResult
+    static func warmUp() -> Bool {
+        guard availability.isAvailable else { return false }
+        defer { scheduleIdleShutdown() }
+        if case .success = ensureRunningReporting() { return true }
+        return false
+    }
+
     static func shutdown() {
         lock.lock()
         idleTimer?.cancel()
