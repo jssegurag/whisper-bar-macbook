@@ -135,24 +135,6 @@ class StreamingTranscriber {
     private static let ansiRegex = try! NSRegularExpression(
         pattern: "\\x1b\\[[0-9;]*[A-Za-z]", options: [])
 
-    /// Frases alucinadas comunes de whisper en silencio (dataset YouTube).
-    private static let hallucinationPatterns: [String] = [
-        "gracias por ver",
-        "gracias por ver el video",
-        "gracias por ver el vídeo",
-        "thank you for watching",
-        "thanks for watching",
-        "subtítulos realizados por",
-        "subtítulos por",
-        "suscríbete",
-        "like and subscribe",
-        "no olvides suscribirte",
-        "hasta la próxima",
-        "nos vemos en el próximo",
-        "gracias.",
-        "gracias",
-    ]
-
     /// Quita códigos de escape ANSI de un string.
     func stripAnsiCodes(_ text: String) -> String {
         let range = NSRange(text.startIndex..., in: text)
@@ -174,14 +156,21 @@ class StreamingTranscriber {
         // Filtrar timestamps: [00:05.000 --> 00:08.000] etc
         if cleaned.hasPrefix("[") { return "" }
 
-        // Filtrar alucinaciones conocidas
-        let lower = cleaned.lowercased()
-        for pattern in StreamingTranscriber.hallucinationPatterns {
-            if lower == pattern || lower.hasPrefix(pattern) {
-                return ""
-            }
+        // Filtrar alucinaciones conocidas. La lista y el criterio viven en
+        // HallucinationFilter, compartidos con el dictado normal.
+        //
+        // Antes esto comparaba con hasPrefix sobre una lista que incluía
+        // «gracias» y «hasta la próxima» a secas, así que se comía frases
+        // enteras del usuario: «Gracias por el reporte, lo reviso mañana»
+        // desaparecía. Ahora la coincidencia es de la línea completa y
+        // normalizada, que además reconoce «¡Gracias por ver el video!» —la
+        // variante con signos, que la versión anterior dejaba pasar.
+        guard let sobreviven = HallucinationFilter.keptSentences(
+                cleaned,
+                phrases: HallucinationFilter.phrases(),
+                ambiguous: HallucinationFilter.ambiguousPhrases()) else {
+            return cleaned      // nada que quitar: la línea sale como entró
         }
-
-        return cleaned
+        return sobreviven.joined(separator: " ")
     }
 }

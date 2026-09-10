@@ -194,6 +194,7 @@ The app follows a **modular, single-responsibility** design:
 **PillView.swift, PillWindowController.swift** — Floating microphone button
 - Draggable pill UI showing recording/transcribing state
 - Click to toggle recording; persists position in UserDefaults
+- The shortcut hint reads `Config.hotkeyModifiers(for: .transcribe)` through `HotkeyBinding.glyphs`, and refreshes on `.gluffiHotkeysChanged` — the same notification `AppDelegate` uses to re-register the hotkeys. It used to be the string `"⌘⌥"` written by hand, so it lied the moment anyone rebound the shortcut, which is exactly what someone does when the default collides with another app (Photoshop, in the report). It also had the modifiers in the wrong order: `glyphs` uses macOS's ⌃⌥⇧⌘, so the hint now matches what the Shortcuts tab shows
 
 **TranscriptionHistory.swift** — Data model & persistence
 - TranscriptionEntry: text, duration, timestamp, sourceApp
@@ -216,6 +217,19 @@ The app follows a **modular, single-responsibility** design:
 - Works sentence by sentence, and a sentence no rule touched is returned **byte for byte**, spacing included. Only the sentence that changed gets re-rendered
 - Self-correction deletes back to where the correction *restarts* (the anchor is its first word, searched backwards), not to the start of the sentence. Without an anchor it does nothing — that is what keeps «te pido perdón por el retraso» intact
 - Fillers come in two lists for a reason: the ambiguous ones («este», «claro») are removed only between two pauses, or «lo tengo claro, gracias» would lose a word
+
+**HallucinationFilter.swift** — What whisper invents over silence
+- Whisper was trained on 680k hours of web audio, much of it YouTube subtitles. Given silence it still has to predict something, and what it learned follows silence is a video sign-off. Reproducible offline with a WAV of pure digital silence — `whisper-cli … -f silence.wav` → `Gracias por ver el video.` **It is not a leak and not a corrupted model**; the model's sha256 matches the official one. Worth knowing, because it looks alarming
+- It lands at the **end** of a dictation: that is where the silence between "stopped talking" and "released the key" sits
+- **Matched sentence by sentence, not line by line.** Whisper chains several into one line — `¡gracias por ver el video! ¡Suscríbete al canal!` — and the whole-line comparison matches neither. The sentence split ignores a period glued to what follows, or `Amara.org` breaks in two and the most frequent hallucination of all stops being recognised
+- **Two confidence tiers, and the split is by phrase *length and register*, not by topic.** Long spoken-presentation closers («gracias a todos por su atención») are unambiguous: whisper hallucinates them and nobody *dictates* them. Short everyday ones («gracias a todos», «hasta la próxima») stay ambiguous, because anyone ends an email that way. **The accepted cost:** someone who really dictates the long form loses it — the list is an editable resource, so it comes out without recompiling. There is a test that asserts this cost rather than hiding it
+- **Two confidence tiers.** `frases` are unambiguous (nobody dictates «gracias por ver el video»); `frasesAmbiguas` whisper also produces but a human says for real — «Buen trabajo hoy. Gracias a todos.» An ambiguous one is only dropped when an unambiguous one sits in the same tail. That is what separates a hallucinated burst from a genuine sign-off, which comes alone
+- **A dictation that is *only* short sign-offs (two or more, no content) is dropped too.** No speech happened. One alone is kept: «Gracias.» is a normal short reply. The risk left is the cheap kind — nothing gets pasted and you see it instantly; what must never happen is deleting a phrase *inside* a long text, which is what nobody rereads
+- **`keptSentences` returns nil when there is nothing to drop**, so untouched input is returned exactly as it came. Returning the reassembled text instead made `cleanOutput` join segments with newlines rather than spaces — a silent regression on dictations with no hallucination at all
+- **Exact match on the whole normalized sentence, never a prefix.** The first version of this lived in `StreamingTranscriber`, matched with `hasPrefix`, and its list included bare «gracias» — so it ate «Gracias por el reporte, lo reviso mañana» whole. It also missed «¡Gracias por ver el video!», because it compared raw text and ignored the punctuation marks
+- **Only the tail is dropped.** One of these phrases mid-dictation is content: there the user was talking
+- Shared by both paths. It used to exist only in `StreamingTranscriber`, so the floating window filtered and **the normal ⌘⌥ dictation did not** — 4 of 100 dictations in the real history ended in the hallucination
+- List in `Resources/hallucinations.json`, same lookup and same live-reload as `CleanupRules`. **Rule for editing it: only phrases nobody would dictate in earnest.** «gracias» and «suscríbete» are deliberately absent
 
 **CleanupRules.swift** — Its tables, and the three levels
 - `CleanupLevel`: `desactivado` | `conservador` (rules 1–2, the default) | `completo` (all four). The `rawValue`s are Spanish because they are what `defaults write` takes
@@ -483,7 +497,7 @@ same `UserDefaults` domain.
 Tests are organized by module/feature with colored output. No external testing framework; simple custom assertions. Key test areas:
 
 - **Streaming logic** — ANSI stripping, progressive text updates, finalization on newline
-- **Hallucination filtering** — Common non-speech patterns (e.g., "Gracias por ver el video", "Thank you for watching")
+- **Hallucination filtering** — the four real cases from the user's history, the punctuated variant `¡…!` the old matcher missed, and the phrases it must **not** eat («Gracias por el reporte…», «Gracias», «Suscríbete»); tail-only stripping, and a mid-dictation occurrence left alone
 - **Deduplication** — Repeated text silenced after 2 occurrences
 - **Rolling buffer** — Display truncated to 800 chars, preserving recent content
 - **Action detection** — Parsing LLM output for intents and parameters
@@ -671,6 +685,7 @@ The floating window (FloatingTranscriptionWindowController) receives whisper-str
 
 - **Source code:** `/Sources/`
 - **Tests:** `/Tests/RunTests.swift`
+- **Hallucination list:** `/Resources/hallucinations.json` (same lookup as the cleanup tables)
 - **Cleanup tables:** `/Resources/cleanup-es.json` (copied into the bundle; the user's copy in Application Support wins)
 - **Cleanup validation tool:** `/Tools/CleanupReport.swift` + `cleanup_report.sh` — runs the cleaner over the real `history.json` and reports what it would change
 - **Build intermediate:** `./Gluffi_bin` (compiled binary before bundling; safe to delete)

@@ -18,6 +18,23 @@ Las versiones siguen [SemVer](https://semver.org/lang/es/).
 
 ### Corregido
 
+### Corregido
+
+- **Whisper dejaba pegar lo que inventa sobre el silencio.** Los dictados
+  terminaban en «¡Gracias por ver el video!» o en la firma de Amara.org: son
+  frases que el modelo aprendió de subtítulos de YouTube y produce cuando el
+  audio calla, y aparecían en 9 de cada 100 dictados. El filtro existía, pero
+  solo se aplicaba en la ventana flotante. **No era el modelo:** su checksum
+  coincide con el oficial y la app no envía nada a ninguna parte (#58).
+- La ventana flotante borraba frases legítimas que empezaran por «gracias» o
+  «hasta la próxima» —«Gracias por el reporte, lo reviso mañana» desaparecía—, y
+  a la vez no reconocía «¡Gracias por ver el video!» con signos (#58).
+- **La píldora anunciaba el atajo de fábrica** aunque lo hubieras cambiado en
+  Preferencias. Estaba escrito a mano como «⌘⌥», así que mentía justo a quien lo
+  reasigna por chocar con otra aplicación. Ahora lee el configurado y se
+  actualiza sin reiniciar; de paso, con el orden de modificadores de macOS, el
+  mismo que muestra la pestaña de Atajos (#59).
+
 - **Al asignar un atajo de dos teclas salía «hace falta combinar al menos dos
   teclas»**, con el atajo ya guardado correctamente. La captura validaba en cada
   evento y `flagsChanged` llega también al soltar, así que la bajada de la
