@@ -29,12 +29,18 @@ Las versiones siguen [SemVer](https://semver.org/lang/es/).
 - La ventana flotante borraba frases legítimas que empezaran por «gracias» o
   «hasta la próxima» —«Gracias por el reporte, lo reviso mañana» desaparecía—, y
   a la vez no reconocía «¡Gracias por ver el video!» con signos (#58).
-
 - **La píldora anunciaba el atajo de fábrica** aunque lo hubieras cambiado en
   Preferencias. Estaba escrito a mano como «⌘⌥», así que mentía justo a quien lo
   reasigna por chocar con otra aplicación. Ahora lee el configurado y se
   actualiza sin reiniciar; de paso, con el orden de modificadores de macOS, el
   mismo que muestra la pestaña de Atajos (#59).
+
+- **Al asignar un atajo de dos teclas salía «hace falta combinar al menos dos
+  teclas»**, con el atajo ya guardado correctamente. La captura validaba en cada
+  evento y `flagsChanged` llega también al soltar, así que la bajada de la
+  primera tecla encendía un aviso que ya no aplicaba. Ahora la combinación se
+  decide al soltar, y mientras compones el botón enseña lo que llevas
+  pulsado (#60).
 
 ## [0.5.0] — 2026-08-29
 
