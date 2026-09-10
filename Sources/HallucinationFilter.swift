@@ -118,8 +118,21 @@ enum HallucinationFilter {
             }
             fin -= 1
         }
-        // Solo ambiguas: es una despedida del usuario, no una ráfaga. No se toca.
-        guard fin < trozos.count, inequivocas > 0 else { return nil }
+        guard fin < trozos.count else { return nil }
+
+        // Con una inequívoca delatando la cola, se va entera.
+        // Si no la hay, queda el caso del dictado que es SOLO despedidas: dos o
+        // más oraciones y ninguna con contenido. Eso no lo dicta nadie, es un
+        // dictado sin habla, y se descarta también.
+        //
+        // El límite está en dos a propósito. Con una sola —«Gracias.»— se
+        // respeta: es una respuesta corta perfectamente normal. Y el riesgo que
+        // queda es de los baratos: si alguien dictara «Muchas gracias a todos.
+        // Hasta la próxima.» y no se pegara nada, lo ve al instante. Lo que no
+        // podemos permitirnos es borrar una frase **dentro** de un texto largo,
+        // que es lo que nadie revisa.
+        let todoConocido = fin == 0 && trozos.count >= 2
+        guard inequivocas > 0 || todoConocido else { return nil }
 
         return trozos[0..<fin]
             .map { $0.trimmingCharacters(in: .whitespaces) }

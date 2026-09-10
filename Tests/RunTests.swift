@@ -4273,7 +4273,6 @@ func testHallucinationBursts() {
     for despedida in [
         "Buen trabajo hoy. Gracias a todos.",
         "Nos vemos el jueves. Hasta la próxima.",
-        "Cerramos el trimestre. Gracias a todos por su participación.",
         "Gracias.",
     ] {
         assertEqual(HallucinationFilter.strip(despedida, phrases: f, ambiguous: a), despedida,
@@ -4286,6 +4285,47 @@ func testHallucinationBursts() {
         phrases: f, ambiguous: a),
         "Cerramos el trimestre.",
         "con una inequívoca al lado, la ambigua cae con ella")
+
+    // Reportado probando la app: la ráfaga puede venir SIN ninguna inequívoca
+    // que la delate. Estas dos son fórmulas de cierre de presentación, no algo
+    // que nadie dicte, así que cuentan como inequívocas.
+    let dosDespedidas = "gracias a todos por su atención\ngracias a todos por su participación"
+    assertEqual(HallucinationFilter.strip(dosDespedidas, phrases: f, ambiguous: a), "",
+        "dos fórmulas de cierre solas se descartan")
+    assertEqual(HallucinationFilter.strip(
+        "Necesito el informe para el jueves.\n" + dosDespedidas, phrases: f, ambiguous: a),
+        "Necesito el informe para el jueves.",
+        "y detrás de un dictado real, solo sobrevive el dictado")
+
+    // El límite del diseño, y lo que decide qué lista es cuál: una despedida
+    // corta la escribe cualquiera al final de un correo.
+    for humana in [
+        "Cerramos el trimestre. Muchas gracias a todos. Hasta la próxima.",
+        "Cerramos el trimestre. Gracias a todos.",
+        "Gracias a todos.",
+    ] {
+        assertEqual(HallucinationFilter.strip(humana, phrases: f, ambiguous: a), humana,
+            "intacta: «\(humana)»")
+    }
+
+    // Un dictado que es SOLO despedidas cortas no tenía habla: se descarta. Con
+    // una sola no, que «Gracias.» es una respuesta normal.
+    assertEqual(HallucinationFilter.strip("Gracias a todos.\nHasta luego.",
+                                          phrases: f, ambiguous: a), "",
+        "dos despedidas cortas y nada más: el dictado no tenía habla")
+    assertEqual(HallucinationFilter.strip("Gracias.", phrases: f, ambiguous: a), "Gracias.",
+        "una sola se respeta: es una respuesta corta")
+
+    // EL PRECIO DE LA DECISIÓN, escrito para que nadie lo descubra por sorpresa.
+    // «Gracias a todos por su participación» está en las inequívocas porque
+    // whisper la alucina y porque es una fórmula de cierre hablado, no algo que
+    // se dicte. Quien la dicte de verdad al final la perderá. Se acepta: la
+    // lista es un recurso editable, y esa frase se saca de ahí sin recompilar.
+    assertEqual(HallucinationFilter.strip(
+        "Cerramos el trimestre. Gracias a todos por su participación.",
+        phrases: f, ambiguous: a),
+        "Cerramos el trimestre.",
+        "coste asumido: la fórmula larga de cierre se descarta aunque fuera del usuario")
 
     // Sin tablas no se descarta nada.
     assertEqual(HallucinationFilter.strip(rafaga, phrases: [], ambiguous: []), rafaga,
