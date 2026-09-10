@@ -120,14 +120,21 @@ func testStreamingTranscriberCleanLine() {
     assertEqual(st.cleanLine("Thank you for watching"), "",
         "Hallucination 'Thank you for watching' filtered")
 
-    assertEqual(st.cleanLine("gracias"), "",
-        "Hallucination 'gracias' (lowercase) filtered")
+    // Estas tres esperaban lo contrario, y esperaban mal. La lista traía
+    // «gracias» y «suscríbete» a secas y se comparaba con hasPrefix, así que
+    // cualquier frase que empezara por ahí desaparecía de la ventana. Una
+    // palabra que el usuario puede dictar en serio no es una alucinación:
+    // ninguna de las dos vuelve a la lista.
+    assertEqual(st.cleanLine("gracias"), "gracias",
+        "«gracias» a secas es una respuesta válida, no una alucinación")
 
-    assertEqual(st.cleanLine("Suscríbete"), "",
-        "Hallucination 'Suscríbete' filtered")
+    assertEqual(st.cleanLine("Suscríbete"), "Suscríbete",
+        "«Suscríbete» se dicta de verdad al escribir textos de marketing")
 
-    assertEqual(st.cleanLine("subtítulos realizados por la comunidad"), "",
-        "Hallucination 'subtítulos realizados por...' (prefix match) filtered")
+    // La frase de Amara sigue filtrada, pero por su forma completa: un
+    // fragmento arbitrario ya no basta, porque la coincidencia es exacta.
+    assertEqual(st.cleanLine("Subtítulos realizados por la comunidad de Amara.org"), "",
+        "la firma de Amara.org completa sí se filtra")
 
     // Non-hallucination text with similar words preserved
     let real1 = "Le di las gracias al profesor por la clase"
@@ -4100,6 +4107,127 @@ func testAppCatalogSearch() {
         "una búsqueda de solo espacios no filtra nada")
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// MARK: - HallucinationFilter — Lo que whisper inventa sobre el silencio
+// ══════════════════════════════════════════════════════════════════════════════
+
+func testHallucinationFilter() {
+    suite("HallucinationFilter — Tablas y coincidencia")
+
+    let frases = HallucinationFilter.phrases()
+    assert(!frases.isEmpty, "Resources/hallucinations.json se lee y trae frases")
+
+    // La forma exacta que reportó el usuario, con signos de apertura y cierre.
+    // La versión anterior comparaba texto crudo y esta se le escapaba.
+    assert(HallucinationFilter.matches("¡Gracias por ver el video!", phrases: frases),
+        "«¡Gracias por ver el video!» se reconoce pese a los signos")
+    assert(HallucinationFilter.matches("Gracias por ver el video.", phrases: frases),
+        "y con punto final")
+    assert(HallucinationFilter.matches("gracias por ver el vídeo", phrases: frases),
+        "y con tilde en vídeo")
+    assert(HallucinationFilter.matches("  Thank you for watching  ", phrases: frases),
+        "también en inglés, con espacios alrededor")
+
+    // Lo que NO puede tocar. Cada una de estas se borraba antes por hasPrefix.
+    let legitimas = [
+        "Gracias por el reporte, lo reviso mañana",
+        "Gracias, nos vemos el martes",
+        "Gracias",
+        "Gracias por ver el informe que te mandé",
+        "Hasta la próxima semana confirmamos el alcance",
+        "Suscríbete al boletín interno antes del viernes",
+        "Necesito el informe del cliente",
+    ]
+    for frase in legitimas {
+        assert(!HallucinationFilter.matches(frase, phrases: frases),
+            "intacta: «\(frase)»")
+    }
+
+    // Sin tablas no se descarta nada: la única respuesta segura.
+    assert(!HallucinationFilter.matches("Gracias por ver el video", phrases: []),
+        "sin tablas el filtro es inerte")
+
+    // Solo la cola. Una frase de la lista en mitad del dictado es contenido.
+    let enMedio = ["hola", "Gracias por ver el video", "seguimos mañana"]
+    assertEqual(HallucinationFilter.stripTrailing(enMedio, phrases: frases).count, 3,
+        "una alucinación en mitad del dictado NO se toca")
+
+    let alFinal = ["seguimos mañana", "Gracias por ver el video."]
+    assertEqual(HallucinationFilter.stripTrailing(alFinal, phrases: frases),
+        ["seguimos mañana"], "al final sí se descarta")
+
+    let variasAlFinal = ["seguimos mañana", "Gracias por ver el video.", "¡Suscríbete al canal!"]
+    assertEqual(HallucinationFilter.stripTrailing(variasAlFinal, phrases: frases),
+        ["seguimos mañana"], "y si son varias, todas")
+
+    // Un toque accidental produce solo la alucinación: mejor no pegar nada.
+    assertEqual(HallucinationFilter.stripTrailing(["¡Gracias por ver el video!"], phrases: frases),
+        [], "un dictado que es solo alucinación queda vacío")
+
+    assertEqual(HallucinationFilter.stripTrailing([], phrases: frases), [],
+        "sin líneas no hay nada que hacer")
+}
+
+func testTranscriberDropsHallucinations() {
+    suite("Transcriber — La cola alucinada no llega al portapapeles")
+
+    // Los cuatro casos reales del history.json del usuario, tal como whisper-cli
+    // los entrega: --no-timestamps, un segmento por línea.
+    assertEqual(Transcriber.cleanOutput("¡Gracias por ver el video!\n"), "",
+        "el dictado de 0,6 s que era solo la alucinación")
+    assertEqual(Transcriber.cleanOutput(
+        "unos slides que alimenten el servicio\nGracias por ver el video.\n"),
+        "unos slides que alimenten el servicio",
+        "dictado largo con la cola pegada al final")
+    assertEqual(Transcriber.cleanOutput(
+        "apuntalo para que no ocupe espacio.\nGracias por ver el video.\n"),
+        "apuntalo para que no ocupe espacio.",
+        "otro del historial real")
+    assertEqual(Transcriber.cleanOutput(
+        "representa de forma estereotipada un sector.\nGracias por ver el video.\n"),
+        "representa de forma estereotipada un sector.",
+        "y el cuarto")
+
+    // Lo que no debe cambiar respecto a antes.
+    assertEqual(Transcriber.cleanOutput("Gracias por el reporte, lo reviso mañana\n"),
+        "Gracias por el reporte, lo reviso mañana",
+        "una frase legítima que empieza por «Gracias» se conserva entera")
+    assertEqual(Transcriber.cleanOutput("hola\nGracias por ver el video\nseguimos\n"),
+        "hola Gracias por ver el video seguimos",
+        "en mitad del dictado no se toca: ahí el usuario estaba hablando")
+    assertEqual(Transcriber.cleanOutput("[00:00:00.000 --> 00:00:02.000]\nhola mundo\n"),
+        "hola mundo", "sigue descartando líneas de timestamp")
+    assertEqual(Transcriber.cleanOutput("  hola  \n\n  mundo  \n"), "hola mundo",
+        "sigue recortando espacios y uniendo segmentos")
+}
+
+func testStreamingKeepsLegitimatePhrases() {
+    suite("StreamingTranscriber — Ya no se come frases del usuario")
+
+    let st = StreamingTranscriber()
+
+    // El bug latente: la lista traía «gracias» y «hasta la próxima» a secas y se
+    // comparaba con hasPrefix, así que estas tres desaparecían de la ventana.
+    assertEqual(st.cleanLine("Gracias por el reporte, lo reviso mañana"),
+        "Gracias por el reporte, lo reviso mañana", "«Gracias por el reporte…» se conserva")
+    assertEqual(st.cleanLine("Gracias, nos vemos el martes"),
+        "Gracias, nos vemos el martes", "«Gracias, nos vemos…» se conserva")
+    assertEqual(st.cleanLine("Hasta la próxima semana confirmamos el alcance"),
+        "Hasta la próxima semana confirmamos el alcance", "«Hasta la próxima semana…» se conserva")
+    assertEqual(st.cleanLine("Gracias"), "Gracias",
+        "«Gracias» a secas es una respuesta válida, no una alucinación")
+
+    // Y sigue filtrando lo que sí debe.
+    assertEqual(st.cleanLine("Gracias por ver el video."), "",
+        "la alucinación se sigue filtrando")
+    assertEqual(st.cleanLine("¡Gracias por ver el video!"), "",
+        "incluso la variante con signos, que antes se colaba")
+    assertEqual(st.cleanLine("Thanks for watching"), "", "y la inglesa")
+    assertEqual(st.cleanLine("[00:05.000 --> 00:08.000]"), "", "los timestamps siguen fuera")
+    assertEqual(st.cleanLine("Necesito el informe del cliente"),
+        "Necesito el informe del cliente", "el texto normal pasa intacto")
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -4133,6 +4261,9 @@ struct TestRunner {
         testAudioRecorderSettings()
         testAudioRecorderStartFailure()
         testTranscriberOutputCleaning()
+        testHallucinationFilter()
+        testTranscriberDropsHallucinations()
+        testStreamingKeepsLegitimatePhrases()
         testTranscriberErrorMessages()
         testTranscriberStderrFlood()
         testTranscriberProcessFailure()
