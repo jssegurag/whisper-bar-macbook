@@ -4100,6 +4100,49 @@ func testAppCatalogSearch() {
         "una búsqueda de solo espacios no filtra nada")
 }
 
+func testPillShowsConfiguredShortcut() {
+    suite("PillView — La píldora anuncia el atajo de verdad")
+
+    let defaults = UserDefaults.standard
+    let clave = "hotkey.transcribe.modifiers"
+    let previo = defaults.object(forKey: clave)
+    defer {
+        if let previo { defaults.set(previo, forKey: clave) }
+        else { defaults.removeObject(forKey: clave) }
+    }
+
+    // De fábrica, el atajo de dictar.
+    defaults.removeObject(forKey: clave)
+    // El orden es el estándar de macOS (⌃⌥⇧⌘), el mismo que enseña la pestaña
+    // de Atajos. El texto fijo decía «⌘⌥», al revés: además de mentir al
+    // cambiarlo, no coincidía con lo que el usuario acababa de elegir.
+    assertEqual(PillViewModel.currentGlyphs(), "⌥⌘",
+        "sin nada configurado, el de fábrica")
+
+    // El caso reportado: ⌘⌥ chocaba con Photoshop, así que el usuario lo cambia
+    // a ⌃⇧ desde Preferencias. La píldora tenía «⌘⌥» escrito a mano y seguía
+    // anunciando el atajo que ya no existe.
+    Config.shared.setHotkeyModifiers([.control, .shift], for: .transcribe)
+    assertEqual(PillViewModel.currentGlyphs(), "⌃⇧",
+        "tras cambiarlo a ⌃⇧, la píldora dice ⌃⇧")
+
+    Config.shared.setHotkeyModifiers([.command, .option, .control], for: .transcribe)
+    assertEqual(PillViewModel.currentGlyphs(), "⌃⌥⌘",
+        "y con tres modificadores, los tres")
+
+    // Y aplica sin reiniciar: el modelo escucha el mismo aviso que usa
+    // AppDelegate para volver a registrar los atajos.
+    let model = PillViewModel()
+    Config.shared.setHotkeyModifiers([.control, .shift], for: .transcribe)
+    assertEqual(model.shortcutGlyphs, "⌃⌥⌘",
+        "el modelo aún muestra lo que había al crearse")
+
+    NotificationCenter.default.post(name: .gluffiHotkeysChanged, object: nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+    assertEqual(model.shortcutGlyphs, "⌃⇧",
+        "tras el aviso se actualiza sin reiniciar la app")
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -4126,6 +4169,7 @@ struct TestRunner {
         testWindowControllerState()
         testConfigAutoDetection()
         testPillStateTransitions()
+        testPillShowsConfiguredShortcut()
         testPillWindowControllerVisibility()
         testConfigFloatingPillDefaults()
         testConfigAudioFeedback()

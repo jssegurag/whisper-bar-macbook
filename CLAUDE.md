@@ -189,6 +189,7 @@ The app follows a **modular, single-responsibility** design:
 **PillView.swift, PillWindowController.swift** — Floating microphone button
 - Draggable pill UI showing recording/transcribing state
 - Click to toggle recording; persists position in UserDefaults
+- The shortcut hint reads `Config.hotkeyModifiers(for: .transcribe)` through `HotkeyBinding.glyphs`, and refreshes on `.gluffiHotkeysChanged` — the same notification `AppDelegate` uses to re-register the hotkeys. It used to be the string `"⌘⌥"` written by hand, so it lied the moment anyone rebound the shortcut, which is exactly what someone does when the default collides with another app (Photoshop, in the report). It also had the modifiers in the wrong order: `glyphs` uses macOS's ⌃⌥⇧⌘, so the hint now matches what the Shortcuts tab shows
 
 **TranscriptionHistory.swift** — Data model & persistence
 - TranscriptionEntry: text, duration, timestamp, sourceApp
