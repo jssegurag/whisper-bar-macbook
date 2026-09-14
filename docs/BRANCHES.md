@@ -53,8 +53,7 @@ las tengas abiertas a la vez. El detalle completo, en `CONTRIBUTING.md`.
 
 | Tipo       | Para qué                                                        | Ejemplo                                 |
 |------------|-----------------------------------------------------------------|-----------------------------------------|
-| `refactor/`| Reorganización sin cambio de comportamiento                     | `docs/`    | Solo documentación                                              | `docs/branch-strategy`                  |
-
+| `refactor/`| Reorganización sin cambio de comportamiento                     
 Reglas:
 
 1. **Una rama = un cambio defendible.** Si el título del PR necesita un "y", probablemente son dos ramas.
@@ -72,9 +71,7 @@ imperativo, ≤ 72 caracteres. El cuerpo explica el *por qué*, no el *qué*.
 
 | Rama | Propósito | Estado |
 |---|---|---|
-| `feat/62-atajos-testeables` | Sacar la decisión de los atajos a un tipo puro, probado. Base de HU-006. | PR #62 |
-| `feat/63-modo-agente-toggle` | HU-006: dictar una orden en vez de un texto. | PR #63 |
-| `feat/64-estilo-deducido` | HU-006: deducir el tono y el estilo del usuario. | PR #64 |
+| _(ninguna)_ | | |
 
 Esta tabla es corta a propósito. Antes vivía aquí una ficha por rama —propósito,
 alcance, bugs que cerraba, orden de mezcla— y para el 29-08-2026 doce de esas
