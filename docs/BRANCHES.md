@@ -72,7 +72,7 @@ imperativo, ≤ 72 caracteres. El cuerpo explica el *por qué*, no el *qué*.
 
 | Rama | Propósito | Estado |
 |---|---|---|
-| _(ninguna)_ | | |
+| `feat/62-atajos-testeables` | Sacar la decisión de los atajos a un tipo puro, probado. Base de HU-006. | PR #62 |
 
 Esta tabla es corta a propósito. Antes vivía aquí una ficha por rama —propósito,
 alcance, bugs que cerraba, orden de mezcla— y para el 29-08-2026 doce de esas
