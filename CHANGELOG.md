@@ -22,7 +22,6 @@ Las versiones siguen [SemVer](https://semver.org/lang/es/).
   pruebas. Sin cambio visible: los atajos siguen funcionando igual, pero ahora
   hay diecinueve comprobaciones sobre lo único de la app que no se podía
   verificar sin pulsar teclas a mano (#62).
-
 ### Añadido
 
 - **Modo agente.** Un interruptor en la píldora cambia entre transcribir lo que
@@ -35,6 +34,13 @@ Las versiones siguen [SemVer](https://semver.org/lang/es/).
   modo se ve siempre, porque pega algo que tú no dijiste (#63).
 - El historial distingue lo que redactó el agente de lo que transcribiste, y
   guarda también la orden (#63).
+
+### Añadido
+
+- **Gluffi aprende cómo escribes.** En Preferencias → Inteligencia pegas cinco
+  correos tuyos y deduce tu registro, para que lo que redacte suene a ti. Las
+  muestras no se guardan: se usan para deducir y se descartan. El perfil se
+  puede editar a mano y vaciar (#64).
 
 ## [0.5.1] — 2026-09-09
 
