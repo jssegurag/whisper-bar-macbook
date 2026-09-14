@@ -4672,6 +4672,125 @@ func testDictationIntentTravels() {
     assertEqual(DictationIntent.allCases.count, 2, "solo dos modos")
 }
 
+func testStyleProfilerSamples() {
+    suite("StyleProfiler — Qué muestras sirven")
+
+    let uno = "Hola Juan, te confirmo la reunión del martes. Un saludo."
+    func pegar(_ n: Int) -> String {
+        (1...n).map { "\(uno) (\($0))" }.joined(separator: "\n\n")
+    }
+
+    assertEqual(StyleProfiler.split(pegar(5)).count, 5,
+        "los textos se separan por una línea en blanco")
+    assertEqual(StyleProfiler.split("uno\n\n\n\ndos\n\n   \n\ntres").count, 3,
+        "las líneas en blanco de más no cuentan como texto")
+    assertEqual(StyleProfiler.split("   ").count, 0, "solo espacios no es un texto")
+
+    // Con menos de cinco, el modelo describe ESE texto en vez del estilo de
+    // quien lo escribió. Se comprueba antes de arrancar el modelo: hacer
+    // esperar veinte segundos para decir «pega más» es maltrato.
+    if case .failure(let p) = StyleProfiler.inspect(pegar(3), contextSize: 4096) {
+        assertEqual(p, .tooFew(found: 3), "tres textos no bastan")
+        assertContains(p.message, "Llevas 3", "y se dice cuántos lleva")
+    } else {
+        assert(false, "debería rechazar tres")
+    }
+
+    if case .success(let m) = StyleProfiler.inspect(pegar(6), contextSize: 4096) {
+        assertEqual(m.count, 6, "seis sí valen")
+        assert(m.estimatedTokens > 0, "y se estima lo que ocupan")
+    } else {
+        assert(false, "debería aceptar seis")
+    }
+
+    // Truncar en silencio daría un perfil malo sin explicar por qué.
+    let enorme = (1...40).map { "\(String(repeating: "palabra ", count: 120)) \($0)" }
+        .joined(separator: "\n\n")
+    if case .failure(let p) = StyleProfiler.inspect(enorme, contextSize: 4096) {
+        if case .tooLong = p {
+            assertContains(p.message, "contexto", "se avisa y se dice cómo arreglarlo")
+        } else {
+            assert(false, "debería ser tooLong")
+        }
+    } else {
+        assert(false, "un texto enorme no cabe en 4096")
+    }
+
+    // Con más contexto configurado, caben más muestras.
+    if case .success = StyleProfiler.inspect(enorme, contextSize: 32768) {
+        assert(true, "subiendo el contexto sí caben")
+    } else {
+        assert(false, "con 32768 deberían caber")
+    }
+}
+
+func testStyleProfilerDeduction() {
+    suite("StyleProfiler — El perfil deducido")
+
+    let cinco = (1...5).map { "Hola, te confirmo lo del martes. Gracias. (\($0))" }
+        .joined(separator: "\n\n")
+
+    var vistoPorElModelo: String?
+    let salida = StyleProfiler.deduce(
+        from: cinco, contextSize: 4096,
+        ask: { _, usuario in
+            vistoPorElModelo = usuario
+            return .success("Escribes de forma cercana y directa, con frases cortas, "
+                          + "saludas sin fórmulas largas y cierras dando las gracias.")
+        })
+    assertContains(vistoPorElModelo ?? "", "--- Texto 1 ---",
+        "los textos van numerados para que el modelo los vea como muestras distintas")
+    assertContains(vistoPorElModelo ?? "", "--- Texto 5 ---", "los cinco")
+    if case .success(let perfil) = salida {
+        assertContains(perfil, "frases cortas", "se devuelve el párrafo deducido")
+    } else {
+        assert(false, "debería deducir")
+    }
+
+    // No se llama al modelo si las muestras no sirven: el aviso es inmediato.
+    var llamado = false
+    let pocas = StyleProfiler.deduce(from: "solo uno", contextSize: 4096,
+                                     ask: { _, _ in llamado = true; return .success("x") })
+    assert(!llamado, "con muestras insuficientes no se molesta al modelo")
+    assertEqual(pocas, .failure(.samples(.tooFew(found: 1))), "y se dice por qué")
+
+    // Una respuesta de dos palabras no describe un estilo: es el modelo fallando.
+    assertEqual(StyleProfiler.deduce(from: cinco, contextSize: 4096,
+                                     ask: { _, _ in .success("Escribes bien.") }),
+                .failure(.unusable), "un perfil de dos palabras se rechaza")
+    assertEqual(StyleProfiler.clean("¡Claro! Aquí tienes:\n\nEscribes de forma cercana, "
+                                  + "con frases cortas y cierres agradecidos."),
+                "Escribes de forma cercana, con frases cortas y cierres agradecidos.",
+        "y se le quita el preámbulo, igual que en el modo agente")
+
+    // El encargo: describir cómo escribe, no de qué habla.
+    let encargo = StyleProfiler.systemPrompt()
+    assertContains(encargo, "CÓMO ESCRIBE", "se le pide el estilo")
+    assertContains(encargo, "NO resumas de qué tratan", "explícitamente, no el contenido")
+    assertContains(encargo, "NO menciones nombres",
+        "ni datos concretos: el perfil se guarda, las muestras no")
+}
+
+func testStyleProfileFeedsTheAgent() {
+    suite("Modo agente — El perfil llega al encargo")
+
+    let perfil = "Escribes directo, con frases cortas y sin florituras."
+    let conEstilo = AgentComposer.systemPrompt(style: perfil)
+    assertContains(conEstilo, perfil, "el perfil deducido viaja en el encargo")
+
+    // Sin perfil el modo sigue funcionando: registro neutro, no un fallo.
+    let sinEstilo = AgentComposer.systemPrompt(style: "")
+    assert(!sinEstilo.contains("Así escribe este usuario"),
+        "sin perfil no se inventa ninguno")
+    if case .success(let texto) = AgentComposer.compose(
+        order: "Escribe un saludo", style: "", snippetRules: [],
+        ask: { _, _ in .success("Hola, buenos días.") }) {
+        assertEqual(texto, "Hola, buenos días.", "y redacta igual")
+    } else {
+        assert(false, "sin perfil el modo agente debe seguir funcionando")
+    }
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -4751,6 +4870,9 @@ struct TestRunner {
         testAgentFailureNotifications()
         testAgentPillState()
         testDictationIntentTravels()
+        testStyleProfilerSamples()
+        testStyleProfilerDeduction()
+        testStyleProfileFeedsTheAgent()
         testShortcutCapture()
         testHistoryPresentation()
         testLiveMeta()

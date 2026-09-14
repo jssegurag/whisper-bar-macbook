@@ -74,6 +74,7 @@ imperativo, ≤ 72 caracteres. El cuerpo explica el *por qué*, no el *qué*.
 |---|---|---|
 | `feat/62-atajos-testeables` | Sacar la decisión de los atajos a un tipo puro, probado. Base de HU-006. | PR #62 |
 | `feat/63-modo-agente-toggle` | HU-006: dictar una orden en vez de un texto. | PR #63 |
+| `feat/64-estilo-deducido` | HU-006: deducir el tono y el estilo del usuario. | PR #64 |
 
 Esta tabla es corta a propósito. Antes vivía aquí una ficha por rama —propósito,
 alcance, bugs que cerraba, orden de mezcla— y para el 29-08-2026 doce de esas

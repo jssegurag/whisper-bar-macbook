@@ -111,6 +111,27 @@ story in `docs/historias/HU-006-modo-agente.md`.
   not say, and that can only be caught while it can still be cancelled. Asleep
   paints no dot: off is the correct state, not a fault.
 
+### The style profile
+
+`StyleProfiler` deduces how the user writes from texts they paste, instead of
+asking them to fill in dropdowns. Nobody can describe their own register, and
+what they would pick off a list does not match how they actually write.
+
+- **The samples are not stored.** They are used to deduce and discarded — the
+  text area is cleared on success, which is what makes that claim visible. What
+  persists is the derived paragraph, so even if the user ignores the warning and
+  pastes a client's email, what lands on disk is «you write short sentences and
+  sign off with "quedo atento"»
+- **Five samples minimum**, split on blank lines. With fewer, the model describes
+  *that text* instead of the person's style
+- **Checked before the model starts.** Making someone wait twenty seconds to be
+  told «paste more texts» is abuse
+- **Never truncated silently.** If the samples do not fit the configured context
+  it says so, and says how to fix it — a truncated sample set yields a bad
+  profile with no explanation
+- **Editable by hand and clearable.** If the model gets it wrong you correct it
+  by typing. Empty profile = neutral register, and agent mode works the same
+
 ## LocalLLM — the optional downloaded model
 
 `LocalLLM` runs `llama-server` and talks to it over HTTP on `127.0.0.1`. Full story in
@@ -203,7 +224,7 @@ The app follows a **modular, single-responsibility** design:
 - In `toggle` mode the shortcut outlives the keys, so the extra key still applies — that is the long-dictation case
 
 **HotkeyManager.swift** — Global keyboard event monitoring
-- Uses NSEvent.addGlobalMonitorForEvents with flagsChanged
+- Uses NSEvent.addGlobalMonitorForEvents with flagsChanged; a second `.keyDown` monitor is installed **only** when some shortcut declares an extra key, so with no agent mode nothing watches every keystroke
 - All decisions delegate to `HotkeyMatcher`; this type only wires monitors to callbacks
 - Supports exact modifier combination matching (⌘⌥, ⌘⌥⇧, ⌘⌥⌃) without conflicts
 - Prioritizes combinations with more modifiers to avoid false matches
@@ -379,7 +400,8 @@ All settings stored in `com.user.WhisperBar` UserDefaults domain:
 - `audioFeedbackVolume` — volume 0.0–1.0 (default: 1.0)
 - `audioFeedbackPreset` — preset ID: `theta` | `deep` | `528hz` | `alpha` | `beta` | `432hz` | `custom` (default: `theta`)
 - `audioFeedbackCustomPath` — path to user-supplied audio file (used when preset = `custom`)
-- `agentModeEnabled` — the pill gets a toggle between transcribing and composing (default: true). Turning it off saves no memory —the model only starts when used and shuts itself down— it removes the toggle for whoever does not want it there
+- `agentModeEnabled` — the space bar turns a dictation into an order (default: true). Turning it off saves no memory —the model only starts when used and shuts itself down— it is for when the key combination gets in the way
+- `agentStyleProfile` — how the user writes, deduced from their own texts. Empty = neutral register
 - `cleanupLevel` — `desactivado` | `conservador` | `completo` (default: `conservador`). Read on every dictation, so `defaults write com.user.WhisperBar cleanupLevel completo` applies without a restart
 - `dictionaryEnabled` — apply the custom dictionary to transcriptions (default: true; inert when the dictionary is empty)
 - `snippetsEnabled` — expand voice snippets (default: true; inert with no snippets)

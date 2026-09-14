@@ -14,6 +14,10 @@ struct IntelligenceTab: View {
     @State private var idleMinutes: Double
 
     @State private var agentMode: Bool = Config.shared.agentModeEnabled
+    @State private var muestras: String = ""
+    @State private var estilo: String = Config.shared.agentStyleProfile
+    @State private var deduciendo = false
+    @State private var errorEstilo: String?
     @State private var probando = false
     @State private var resultado: String?
     @State private var resultadoOK = false
@@ -143,6 +147,62 @@ struct IntelligenceTab: View {
                     .font(.caption)
             }
 
+            Section("Tu forma de escribir") {
+                Text("Pega al menos \(StyleProfiler.minimumSamples) correos o mensajes tuyos, "
+                     + "separados por una línea en blanco. Gluffi deduce cómo escribes para "
+                     + "que lo que redacte suene a ti.")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+
+                Label("Quita antes nombres, identificaciones, contraseñas y cualquier dato "
+                      + "sensible. Con el estilo basta: los textos se usan para deducir y "
+                      + "se descartan, no se guardan en ningún sitio.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                    .font(.caption)
+
+                TextEditor(text: $muestras)
+                    .font(.system(size: 12))
+                    .frame(minHeight: 110)
+                    .overlay(RoundedRectangle(cornerRadius: 5)
+                        .stroke(Color.secondary.opacity(0.25)))
+
+                HStack(spacing: 10) {
+                    Button(deduciendo ? "Leyendo…" : "Deducir mi estilo") { deducirEstilo() }
+                        .disabled(deduciendo || muestras.isEmpty || !disponibilidad.isAvailable)
+                    if deduciendo { ProgressView().controlSize(.small) }
+                    if let errorEstilo {
+                        Text(errorEstilo)
+                            .foregroundColor(.orange)
+                            .font(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                // Editable a mano a propósito: si el modelo se equivoca, se
+                // corrige escribiendo en vez de volver a pegar textos.
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Perfil").font(.caption).foregroundColor(.secondary)
+                    TextEditor(text: $estilo)
+                        .font(.system(size: 12))
+                        .frame(minHeight: 70)
+                        .overlay(RoundedRectangle(cornerRadius: 5)
+                            .stroke(Color.secondary.opacity(0.25)))
+                        .onChange(of: estilo) { _ in Config.shared.agentStyleProfile = estilo }
+                    HStack {
+                        Text(estilo.isEmpty
+                             ? "Sin perfil: el modo agente redacta en registro neutro."
+                             : "Se usa en cada orden. Lo que pidas en la orden manda sobre esto.")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                        Spacer()
+                        Button("Vaciar") { estilo = "" }
+                            .disabled(estilo.isEmpty)
+                            .controlSize(.small)
+                    }
+                }
+            }
+
             Section("Probar") {
                 HStack(spacing: 10) {
                     Button(probando ? "Probando…" : "Probar el modelo") { probar() }
@@ -170,6 +230,37 @@ struct IntelligenceTab: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// Deduce el estilo y **descarta las muestras**.
+    ///
+    /// Vaciar el área de texto al terminar no es cosmético: es lo que hace
+    /// cierto que los textos no se guardan. Si se quedaran a la vista, el
+    /// usuario asumiría que siguen en algún sitio, y con razón.
+    private func deducirEstilo() {
+        deduciendo = true
+        errorEstilo = nil
+        let textos = muestras
+        let contexto = Int(contextSize)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let salida = StyleProfiler.deduce(
+                from: textos, contextSize: contexto,
+                ask: { sistema, usuario in
+                    LocalLLM.askReporting(system: sistema, user: usuario,
+                                          maxTokens: StyleProfiler.maxTokens)
+                })
+            DispatchQueue.main.async {
+                deduciendo = false
+                switch salida {
+                case .success(let perfil):
+                    estilo = perfil
+                    Config.shared.agentStyleProfile = perfil
+                    muestras = ""           // se descartan, y se ve que se descartan
+                case .failure(let fallo):
+                    errorEstilo = fallo.message
+                }
+            }
+        }
     }
 
     /// Prueba de verdad: arranca el servidor y le pide algo real, para que el

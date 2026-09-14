@@ -345,6 +345,14 @@ class Config {
         set { defaults.set(newValue, forKey: "agentModeEnabled") }
     }
 
+    /// Cómo escribe el usuario, deducido de sus propios textos. Vacío = registro
+    /// neutro. Lo rellena la pestaña Inteligencia; el modo agente funciona igual
+    /// sin él.
+    var agentStyleProfile: String {
+        get { defaults.string(forKey: "agentStyleProfile") ?? "" }
+        set { defaults.set(newValue, forKey: "agentStyleProfile") }
+    }
+
     // MARK: - Snippets por voz
 
     // MARK: - Atajos
