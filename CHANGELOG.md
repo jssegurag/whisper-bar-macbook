@@ -16,6 +16,13 @@ Las versiones siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Cambiado
+
+- La lógica de los atajos de teclado sale a un tipo propio y queda cubierta por
+  pruebas. Sin cambio visible: los atajos siguen funcionando igual, pero ahora
+  hay diecinueve comprobaciones sobre lo único de la app que no se podía
+  verificar sin pulsar teclas a mano (#62).
+
 ## [0.5.1] — 2026-09-09
 
 ### Corregido

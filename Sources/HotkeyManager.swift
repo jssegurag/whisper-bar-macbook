@@ -17,9 +17,8 @@ struct HotkeyCombination {
 class HotkeyManager {
 
     private var combinations: [HotkeyCombination] = []
-    private var activeComboId: String?
-    /// Combos en modo toggle que están encendidos ahora mismo.
-    private var toggledOn: Set<String> = []
+    /// Toda la decisión vive aquí, sin NSEvent de por medio, para poder probarla.
+    private var matcher = HotkeyMatcher()
 
     private var flagsMonitor: Any?
     private var retryTimer:   DispatchSourceTimer?
@@ -38,12 +37,26 @@ class HotkeyManager {
             onKeyDown: onKeyDown, onKeyUp: onKeyUp))
     }
 
+    /// Los combos tal como los ve el decisor.
+    private var combos: [HotkeyMatcher.Combo] {
+        combinations.map {
+            HotkeyMatcher.Combo(id: $0.id, modifiers: $0.modifiers, mode: $0.mode)
+        }
+    }
+
+    private func run(_ action: HotkeyMatcher.Action) {
+        switch action {
+        case .none: break
+        case .start(let id):   combinations.first { $0.id == id }?.onKeyDown()
+        case .stop(let id):    combinations.first { $0.id == id }?.onKeyUp()
+        }
+    }
+
     /// Borra lo registrado. Se usa al cambiar los atajos en Preferencias: hay que
     /// volver a registrarlos sin reiniciar la app.
     func unregisterAll() {
         combinations.removeAll()
-        activeComboId = nil
-        toggledOn.removeAll()
+        matcher.reset()
     }
 
     func setupWhenReady() {
@@ -79,42 +92,11 @@ class HotkeyManager {
 
         flagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
             guard let self else { return }
-            let current = event.modifierFlags
+            let pulsados = event.modifierFlags
                 .intersection(.deviceIndependentFlagsMask)
                 .intersection(self.relevantMask)
-
-            if let activeId = self.activeComboId {
-                // Ya hay un combo de mantener pulsado activo: se mira si se soltó.
-                if let combo = self.combinations.first(where: { $0.id == activeId }) {
-                    if current != combo.modifiers {
-                        self.activeComboId = nil
-                        combo.onKeyUp()
-                    }
-                }
-            } else {
-                // Buscar match exacto — prioridad: más modificadores primero
-                let sorted = self.combinations.sorted {
-                    $0.modifiers.rawValue.nonzeroBitCount > $1.modifiers.rawValue.nonzeroBitCount
-                }
-                for combo in sorted where current == combo.modifiers {
-                    switch combo.mode {
-                    case .hold:
-                        self.activeComboId = combo.id
-                        combo.onKeyDown()
-                    case .toggle:
-                        // Soltar no cierra nada: la siguiente pulsación es la que
-                        // termina. Así se puede dictar largo sin sostener teclas.
-                        if self.toggledOn.contains(combo.id) {
-                            self.toggledOn.remove(combo.id)
-                            combo.onKeyUp()
-                        } else {
-                            self.toggledOn.insert(combo.id)
-                            combo.onKeyDown()
-                        }
-                    }
-                    break
-                }
-            }
+            self.run(self.matcher.flagsChanged(to: pulsados, combos: self.combos))
         }
+
     }
 }

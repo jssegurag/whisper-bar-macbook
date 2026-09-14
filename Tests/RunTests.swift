@@ -4436,6 +4436,52 @@ func testHallucinationBursts() {
         "sin tablas el filtro es inerte")
 }
 
+
+func testHotkeyMatcher() {
+    suite("HotkeyMatcher — La decisión de los atajos")
+
+    let dictar   = HotkeyMatcher.Combo(id: "transcribe", modifiers: [.control, .shift],
+                                       mode: .hold)
+    let traducir = HotkeyMatcher.Combo(id: "translate",
+                                       modifiers: [.control, .shift, .option], mode: .hold)
+    let combos = [dictar, traducir]
+
+    // ── Lo de siempre, que no se puede romper ────────────────────────────────
+    var m = HotkeyMatcher()
+    assertEqual(m.flagsChanged(to: [.control, .shift], combos: combos), .start("transcribe"),
+        "completar los modificadores arranca")
+    assertEqual(m.flagsChanged(to: [], combos: combos), .stop("transcribe"),
+        "soltarlos termina")
+
+    // El de más modificadores gana: ⌃⇧⌥ pasa por ⌃⇧ en el camino.
+    var prio = HotkeyMatcher()
+    assertEqual(prio.flagsChanged(to: [.control, .shift, .option], combos: combos),
+        .start("translate"), "gana la combinación más larga, no la que también encaja")
+
+    var suelto = HotkeyMatcher()
+    assertEqual(suelto.flagsChanged(to: [.control], combos: combos), .none,
+        "una combinación incompleta no dispara nada")
+
+    // Modo toggle: soltar no cierra, la siguiente pulsación sí.
+    let fijo = HotkeyMatcher.Combo(id: "transcribe", modifiers: [.command, .option],
+                                   mode: .toggle)
+    var t = HotkeyMatcher()
+    assertEqual(t.flagsChanged(to: [.command, .option], combos: [fijo]), .start("transcribe"),
+        "toggle · la primera arranca")
+    assertEqual(t.flagsChanged(to: [], combos: [fijo]), .none,
+        "toggle · soltar no cierra")
+    assertEqual(t.flagsChanged(to: [.command, .option], combos: [fijo]), .stop("transcribe"),
+        "toggle · la segunda cierra")
+
+    // reset deja todo limpio (se usa al recambiar los atajos sin reiniciar).
+    var r = HotkeyMatcher()
+    _ = r.flagsChanged(to: [.control, .shift], combos: combos)
+    r.reset()
+    assertEqual(r.activeId, nil, "reset olvida el atajo en curso")
+    assertEqual(r.flagsChanged(to: [], combos: combos), .none,
+        "y no emite un stop de algo que ya no existe")
+}
+
 @main
 struct TestRunner {
     static func main() {
@@ -4507,6 +4553,7 @@ struct TestRunner {
         testAppNotificationContent()
         testStreamingPriority()
         testHotkeyBinding()
+        testHotkeyMatcher()
         testShortcutCapture()
         testHistoryPresentation()
         testLiveMeta()
