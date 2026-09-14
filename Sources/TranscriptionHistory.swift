@@ -15,14 +15,32 @@ struct TranscriptionEntry: Codable, Identifiable {
     /// renombrarlo también en el historial, no dejar el nombre viejo congelado.
     let profileID: UUID?
 
+    /// Qué produjo esta entrada. Opcional por lo mismo que `profileID`: las
+    /// entradas escritas antes decodifican como `nil` en vez de fallar, y `nil`
+    /// significa lo que siempre significó, un dictado.
+    let kind: Kind?
+    /// La orden dictada, solo en modo agente. Se guarda además del resultado
+    /// porque es lo que permite repetirla si el texto no convence — y lo único
+    /// que queda cuando el modelo falla.
+    let order: String?
+
+    enum Kind: String, Codable {
+        case dictation
+        case agent
+    }
+
+    var isAgent: Bool { kind == .agent }
+
     init(text: String, duration: TimeInterval, sourceApp: String? = nil,
-         profileID: UUID? = nil) {
+         profileID: UUID? = nil, kind: Kind? = nil, order: String? = nil) {
         self.id        = UUID()
         self.timestamp = Date()
         self.text      = text
         self.duration  = duration
         self.sourceApp = sourceApp
         self.profileID = profileID
+        self.kind      = kind
+        self.order     = order
     }
 }
 

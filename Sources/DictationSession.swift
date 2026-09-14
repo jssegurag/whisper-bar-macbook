@@ -36,6 +36,11 @@ struct DictationSession {
     let whisperCliPath: String
     let modelPath: String
     let language: String
+    /// Transcribir lo dicho, o redactar lo pedido. Viaja en la sesión por lo
+    /// mismo que todo lo demás: un dictado largo da tiempo de sobra a cambiar
+    /// el interruptor, y leerlo al final aplicaría un modo que el usuario no
+    /// eligió cuando empezó a hablar.
+    var intent: DictationIntent = .transcribe
     /// Pasarle los términos del diccionario a whisper como sesgo. No es de los
     /// nueve sobrescribibles —ningún perfil lo cambia—, pero viaja igual: el
     /// criterio es que **ninguna** etapa consulte Config mientras procesa, y esto
@@ -64,6 +69,7 @@ struct DictationSession {
     static func make(profile: Profile?,
                      bundleID: String?,
                      appName: String? = nil,
+                     intent: DictationIntent = .transcribe,
                      config: Config = .shared) -> DictationSession {
         let o = profile?.overrides ?? ProfileOverrides()
         return DictationSession(
@@ -74,6 +80,7 @@ struct DictationSession {
             whisperCliPath: config.whisperCliPath,
             modelPath: resolveModel(o.model, fallback: config.modelPath),
             language: o.language ?? config.language,
+            intent: intent,
             recognitionBias: config.recognitionBiasEnabled,
             systemPolish: o.systemPolish ?? config.systemPolishEnabled,
             cleanupLevel: o.cleanupLevel ?? config.cleanupLevel,

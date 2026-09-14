@@ -4436,7 +4436,6 @@ func testHallucinationBursts() {
         "sin tablas el filtro es inerte")
 }
 
-
 func testHotkeyMatcher() {
     suite("HotkeyMatcher — La decisión de los atajos")
 
@@ -4480,6 +4479,197 @@ func testHotkeyMatcher() {
     assertEqual(r.activeId, nil, "reset olvida el atajo en curso")
     assertEqual(r.flagsChanged(to: [], combos: combos), .none,
         "y no emite un stop de algo que ya no existe")
+}
+
+func testAgentComposer() {
+    suite("AgentComposer — La orden se convierte en texto")
+
+    let correo = PhraseRewriter.Rule(phrases: ["mi correo"], replacement: "micorreo@dominio.com")
+
+    // ── El caso de aceptación de HU-006, con el modelo simulado ─────────────
+    var vistoPorElModelo: String?
+    let orden = "Redacta un correo para Juan, diciendo que este es mi correo y "
+              + "que espero que lo envíe antes de las 8 pm. Sé claro y amable."
+    let resultado = AgentComposer.compose(
+        order: orden, style: "", snippetRules: [correo],
+        ask: { _, usuario in
+            vistoPorElModelo = usuario
+            return .success("Hola, Juan:\n\nEsta es mi dirección: micorreo@dominio.com.")
+        })
+
+    // Lo que importa: el snippet llegó RESUELTO. Si el modelo leyera «mi correo»
+    // escribiría eso tal cual, o se inventaría una dirección.
+    assertContains(vistoPorElModelo ?? "", "micorreo@dominio.com",
+        "el snippet se resuelve ANTES de que el modelo lea la orden")
+    assert(!(vistoPorElModelo ?? "").contains("mi correo"),
+        "y no queda rastro de la frase disparadora")
+    if case .success(let texto) = resultado {
+        assertContains(texto, "Hola, Juan", "se devuelve lo que redactó el modelo")
+    } else {
+        assert(false, "debería haber redactado")
+    }
+
+    // ── Si falla, no hay texto sustituto: nunca se pega la orden ────────────
+    let caido = AgentComposer.compose(
+        order: orden, style: "", snippetRules: [],
+        ask: { _, _ in .failure(.serverDied) })
+    if case .failure(let f) = caido {
+        assert(f != .unusable, "un servidor caído se distingue de una respuesta inservible")
+    } else {
+        assert(false, "un servidor caído es un fallo")
+    }
+
+    assertEqual(AgentComposer.compose(order: "   ", style: "", snippetRules: [],
+                                      ask: { _, _ in .success("lo que sea") }),
+                .failure(.emptyOrder), "una orden vacía no llega al modelo")
+
+    assertEqual(AgentComposer.compose(order: orden, style: "", snippetRules: [],
+                                      ask: { _, _ in .success("   ") }),
+                .failure(.unusable), "una respuesta vacía es un fallo, no un texto")
+
+    // El mensaje que ve el usuario cuando no se le entendió.
+    assertEqual(AgentComposer.Failure.emptyOrder.message, "Ups, no te entendí",
+        "la app lo dice con su voz")
+    assertEqual(AgentComposer.Failure.unusable.message, "Ups, no te entendí", "igual")
+}
+
+func testAgentComposerCleansModelOutput() {
+    suite("AgentComposer — Lo que el modelo añade de su cosecha")
+
+    // Un modelo pequeño saluda antes de obedecer. SystemPolish ya tuvo que
+    // lidiar con lo mismo.
+    assertEqual(AgentComposer.clean("¡Claro! Aquí tienes el correo:\n\nHola, Juan:"),
+        "Hola, Juan:", "se quita el preámbulo de una línea")
+    assertEqual(AgentComposer.clean("\"Hola, Juan: te confirmo la reunión.\""),
+        "Hola, Juan: te confirmo la reunión.", "y las comillas que envuelven todo")
+    assertEqual(AgentComposer.clean("«Hola, Juan.»"), "Hola, Juan.", "también las españolas")
+    assertEqual(AgentComposer.clean("  \n Hola, Juan. \n "), "Hola, Juan.",
+        "y los espacios de los bordes")
+
+    // Lo que NO se puede tocar: si el texto legítimo termina en dos puntos y es
+    // lo único que hay, era la respuesta, no un preámbulo.
+    assertEqual(AgentComposer.clean("Estimado Juan:"), "Estimado Juan:",
+        "una sola línea nunca es preámbulo, aunque acabe en dos puntos")
+    assertEqual(AgentComposer.clean("Pendientes de hoy:\n1. Llamar al banco"),
+        "Pendientes de hoy:\n1. Llamar al banco",
+        "un encabezado real se conserva: no es una fórmula de cortesía")
+    assertEqual(AgentComposer.clean(""), nil, "vacío es nil, no cadena vacía")
+    assertEqual(AgentComposer.clean("   \n  "), nil, "solo espacios, también")
+}
+
+func testAgentSystemPrompt() {
+    suite("AgentComposer — El encargo al modelo")
+
+    let neutro = AgentComposer.systemPrompt(style: "")
+    assertContains(neutro, "ÚNICAMENTE", "se le exige devolver solo el texto")
+    assertContains(neutro, "No inventes datos",
+        "y no inventar nombres, fechas ni cifras que no estén en la orden")
+    assert(!neutro.contains("Así escribe este usuario"),
+        "sin perfil de estilo no se le cuenta ninguno")
+
+    let conEstilo = AgentComposer.systemPrompt(style: "Directo, frases cortas, sin florituras.")
+    assertContains(conEstilo, "Directo, frases cortas", "con perfil, se le pasa")
+
+    // La instrucción puntual manda sobre el perfil, y por eso va la última.
+    let iEstilo = conEstilo.range(of: "Así escribe este usuario")!.lowerBound
+    let iOrden  = conEstilo.range(of: "tienen prioridad sobre lo anterior")!.lowerBound
+    assert(iEstilo < iOrden,
+        "lo que se pide esta vez va después del estilo: manda sobre él")
+
+    assertEqual(AgentComposer.maxTokens, 1024,
+        "1024 en modo agente; el resto de la app se queda en 512")
+}
+
+func testAgentHistoryEntry() {
+    suite("Historial — Un resultado de agente no es un dictado")
+
+    let dictado = TranscriptionEntry(text: "hola", duration: 1)
+    assert(!dictado.isAgent, "un dictado normal no es de agente")
+    assertEqual(dictado.kind, nil, "y no lleva tipo: es lo que siempre fue")
+    assertEqual(dictado.order, nil, "ni orden")
+
+    let agente = TranscriptionEntry(text: "Hola, Juan:", duration: 4,
+                                    kind: .agent, order: "Redacta un correo para Juan")
+    assert(agente.isAgent, "el de agente sí")
+    assertEqual(agente.order, "Redacta un correo para Juan",
+        "y guarda la orden, para poder repetirla si el texto no convence")
+
+    // Las entradas de antes no traen el campo: tienen que decodificar igual.
+    let viejo = """
+    {"id":"\(UUID().uuidString)","timestamp":768000000,"text":"hola","duration":1}
+    """.data(using: .utf8)!
+    let leido = try? JSONDecoder().decode(TranscriptionEntry.self, from: viejo)
+    assertEqual(leido?.text, "hola", "una entrada antigua se lee sin fallar")
+    assertEqual(leido?.kind, nil, "y cuenta como dictado")
+}
+
+func testAgentFailureNotifications() {
+    suite("Modo agente — El aviso cuando no se pega nada")
+
+    // Sin modelo hay algo que configurar: la notificación lleva botón.
+    let sinModelo = AppNotification.agentFailed(.unavailable("Falta el modelo"))
+    assertEqual(sinModelo?.actions ?? [], [.configure],
+        "«no hay modelo» lleva el botón que lo resuelve")
+
+    // No entender la orden no se arregla en Preferencias: sin botón.
+    let noEntendi = AppNotification.agentFailed(.unusable)
+    assertEqual(noEntendi?.title, "Ups, no te entendí", "con la voz de la app")
+    assertEqual(noEntendi?.actions ?? [.configure], [],
+        "sin botón: no hay nada que configurar, solo volver a dictar")
+}
+
+func testAgentPillState() {
+    suite("Píldora — En qué modo está Gluffi")
+
+    // El punto NO existe en reposo si el modelo duerme: IdleWord prohíbe algo
+    // que cambie solo delante de quien intenta trabajar.
+    assertEqual(AgentModelState.asleep.word, nil,
+        "dormido no dice nada: sigue la palabra de reposo de siempre")
+    assertEqual(AgentModelState.waking.word, "Dame un segundo", "despertando")
+    assertEqual(AgentModelState.ready.word, "Te escucho", "listo")
+    assertEqual(AgentModelState.unavailable("x").word, "No tengo modelo", "sin modelo")
+
+    // El modo se elige ANTES de hablar, y por eso tiene que verse siempre.
+    assertEqual(DictationIntent.transcribe.toggled, .agent, "el interruptor alterna")
+    assertEqual(DictationIntent.agent.toggled, .transcribe, "en los dos sentidos")
+    // El interruptor no lleva texto: el modo se lee en el color de toda la
+    // píldora, que es más visible que una palabra de diez puntos.
+    assertEqual(DictationIntent.transcribe.symbol, "textformat.abc", "«AB»: sale tu texto")
+    assertEqual(DictationIntent.agent.symbol, "sparkles", "chispas: lo escribe Gluffi")
+    assertContains(DictationIntent.transcribe.help, "pulsa para redactar",
+        "la ayuda dice qué pasa al pulsarlo, no solo dónde estás")
+    assertContains(DictationIntent.agent.help, "pulsa para volver", "y al revés")
+
+    let model = PillViewModel()
+    assertEqual(model.intent, .transcribe,
+        "arranca en transcribir: es el modo seguro, y no se hereda de la sesión anterior")
+    assertEqual(model.modelState, .asleep, "y el modelo está dormido")
+
+    model.intent = .agent
+    assert(model.isAgent, "en modo orden lo dice")
+    model.leaveAgentMode()
+    assertEqual(model.intent, .transcribe, "volver a transcribir apaga el modo")
+    assertEqual(model.modelState, .asleep, "y suelta el estado del modelo")
+}
+
+func testDictationIntentTravels() {
+    suite("DictationIntent — El modo se congela al empezar a hablar")
+
+    // Misma disciplina que el perfil (HU-005): un dictado largo da tiempo de
+    // sobra a tocar el interruptor, y leerlo al final aplicaría un modo que el
+    // usuario no eligió cuando empezó.
+    let orden = DictationSession.make(profile: nil, bundleID: nil, intent: .agent)
+    assertEqual(orden.intent, .agent, "el modo viaja en la sesión")
+
+    let dictado = DictationSession.make(profile: nil, bundleID: nil)
+    assertEqual(dictado.intent, .transcribe,
+        "y por defecto es transcribir, el modo seguro")
+
+    assertEqual(DictationSession.global().intent, .transcribe,
+        "la sesión global también")
+
+    // Un perfil por aplicación no toca el modo: son dos ejes distintos.
+    assertEqual(DictationIntent.allCases.count, 2, "solo dos modos")
 }
 
 @main
@@ -4554,6 +4744,13 @@ struct TestRunner {
         testStreamingPriority()
         testHotkeyBinding()
         testHotkeyMatcher()
+        testAgentComposer()
+        testAgentComposerCleansModelOutput()
+        testAgentSystemPrompt()
+        testAgentHistoryEntry()
+        testAgentFailureNotifications()
+        testAgentPillState()
+        testDictationIntentTravels()
         testShortcutCapture()
         testHistoryPresentation()
         testLiveMeta()

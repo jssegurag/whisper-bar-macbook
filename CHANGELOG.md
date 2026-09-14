@@ -23,6 +23,19 @@ Las versiones siguen [SemVer](https://semver.org/lang/es/).
   hay diecinueve comprobaciones sobre lo único de la app que no se podía
   verificar sin pulsar teclas a mano (#62).
 
+### Añadido
+
+- **Modo agente.** Un interruptor en la píldora cambia entre transcribir lo que
+  dices y **redactar lo que pides**. Dictas «redacta un correo para Juan diciendo
+  que este es mi correo y que lo envíe antes de las 8» y sale el correo escrito,
+  con tu dirección ya puesta —los snippets se resuelven antes de que el modelo
+  lea la orden—. El atajo es el mismo: el modo se elige antes de hablar (#63).
+- La píldora entera se vuelve cian en modo orden, y Gluffi dice en qué va:
+  «Dame un segundo» mientras despierta el modelo, «Creando» mientras escribe. El
+  modo se ve siempre, porque pega algo que tú no dijiste (#63).
+- El historial distingue lo que redactó el agente de lo que transcribiste, y
+  guarda también la orden (#63).
+
 ## [0.5.1] — 2026-09-09
 
 ### Corregido

@@ -13,6 +13,7 @@ struct IntelligenceTab: View {
     @State private var contextSize: Double
     @State private var idleMinutes: Double
 
+    @State private var agentMode: Bool = Config.shared.agentModeEnabled
     @State private var probando = false
     @State private var resultado: String?
     @State private var resultadoOK = false
@@ -37,6 +38,31 @@ struct IntelligenceTab: View {
 
     var body: some View {
         Form {
+            Section("Modo agente") {
+                Toggle("Dictar órdenes en vez de texto", isOn: $agentMode)
+                    .onChange(of: agentMode) { _ in
+                        Config.shared.agentModeEnabled = agentMode
+                        // Que la píldora deje de ofrecer el interruptor sin
+                        // reiniciar. AppDelegate escucha este mismo aviso.
+                        NotificationCenter.default.post(name: .gluffiHotkeysChanged, object: nil)
+                    }
+
+                Text("Añade un interruptor a la píldora para cambiar entre transcribir "
+                     + "lo que dices y redactar lo que pides. El atajo es el mismo: "
+                     + "el modo se elige antes de hablar. Los snippets se resuelven "
+                     + "antes de que el modelo lea la orden, así que «mi correo» le "
+                     + "llega ya con tu dirección.")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+
+                Text("Apagarlo no ahorra memoria —el modelo solo arranca cuando lo "
+                     + "usas y se apaga solo—; quita el interruptor de la píldora "
+                     + "si no lo quieres ahí. Al arrancar Gluffi siempre empieza en "
+                     + "transcribir.")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            }
+
             Section("Estado") {
                 HStack(spacing: 8) {
                     Image(systemName: disponibilidad.isAvailable

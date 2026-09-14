@@ -18,6 +18,17 @@ enum Theme {
     static let brandHighNS = NSColor(srgbRed: 164/255, green: 245/255, blue: 60/255, alpha: 1)
     /// #ffd60a — falta algo, o dato sensible.
     static let warnNS = NSColor(srgbRed: 1, green: 214/255, blue: 10/255, alpha: 1)
+
+    /// El acento del modo agente. Cian fluorescente.
+    ///
+    /// El rediseño retiró tres neones —cian entre ellos— porque coloreaban
+    /// estados sin significar nada, y dejó un solo acento: el verde de la marca.
+    /// Este vuelve por un motivo distinto: **no decora un estado, avisa de que
+    /// Gluffi va a escribir por ti**. Es el único sitio de la app donde lo que
+    /// se pega no es lo que el usuario dijo, y eso merece no parecerse a nada
+    /// más. Si algún día colorea algo que no sea eso, sobra.
+    static let agentNS = NSColor(srgbRed: 34/255, green: 232/255, blue: 1, alpha: 1)
+    static let agent = Color(agentNS)
     /// #ff453a — destructivo, punto de grabación.
     static let dangerNS = NSColor(srgbRed: 1, green: 69/255, blue: 58/255, alpha: 1)
 

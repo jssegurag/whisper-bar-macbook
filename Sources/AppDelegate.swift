@@ -18,7 +18,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Modo de grabación actual (transcripción o traducción)
     private var recordingMode: RecordingMode = .transcribe
-    private enum RecordingMode { case transcribe, translate }
+    private enum RecordingMode { case transcribe, translate, agent }
 
     private var statusItem: NSStatusItem!
 
@@ -83,6 +83,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         PillWindowController.shared.onPillCancelTapped = { [weak self] in
             DispatchQueue.main.async { self?.cancelRecording() }
         }
+        PillWindowController.shared.onIntentToggled = { [weak self] in
+            self?.toggleIntent()
+        }
+        refreshAgentAvailability()
         PillWindowController.shared.onPillHiddenByUser = { [weak self] in
             DispatchQueue.main.async { self?.rebuildMenu() }
         }
@@ -95,6 +99,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NotificationCenter.default.addObserver(
             forName: .gluffiHotkeysChanged, object: nil, queue: .main) { [weak self] _ in
                 self?.registerHotkeys()
+                self?.refreshAgentAvailability()
                 self?.rebuildMenu()
         }
 
@@ -234,6 +239,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
+        // También en el menú: la píldora se puede ocultar, y sin esto quien la
+        // esconde se queda sin forma de cambiar de modo.
+        if config.agentModeEnabled, config.isLlmValid {
+            let modo = PillWindowController.shared.intent
+            menu.addItem(row(leading: .symbol(modo.symbol,
+                                              tint: modo == .agent ? Theme.warnNS : nil),
+                             title: modo == .agent
+                                    ? "Modo: redactar lo que pides"
+                                    : "Modo: transcribir lo que dices",
+                             action: #selector(handleToggleIntent)))
+            menu.addItem(.separator())
+        }
+
         menu.addItem(row(leading: .symbol("clock", tint: nil), title: "Historial…",
                          action: #selector(openHistory), keyEquivalent: "h"))
         menu.addItem(row(leading: .symbol("character.book.closed", tint: nil), title: "Diccionario…",
@@ -365,7 +383,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let perfil = ProfileResolver.resolve(bundleID: bundleID,
                                              among: ProfileStore.shared.profiles)
         return DictationSession.make(profile: perfil, bundleID: bundleID,
-                                     appName: pasteTargetApp?.localizedName)
+                                     appName: pasteTargetApp?.localizedName,
+                                     intent: PillWindowController.shared.intent)
     }
 
     /// Cancela la grabación o transcripción en curso sin pegar nada.
@@ -395,6 +414,72 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func recognitionPrompt(_ session: DictationSession) -> String? {
         guard session.recognitionBias, session.dictionary else { return nil }
         return WhisperPrompt.build(from: CustomDictionary.shared.activeEntries)
+    }
+
+    // MARK: - Modo agente
+
+    /// El usuario cambió de modo, desde la píldora o desde el menú.
+    ///
+    /// Aquí se despierta el modelo, no al terminar de dictar. Son 24,9 s en frío
+    /// contra ~1,5 s caliente: quien elige «Orden» va a pedir algo en los
+    /// próximos segundos, así que el arranque se solapa con lo que tarde en
+    /// pulsar el atajo y hablar.
+    func setIntent(_ intent: DictationIntent) {
+        PillWindowController.shared.setIntent(intent)
+        rebuildMenu()
+        guard intent == .agent else { return }
+
+        guard config.isLlmValid else {
+            PillWindowController.shared.setModelState(.unavailable(LocalLLM.availability.message))
+            return
+        }
+        PillWindowController.shared.setModelState(.waking)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let listo = LocalLLM.warmUp()
+            DispatchQueue.main.async {
+                PillWindowController.shared.setModelState(
+                    listo ? .ready : .unavailable("No pude despertar el modelo"))
+            }
+        }
+    }
+
+    func toggleIntent() {
+        setIntent(PillWindowController.shared.intent.toggled)
+    }
+
+    /// Si el modo agente se puede ofrecer siquiera.
+    private func refreshAgentAvailability() {
+        PillWindowController.shared.setAgentAvailable(
+            config.agentModeEnabled && config.isLlmValid)
+    }
+
+    /// Convierte la orden dictada en el texto que el usuario quería.
+    /// Devuelve nil si no se puede: en modo agente **no se pega la orden**.
+    private func composeFromOrder(_ order: String, session: DictationSession) -> String? {
+        DispatchQueue.main.async {
+            self.setIconState(.transcribing)
+            PillWindowController.shared.setProcessingLabel("Creando")
+        }
+        let reglas = session.snippets ? SnippetStore.shared.rules() : []
+        let resultado = AgentComposer.compose(
+            order: order,
+            style: "",   // el perfil de estilo llega en la entrega siguiente
+            snippetRules: reglas,
+            ask: { sistema, usuario in
+                LocalLLM.askReporting(system: sistema, user: usuario,
+                                      maxTokens: AgentComposer.maxTokens)
+            })
+        switch resultado {
+        case .success(let texto):
+            return texto
+        case .failure(let fallo):
+            DispatchQueue.main.async {
+                if let aviso = AppNotification.agentFailed(fallo) {
+                    Notifier.shared.post(aviso)
+                }
+            }
+            return nil
+        }
     }
 
     private func applyRewrites(_ text: String, session: DictationSession) -> String {
@@ -478,6 +563,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         removeEscMonitor()
         setIconState(.idle)
         PillWindowController.shared.setState(.idle)
+        // El modo NO se reinicia aquí: lo eligió el usuario y dura hasta que lo
+        // cambie. Lo que sí se suelta es el estado del modelo, que pertenece a
+        // la petición y no al modo.
         // El perfil pertenece al dictado, no a la píldora: en reposo no hay
         // ninguno aplicándose y enseñar el último sería mentir.
         PillWindowController.shared.setProfileName(nil)
@@ -533,6 +621,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     PillWindowController.shared.setProcessingLabel("Repasando")
                     if let repasado = SystemPolish.polish(text) { textoBase = repasado }
                 }
+                // Modo agente: lo dictado es una orden. Los snippets se resuelven
+                // antes de que el modelo lea nada, y el diccionario después de
+                // que escriba —el modelo reescribe los términos del usuario por
+                // su cuenta, está medido en HU-004—.
+                var esAgente = false
+                if session.intent == .agent {
+                    esAgente = true
+                    guard let redactado = self.composeFromOrder(text, session: session) else {
+                        // No se pega la orden. Queda en el historial para no
+                        // perder lo dictado y poder repetirla.
+                        self.history.add(TranscriptionEntry(
+                            text: "", duration: duration, sourceApp: session.appName,
+                            profileID: session.profileID, kind: .agent, order: text))
+                        self.resetIdleUI()
+                        return
+                    }
+                    textoBase = redactado
+                }
+                guard !self.isCancelled else { self.resetIdleUI(); return }
                 let correctedText = self.applyRewrites(textoBase, session: session)
 
                 // La app sale de la sesión, capturada al presionar el atajo.
@@ -540,7 +647,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 // el usuario cuando whisper terminaba, que no es donde se pegó.
                 let entry = TranscriptionEntry(text: correctedText, duration: duration,
                                                sourceApp: session.appName,
-                                               profileID: session.profileID)
+                                               profileID: session.profileID,
+                                               kind: esAgente ? .agent : .dictation,
+                                               order: esAgente ? text : nil)
                 self.history.add(entry)
                 self.paste(text: correctedText)
 
@@ -719,6 +828,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                 },
                                 onKeyUp: { [weak self] in self?.stopAndTranscribe() })
             case .translate:
+
                 hotkey.register(id: "translate", modifiers: binding.modifiers, mode: binding.mode,
                                 onKeyDown: { [weak self] in
                                     self?.recordingMode = .translate
@@ -773,6 +883,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func openPreferences() {
         PreferencesWindowController.shared.showWindow()
     }
+
+    @objc private func handleToggleIntent() { toggleIntent() }
 
     @objc private func openHistory() {
         HistoryWindowController.shared.showWindow()

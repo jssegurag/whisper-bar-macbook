@@ -91,6 +91,29 @@ enum AppNotification {
 
     /// Falló la transcripción. Cada error del Transcriber tiene una causa y una
     /// salida distintas: repetirlas todas como «Error: …» era desperdiciarlas.
+    /// El modo agente no pudo redactar.
+    ///
+    /// Se avisa **siempre**, a diferencia de un dictado fallido: aquí no se pega
+    /// nada, y sin aviso el usuario se queda mirando un cursor que no recibe
+    /// texto sin saber por qué.
+    static func agentFailed(_ failure: AgentComposer.Failure) -> Content? {
+        switch failure {
+        case .unavailable(let detalle):
+            // Esta sí lleva botón: hay algo que configurar.
+            return Content(title: "No pude redactar",
+                           body: detalle,
+                           actions: [.configure],
+                           identifier: "agent")
+        case .unusable, .emptyOrder:
+            // Sin botón a propósito: no hay nada que arreglar en Preferencias,
+            // solo volver a dictar la orden.
+            return Content(title: "Ups, no te entendí",
+                           body: "Vuelve a dictar la orden diciendo qué quieres que escriba.",
+                           actions: [],
+                           identifier: "agent")
+        }
+    }
+
     static func transcriptionFailed(_ error: Error) -> Content? {
         guard let known = error as? Transcriber.TranscriberError else {
             return Content(title: "No se pudo transcribir",
