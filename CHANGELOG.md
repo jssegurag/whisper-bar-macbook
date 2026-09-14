@@ -16,6 +16,13 @@ Las versiones siguen [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
 
+### Cambiado
+
+- **Deducir tu estilo pide dos textos, no cinco.** Al usarlo de verdad, cinco
+  correos propios resultaron difíciles de reunir —hay que buscarlos, y buena
+  parte de lo que uno escribe al día son respuestas de dos líneas—, y con dos el
+  perfil ya sale bien (#66).
+
 ## [0.6.0] — 2026-09-14
 
 ### Añadido

@@ -122,8 +122,12 @@ what they would pick off a list does not match how they actually write.
   persists is the derived paragraph, so even if the user ignores the warning and
   pastes a client's email, what lands on disk is «you write short sentences and
   sign off with "quedo atento"»
-- **Five samples minimum**, split on blank lines. With fewer, the model describes
-  *that text* instead of the person's style
+- **Two samples minimum**, split on blank lines. It started at five, out of fear
+  that few samples would make the model describe *that text* instead of the
+  person's style. Real use said otherwise: five of your own emails are hard to
+  gather —half of what anyone writes in a day is a two-line reply— and two
+  already produce a good profile. One is still not enough: with a single text
+  there is no way to separate how someone writes from what they were writing about
 - **Checked before the model starts.** Making someone wait twenty seconds to be
   told «paste more texts» is abuse
 - **Never truncated silently.** If the samples do not fit the configured context

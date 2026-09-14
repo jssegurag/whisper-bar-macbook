@@ -4686,19 +4686,28 @@ func testStyleProfilerSamples() {
         "las líneas en blanco de más no cuentan como texto")
     assertEqual(StyleProfiler.split("   ").count, 0, "solo espacios no es un texto")
 
-    // Con menos de cinco, el modelo describe ESE texto en vez del estilo de
-    // quien lo escribió. Se comprueba antes de arrancar el modelo: hacer
+    // Con un solo texto no hay forma de separar el estilo de quien escribe del
+    // tema del que escribe. Se comprueba antes de arrancar el modelo: hacer
     // esperar veinte segundos para decir «pega más» es maltrato.
-    if case .failure(let p) = StyleProfiler.inspect(pegar(3), contextSize: 4096) {
-        assertEqual(p, .tooFew(found: 3), "tres textos no bastan")
-        assertContains(p.message, "Llevas 3", "y se dice cuántos lleva")
+    if case .failure(let p) = StyleProfiler.inspect(pegar(1), contextSize: 4096) {
+        assertEqual(p, .tooFew(found: 1), "un texto no basta")
+        assertContains(p.message, "Llevas 1", "y se dice cuántos lleva")
     } else {
-        assert(false, "debería rechazar tres")
+        assert(false, "debería rechazar uno")
+    }
+
+    // Dos sí. El mínimo empezó en cinco por miedo a que el modelo describiera
+    // ese texto en vez del estilo; al usarlo de verdad, con dos ya sale bien, y
+    // cinco correos propios no son fáciles de reunir.
+    if case .success(let m) = StyleProfiler.inspect(pegar(2), contextSize: 4096) {
+        assertEqual(m.count, 2, "dos bastan")
+        assert(m.estimatedTokens > 0, "y se estima lo que ocupan")
+    } else {
+        assert(false, "debería aceptar dos")
     }
 
     if case .success(let m) = StyleProfiler.inspect(pegar(6), contextSize: 4096) {
-        assertEqual(m.count, 6, "seis sí valen")
-        assert(m.estimatedTokens > 0, "y se estima lo que ocupan")
+        assertEqual(m.count, 6, "y de sobra con seis")
     } else {
         assert(false, "debería aceptar seis")
     }
@@ -4753,6 +4762,18 @@ func testStyleProfilerDeduction() {
                                      ask: { _, _ in llamado = true; return .success("x") })
     assert(!llamado, "con muestras insuficientes no se molesta al modelo")
     assertEqual(pocas, .failure(.samples(.tooFew(found: 1))), "y se dice por qué")
+
+    // El caso real que motivó bajar el mínimo: dos textos y sale el perfil.
+    let dos = "Hola Juan, te confirmo la reunión del martes. Un saludo.\n\n"
+            + "Buenas, adjunto el informe que pediste. Cualquier cosa me dices."
+    if case .success = StyleProfiler.deduce(
+        from: dos, contextSize: 4096,
+        ask: { _, _ in .success("Escribes de forma cercana y breve, saludas sin "
+                              + "fórmulas y cierras ofreciéndote.") }) {
+        assert(true, "con dos textos se deduce el perfil")
+    } else {
+        assert(false, "dos textos deberían bastar")
+    }
 
     // Una respuesta de dos palabras no describe un estilo: es el modelo fallando.
     assertEqual(StyleProfiler.deduce(from: cinco, contextSize: 4096,
