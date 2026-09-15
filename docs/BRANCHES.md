@@ -71,7 +71,7 @@ imperativo, ≤ 72 caracteres. El cuerpo explica el *por qué*, no el *qué*.
 
 | Rama | Propósito | Estado |
 |---|---|---|
-| `fix/66-menos-muestras-de-estilo` | Bajar a dos el mínimo de textos para deducir el estilo. | PR #66 |
+| `fix/cancelacion-durante-transcripcion` | Cancelar (Escape o `✕`) no hacía nada durante la transcripción con el sonido de fondo apagado. Alcance: el guard de `AppDelegate.cancelRecording()` y su test. | PR #57, 1014 tests en verde |
 
 Esta tabla es corta a propósito. Antes vivía aquí una ficha por rama —propósito,
 alcance, bugs que cerraba, orden de mezcla— y para el 29-08-2026 doce de esas
