@@ -148,9 +148,10 @@ struct IntelligenceTab: View {
             }
 
             Section("Tu forma de escribir") {
-                Text("Pega al menos \(StyleProfiler.minimumSamples) correos o mensajes tuyos, "
-                     + "separados por una línea en blanco. Gluffi deduce cómo escribes para "
-                     + "que lo que redacte suene a ti.")
+                Text("Pega un par de textos tuyos —correos, mensajes, un par de "
+                     + "párrafos que hayas escrito— separados por una línea en blanco. "
+                     + "Con dos basta. Gluffi deduce cómo escribes para que lo que "
+                     + "redacte suene a ti.")
                     .foregroundColor(.secondary)
                     .font(.caption)
 

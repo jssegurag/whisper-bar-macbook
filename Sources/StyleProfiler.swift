@@ -18,9 +18,17 @@ import Foundation
 /// pero pasan—.
 enum StyleProfiler {
 
-    /// Cuántos textos hacen falta. Con menos, el modelo describe *ese* texto en
-    /// vez del estilo de quien lo escribió.
-    static let minimumSamples = 5
+    /// Cuántos textos hacen falta.
+    ///
+    /// Empezó en cinco por miedo a que con pocas muestras el modelo describiera
+    /// *ese* texto en vez del estilo de quien lo escribió. Al usarlo de verdad
+    /// resultó que cinco correos propios no son fáciles de reunir —hay que
+    /// buscarlos, y la mitad de lo que uno escribe al día son respuestas de dos
+    /// líneas—, y que con **dos** el perfil ya sale bien.
+    ///
+    /// Dos sigue siendo un mínimo con sentido: con uno solo no hay forma de
+    /// distinguir el estilo de quien escribe del tema del que escribe.
+    static let minimumSamples = 2
 
     /// Cuánto puede ocupar la respuesta. Es un párrafo, no un ensayo.
     static let maxTokens = 320
@@ -43,7 +51,7 @@ enum StyleProfiler {
             switch self {
             case .tooFew(let n):
                 let plural = n == 1 ? "texto" : "textos"
-                return "Pega al menos \(StyleProfiler.minimumSamples) textos separados por una línea en blanco. "
+                return "Pega al menos \(StyleProfiler.minimumSamples) textos tuyos separados por una línea en blanco. "
                      + "Llevas \(n) \(plural)."
             case .tooLong(let tokens, let fits):
                 return "Son demasiado largos para el contexto configurado "
